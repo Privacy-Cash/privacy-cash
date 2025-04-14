@@ -27,8 +27,8 @@ pub struct Proof {
 #[derive(BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq)]
 pub enum PrivacyInstruction {
     /// Initialize a new merkle tree
-    Initialize {
-        merkle_tree_height: u8,
+    Initialize { 
+       // empty params 
     },
     /// Process a privacy transaction
     Transact {
