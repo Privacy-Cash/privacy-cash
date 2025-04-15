@@ -9,6 +9,11 @@ use solana_program::{
 pub mod instruction;
 pub mod processor;
 
+// Re-export Merkle tree types
+pub mod data_structures {
+    pub mod sparse_merkle_tree;
+}
+
 // Entrypoint
 entrypoint!(process_instruction);
 
