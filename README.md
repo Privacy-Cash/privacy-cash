@@ -27,6 +27,21 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
 
 ## Installation
 
+### ZK Circuits
+1. Navigate to the script directory:
+   ```bash
+   cd scripts
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Generate circuits:
+   ```bash
+   ./buildCircuit_prod_solana.sh 2
+   ./buildCircuit_prod_solana.sh 16
+   ```
+
 ### Solana Program
 
 1. Navigate to the program directory:
