@@ -1,32 +1,42 @@
 use std::marker::PhantomData;
 
 use light_hasher::Hasher;
-use num_bigint::BigUint;
 
-/// Sparse Merkle Tree implementation, inspired by https://github.com/Lightprotocol/light-protocol/blob/2563f19f80d90ad04a2bdd351e2dfe80f7d8068d/program-tests/merkle-tree/src/sparse_merkle_tree.rs#L7
+/// Inspired by Sparse Merkle Tree implementation in https://github.com/Lightprotocol/light-protocol/blob/2563f19f80d90ad04a2bdd351e2dfe80f7d8068d/program-tests/merkle-tree/src/sparse_merkle_tree.rs#L7
+const ROOT_HISTORY_SIZE: usize = 100;
+
 #[derive(Clone, Debug)]
-pub struct SparseMerkleTree<H: Hasher, const HEIGHT: usize> {
+pub struct SparseMerkleTreeWithHistory<H: Hasher, const HEIGHT: usize> {
     subtrees: [[u8; 32]; HEIGHT],
-    next_index: usize,
+    // index of the next leaf to be inserted
+    next_index_to_insert: usize,
     root: [u8; 32],
+    root_history: [[u8; 32]; ROOT_HISTORY_SIZE],
+    current_root_index: usize,
     _hasher: PhantomData<H>,
 }
 
-impl<H, const HEIGHT: usize> SparseMerkleTree<H, HEIGHT>
+impl<H, const HEIGHT: usize> SparseMerkleTreeWithHistory<H, HEIGHT>
 where
     H: Hasher,
 {
     pub fn new_empty() -> Self {
+        let initial_root = H::zero_bytes()[HEIGHT];
+        let mut root_history = [[0u8; 32]; ROOT_HISTORY_SIZE];
+        root_history[0] = initial_root;
+        
         Self {
             subtrees: H::zero_bytes()[0..HEIGHT].try_into().unwrap(),
-            next_index: 0,
-            root: H::zero_bytes()[HEIGHT],
+            next_index_to_insert: 0,
+            root: initial_root,
+            root_history,
+            current_root_index: 0,
             _hasher: PhantomData,
         }
     }
 
     pub fn append(&mut self, leaf: [u8; 32]) -> [[u8; 32]; HEIGHT] {
-        let mut current_index = self.next_index;
+        let mut current_index = self.next_index_to_insert;
         let mut current_level_hash = leaf;
         let mut left;
         let mut right;
@@ -52,8 +62,12 @@ where
             current_index /= 2;
         }
         self.root = current_level_hash;
-        self.next_index += 1;
-
+        self.next_index_to_insert += 1;
+        
+        let new_root_index = (self.current_root_index + 1) % ROOT_HISTORY_SIZE;
+        self.current_root_index = new_root_index;
+        self.root_history[new_root_index] = current_level_hash;
+        
         proof
     }
 
@@ -61,6 +75,14 @@ where
         self.root
     }
 
+    pub fn get_root_history(&self) -> [[u8; 32]; ROOT_HISTORY_SIZE] {
+        self.root_history
+    }
+
+    pub fn get_current_root_index(&self) -> usize {
+        self.current_root_index
+    }
+    
     pub fn get_subtrees(&self) -> [[u8; 32]; HEIGHT] {
         self.subtrees
     }
@@ -70,10 +92,7 @@ where
     }
 
     pub fn get_next_index(&self) -> usize {
-        self.next_index
+        self.next_index_to_insert
     }
-}
-
-pub fn arr_to_string(arr: [u8; 32]) -> String {
-    format!("0x{}", BigUint::from_bytes_be(&arr).to_str_radix(16))
+    
 }

@@ -10,7 +10,7 @@ pub mod instruction;
 pub mod processor;
 
 // Re-export Merkle tree types
-pub mod data_structures {
+pub mod lib {
     pub mod sparse_merkle_tree;
 }
 

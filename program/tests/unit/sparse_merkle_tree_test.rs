@@ -3,12 +3,12 @@ mod tests {
     use light_hasher::{Poseidon, Hasher};
     
     // Import from the properly structured module
-    use zkcash::data_structures::sparse_merkle_tree::SparseMerkleTree;
+    use zkcash::lib::sparse_merkle_tree::SparseMerkleTreeWithHistory;
     
     #[test]
     fn test_new_empty() {
         // Test initialization of an empty tree
-        let tree: SparseMerkleTree<Poseidon, 10> = SparseMerkleTree::new_empty();
+        let tree: SparseMerkleTreeWithHistory<Poseidon, 10> = SparseMerkleTreeWithHistory::new_empty();
         
         // Verify initial state
         assert_eq!(tree.get_next_index(), 0);
@@ -28,7 +28,7 @@ mod tests {
     #[test]
     fn test_append_single_leaf() {
         // Initialize empty tree
-        let mut tree: SparseMerkleTree<Poseidon, 5> = SparseMerkleTree::new_empty();
+        let mut tree: SparseMerkleTreeWithHistory<Poseidon, 5> = SparseMerkleTreeWithHistory::new_empty();
         
         // Create a test leaf
         let mut leaf = [0u8; 32];
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn test_append_multiple_leaves() {
         // Initialize empty tree with height 5 to avoid overflow
-        let mut tree: SparseMerkleTree<Poseidon, 5> = SparseMerkleTree::new_empty();
+        let mut tree: SparseMerkleTreeWithHistory<Poseidon, 5> = SparseMerkleTreeWithHistory::new_empty();
         
         // Create and append 8 leaves (not enough to fill a tree of height 5)
         let mut prev_root = tree.root();
@@ -76,8 +76,8 @@ mod tests {
     #[test]
     fn test_deterministic_output() {
         // Initialize two identical empty trees
-        let mut tree1: SparseMerkleTree<Poseidon, 3> = SparseMerkleTree::new_empty();
-        let mut tree2: SparseMerkleTree<Poseidon, 3> = SparseMerkleTree::new_empty();
+        let mut tree1: SparseMerkleTreeWithHistory<Poseidon, 3> = SparseMerkleTreeWithHistory::new_empty();
+        let mut tree2: SparseMerkleTreeWithHistory<Poseidon, 3> = SparseMerkleTreeWithHistory::new_empty();
         
         // Append the same leaves to both trees
         for i in 0..4 {
@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn test_comparison_with_right_root_hash() {
         // Setup
-        let mut tree = SparseMerkleTree::<Poseidon, 2>::new_empty();
+        let mut tree = SparseMerkleTreeWithHistory::<Poseidon, 2>::new_empty();
         
         // Add some known leaves and verify expected behavior
         let test_leaves = [
@@ -132,5 +132,102 @@ mod tests {
         // Verify the root hash matches our calculated expected value
         assert_eq!(root_after_second, expected_root,
             "Root hash doesn't match expected calculation");
+    }
+
+    #[test]
+    fn test_root_history_initial_state() {
+        // Initialize empty tree with height 20 
+        let tree: SparseMerkleTreeWithHistory<Poseidon, 20> = SparseMerkleTreeWithHistory::new_empty();
+
+        // Check that the root history is initialized correctly
+        let root_history = tree.get_root_history();
+        assert_eq!(root_history[0], Poseidon::zero_bytes()[20]);
+        assert_eq!(tree.get_current_root_index(), 0);
+    }
+
+    #[test]
+    fn test_root_history() {
+        // Initialize empty tree with height 3
+        let mut tree: SparseMerkleTreeWithHistory<Poseidon, 3> = SparseMerkleTreeWithHistory::new_empty();
+        
+        // Initial state check
+        assert_eq!(tree.get_current_root_index(), 0);
+        let initial_root = tree.root();
+        
+        // Create and append 5 leaves
+        let mut expected_roots = Vec::new();
+        expected_roots.push(initial_root);
+        
+        for i in 0..5 {
+            let mut leaf = [0u8; 32];
+            leaf[0] = (i + 1) as u8; // Make each leaf unique
+            
+            tree.append(leaf);
+            expected_roots.push(tree.root());
+        }
+        
+        // Check that the root history contains the expected roots
+        let root_history = tree.get_root_history();
+        
+        // The root history should have roots at indices 0-4 
+        // (since current_root_index = 5 after 5 appends)
+        for i in 0..6 {
+            assert_eq!(root_history[i], expected_roots[i], 
+                "Root history at index {} doesn't match expected root", i);
+        }
+        
+        // And the current index should be 5
+        assert_eq!(tree.get_current_root_index(), 5);
+    }
+
+    #[test]
+    fn test_root_history_circular_buffer() {
+       // Initialize empty tree with height 3
+       let mut tree: SparseMerkleTreeWithHistory<Poseidon, 3> = SparseMerkleTreeWithHistory::new_empty();
+        
+       // Initial state check
+       assert_eq!(tree.get_current_root_index(), 0);
+       let initial_root = tree.root();
+       
+       // Store all roots as we append leaves
+       let mut all_roots = Vec::new();
+       all_roots.push(initial_root); // Initial root before any appends
+       
+       // Append 101 leaves to test circular buffer wraparound
+       for i in 0..101 {
+           let mut leaf = [0u8; 32];
+           leaf[0] = ((i + 1) % 8) as u8;
+           
+           tree.append(leaf);
+           all_roots.push(tree.root());
+       }
+       
+       // After 101 appends, current_root_index will be 1 (101 % 100 = 1)
+       assert_eq!(tree.get_current_root_index(), 1);
+       
+       // Get the final root history
+       let root_history = tree.get_root_history();
+       
+       // The implementation stores each new root at the next index (after incrementing):
+       // 1. The initial root is stored at root_history[0]
+       // 2. Append #0 root is stored at root_history[1]
+       // 3. Append #1 root is stored at root_history[2]
+       // ...and so on
+       
+       // After 101 appends, the circular buffer should contain:
+       // - Index 0: The root after append #99 (100th append, wrapping around to index 0)
+       // - Index 1 is current_root_index (where next root would be stored)
+       
+       // Verify the final state of the buffer
+       assert_eq!(root_history[0], all_roots[100], 
+           "Root history at index 0 should be the root after the 100th append");
+
+        assert_eq!(root_history[1], all_roots[101], 
+            "Root history at index 0 should be the root after the 100th append");
+           
+       for i in 2..100 {
+           assert_eq!(root_history[i], all_roots[i], 
+               "Root history at index {} doesn't match expected root", i);
+       }
     }
 }
