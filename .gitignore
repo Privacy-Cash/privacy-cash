@@ -1,4 +1,2 @@
 .DS_Store
 program/target/
-program/program-keypair.json
-program/upgrader-keypair.json
