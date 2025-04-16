@@ -41,6 +41,15 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ./buildCircuit_prod_solana.sh 2
    ./buildCircuit_prod_solana.sh 16
    ```
+### ZK Proofs
+1. Navigate to the script directory:
+   ```bash
+   cd scripts
+   ```
+2. Generate a sample proof
+   ```bash
+   ts-node sample_proof_generator.ts
+   ```
 
 ### Solana Program
 

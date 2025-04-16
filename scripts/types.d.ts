@@ -6,8 +6,21 @@ declare module 'ffjavascript' {
 }
 
 declare module 'snarkjs' {
-  export const wtns: any;
-  export const groth16: any;
+  export const wtns: {
+    debug: (input: any, wasmFile: string, wtnsFile: string, symFile: string, options: any, logger: any) => Promise<void>;
+    exportJson: (wtnsFile: string) => Promise<any>;
+  };
+  
+  export const groth16: {
+    fullProve: (input: any, wasmFile: string, zkeyFile: string) => Promise<{ 
+      proof: {
+        pi_a: string[];
+        pi_b: string[][];
+        pi_c: string[];
+      };
+      publicSignals: any;
+    }>;
+  };
 }
 
 declare module 'tmp-promise' {

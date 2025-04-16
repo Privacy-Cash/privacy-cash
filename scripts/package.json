@@ -1,13 +1,16 @@
 {
-  "name": "solana-privacy",
+  "name": "zkcash-scripts",
   "version": "1.0.0",
-  "main": "init.ts",
+  "description": "ZK Cash proof generation scripts",
+  "main": "sample_proof_generator.ts",
+  "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node -r tsconfig-paths/register",
+    "build": "tsc"
   },
   "author": "",
   "license": "MIT",
-  "description": "",
   "dependencies": {
     "@types/node": "^22.14.0",
     "bn.js": "^5.2.1",
@@ -17,11 +20,12 @@
     "circomlib": "github:tornadocash/circomlib#d20d53411d1bef61f38c99a8b36d5d0cc4836aa1",
     "circomlibjs": "^0.1.7",
     "dotenv": "^16.4.7",
-    "ffjavascript": "^0.2.62",
-    "snarkjs": "github:tornadocash/snarkjs#f37f146948f3b28086493e71512006b030588fc2",
+    "ffjavascript": "^0.2.63",
+    "snarkjs": "^0.7.3",
     "tmp-promise": "^3.0.3",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.0.0"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.5",
