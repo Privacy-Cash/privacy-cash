@@ -10,17 +10,21 @@
   "description": "",
   "dependencies": {
     "@types/node": "^22.14.0",
+    "bn.js": "^5.2.1",
     "bs58": "^6.0.0",
     "circom": "^0.5.46",
     "circom_runtime": "^0.1.13",
     "circomlib": "github:tornadocash/circomlib#d20d53411d1bef61f38c99a8b36d5d0cc4836aa1",
     "circomlibjs": "^0.1.7",
     "dotenv": "^16.4.7",
+    "ffjavascript": "^0.2.62",
     "snarkjs": "github:tornadocash/snarkjs#f37f146948f3b28086493e71512006b030588fc2",
+    "tmp-promise": "^3.0.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.1.5",
     "@types/circomlibjs": "^0.1.6"
   }
 }
