@@ -41,6 +41,12 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ./buildCircuit_prod_solana.sh 2
    ./buildCircuit_prod_solana.sh 16
    ```
+4. Generate verifying keys
+   ```bash
+   cd artifacts/circuits
+   npx snarkjs zkey export verificationkey transaction2.zkey verifyingkey2.json
+   npx snarkjs zkey export verificationkey transaction16.zkey verifyingkey16.json
+   ```
 ### ZK Proofs
 1. Navigate to the script directory:
    ```bash
