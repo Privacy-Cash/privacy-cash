@@ -8,10 +8,12 @@ use solana_program::{
 // Required modules
 pub mod instruction;
 pub mod processor;
+pub mod errors;
 
 // Re-export Merkle tree types
 pub mod lib {
     pub mod sparse_merkle_tree;
+    pub mod groth16;
 }
 
 // Entrypoint
