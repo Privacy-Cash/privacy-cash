@@ -227,7 +227,7 @@ async function generateSampleProof(options: {
   fee?: string,
   recipient?: string,
   relayer?: string
-} = {}): Promise<string> {
+} = {}): Promise<number[]> {
   console.log('Using test keypair with pubkey:', TEST_KEYPAIR.pubkey.substring(0, 20) + '...');
   
   // Use provided values or defaults
@@ -346,8 +346,12 @@ async function generateSampleProof(options: {
     // Use the original prove function with only the expected parameters
     const proof = await prove(processedInput, keyBasePath);
     console.log('Proof generated successfully!');
-    console.log('Proof (first 64 chars):', proof.substring(0, 64) + '...');
-    return proof;
+    console.log('Proof hex:', proof);
+    
+    // Convert the proof to a byte array
+    const proofByteArray = hexToByteArray(proof);
+    console.log(`Proof as byte array: [${proofByteArray.join(', ')}]`);
+    return proofByteArray;
   } catch (error) {
     console.error('Error generating proof:', error);
     if (error instanceof Error) {
@@ -377,7 +381,6 @@ async function main() {
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
     const proof = await generateSampleProof(options);
-    console.log('Complete proof:', proof);
     console.log('Proof generation completed successfully!');
   } catch (error) {
     console.error('Failed to generate proof:', error);
@@ -399,3 +402,26 @@ if (require.main === module) {
 }
 
 export { generateSampleProof };
+
+function hexToByteArray(hexString: string): number[] {
+  // Remove the '0x' prefix if present
+  if (hexString.startsWith('0x')) {
+    hexString = hexString.slice(2);
+  }
+
+  // Convert hex string to byte array
+  const byteArray: number[] = [];
+  for (let i = 0; i < hexString.length; i += 2) {
+    const byte = parseInt(hexString.substr(i, 2), 16);
+    byteArray.push(byte);
+  }
+
+  return byteArray;
+}
+
+// Your hex string
+const hexProof = "030e9125d70e3e5298bc495978ddb4803ad51d5854355a366694a77add213331125a20bcbe76c5398e351b2e78034b1cbfee080603db32aa56f93833f40ea66a0512831a2e53e95d914c1d9c9e138ddf76b35f28861837b549b0545d09e334fa0afc06903e839f7763f9560c48b0c82de7e8c457a85ea00ff2cc8c284579a2501374b16e70cd762a2b5994b8bac6a8abd06196fcb2bf4b83a2493271d263cc3f00151ddd2c0af67cb47611974af8e576dc59addda85eced8a0c8569ecd6967df07629e24f6ce7c77c301baf0def9bdd1825e1dad0dd6964407e329983b90496a0270fe50a827d56456f4563cb696c534f0edde50e7a993a4ca03148fa753f362";
+
+// Convert and print the byte array
+const byteArray = hexToByteArray(hexProof);
+console.log(`pub const PROOF: [u8; ${byteArray.length}] = [${byteArray.join(', ')}];`);
