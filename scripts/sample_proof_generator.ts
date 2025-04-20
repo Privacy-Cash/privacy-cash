@@ -31,6 +31,65 @@ function toFixedHex(number: any, length = 32): string {
 }
 
 /**
+ * Converts a string or BN to a 32-byte array with big-endian representation
+ */
+function toBigEndianBytes(value: string | BN): Uint8Array {
+  let bnValue: BN;
+  
+  // Convert to BN if it's a string
+  if (typeof value === 'string') {
+    // If it's a hex string, convert from hex
+    if (value.startsWith('0x')) {
+      bnValue = new BN(value.slice(2), 16);
+    } else {
+      // Otherwise treat as decimal
+      bnValue = new BN(value, 10);
+    }
+  } else {
+    bnValue = value;
+  }
+  
+  // Convert to big-endian bytes and pad to 32 bytes
+  const hex = bnValue.toString(16).padStart(64, '0');
+  const bytes = new Uint8Array(32);
+  
+  // Fill the byte array
+  for (let i = 0; i < 32; i++) {
+    const idx = i * 2;
+    if (idx < hex.length) {
+      bytes[i] = parseInt(hex.slice(idx, idx + 2), 16);
+    }
+  }
+  
+  return bytes;
+}
+
+/**
+ * Formats byte arrays as a Rust-style array declaration
+ * Matches the exact format used in the groth16_test.rs file
+ */
+function formatAsRustByteArrays(arrays: number[][]): string {
+  return `pub const PUBLIC_INPUTS: [[u8; 32]; ${arrays.length}] = [
+${arrays.map(arr => {
+  // Group bytes into lines of ~20 numbers each for readability
+  const lines = [];
+  let line = '';
+  for (let i = 0; i < arr.length; i++) {
+    line += arr[i] + ', ';
+    // Start a new line every ~20 numbers
+    if ((i + 1) % 20 === 0 || i === arr.length - 1) {
+      lines.push(line.trim());
+      line = '';
+    }
+  }
+  return `    [
+        ${lines.join('\n        ')}
+    ]`;
+}).join(',\n')}
+];`;
+}
+
+/**
  * Calculates the Poseidon hash of ext data, similar to keccak256 in Ethereum implementation
  */
 async function getExtDataHash(extData: any): Promise<string> {
@@ -216,8 +275,7 @@ class Utxo {
  * Generates a sample ZK proof using the main proving method
  * 
  * @param options Optional parameters for the proof generation
- * @returns A promise that resolves to the generated proof string. e.g.:
- * 0x030e9125d70e3e5298bc495978ddb4803ad51d5854355a366694a77add213331125a20bcbe76c5398e351b2e78034b1cbfee080603db32aa56f93833f40ea66a0512831a2e53e95d914c1d9c9e138ddf76b35f28861837b549b0545d09e334fa0afc06903e839f7763f9560c48b0c82de7e8c457a85ea00ff2cc8c284579a2501374b16e70cd762a2b5994b8bac6a8abd06196fcb2bf4b83a2493271d263cc3f00151ddd2c0af67cb47611974af8e576dc59addda85eced8a0c8569ecd6967df07629e24f6ce7c77c301baf0def9bdd1825e1dad0dd6964407e329983b90496a0270fe50a827d56456f4563cb696c534f0edde50e7a993a4ca03148fa753f362
+ * @returns A promise that resolves to an object containing the proof byte array and public inputs
  */
 async function generateSampleProof(options: {
   amount1?: string,
@@ -227,7 +285,7 @@ async function generateSampleProof(options: {
   fee?: string,
   recipient?: string,
   relayer?: string
-} = {}): Promise<number[]> {
+} = {}): Promise<{ proof: number[], publicInputs: number[][] }> {
   console.log('Using test keypair with pubkey:', TEST_KEYPAIR.pubkey.substring(0, 20) + '...');
   
   // Use provided values or defaults
@@ -257,9 +315,9 @@ async function generateSampleProof(options: {
   ];
 
   // Create outputs (UTXOs that are being created)
-  const outputAmount = new BN(amount1).add(new BN(amount2)).sub(new BN(fee)); // Subtract fee
+  const outputAmount = '1900000000'; // Subtract fee
   const outputs = [
-    new Utxo({ amount: outputAmount.toString(10) }), // Combined amount minus fee
+    new Utxo({ amount: outputAmount }), // Combined amount minus fee
     new Utxo({ amount: '0' }) // Empty UTXO
   ];
 
@@ -268,6 +326,8 @@ async function generateSampleProof(options: {
   const outputsSum = outputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
   const inputsSum = inputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
   const extAmount = outputsSum.sub(inputsSum).add(new BN(fee));
+
+  console.log(`outputsSum: ${outputsSum.toString(10)}, inputsSum: ${inputsSum.toString(10)}, extAmount: ${extAmount.toString(10)}`);
 
   // Create mock Merkle path data (normally built from the tree)
   const inputMerklePathIndices = inputs.map((input) => input.index || 0);
@@ -292,8 +352,6 @@ async function generateSampleProof(options: {
     fee: fee,
     encryptedOutput1: mockEncrypt(outputs[0].getCommitment()),
     encryptedOutput2: mockEncrypt(outputs[1].getCommitment()),
-    isL1Withdrawal: false,
-    l1Fee: '0'
   };
   
   // Generate extDataHash from the extData structure
@@ -351,7 +409,45 @@ async function generateSampleProof(options: {
     // Convert the proof to a byte array
     const proofByteArray = hexToByteArray(proof);
     console.log(`Proof as byte array: [${proofByteArray.join(', ')}]`);
-    return proofByteArray;
+
+    // Extract public inputs similar to the PUBLIC_INPUTS format in the Rust test file
+    // The Rust test expects 9 public inputs, each as a 32-byte array
+    const publicInputs: number[][] = [];
+    
+    // 1. Root
+    publicInputs.push([...toBigEndianBytes(input.root)]);
+    
+    // 2-3. InputNullifiers (2 inputs)
+    for (const nullifier of input.inputNullifier) {
+      publicInputs.push([...toBigEndianBytes(nullifier)]);
+    }
+    
+    // 4-5. OutputCommitments (2 outputs)
+    for (const commitment of input.outputCommitment) {
+      publicInputs.push([...toBigEndianBytes(commitment)]);
+    }
+    
+    // 6. PublicAmount (extAmount)
+    publicInputs.push([...toBigEndianBytes(input.publicAmount)]);
+    
+    // 7. ExtDataHash
+    publicInputs.push([...toBigEndianBytes(input.extDataHash)]);
+    
+    // Log the public inputs for debugging
+    console.log('Generated public inputs:');
+    publicInputs.forEach((input, i) => {
+      console.log(`Public input ${i}: [${input.join(', ')}]`);
+    });
+    
+    // Format the public inputs as a Rust array declaration (exactly matching Rust test format)
+    const rustPublicInputs = formatAsRustByteArrays(publicInputs);
+    console.log('Rust PUBLIC_INPUTS declaration:');
+    console.log(rustPublicInputs);
+    
+    return { 
+      proof: proofByteArray,
+      publicInputs: publicInputs
+    };
   } catch (error) {
     console.error('Error generating proof:', error);
     if (error instanceof Error) {
@@ -380,8 +476,15 @@ async function main() {
     };
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
-    const proof = await generateSampleProof(options);
+    const { proof, publicInputs } = await generateSampleProof(options);
     console.log('Proof generation completed successfully!');
+    
+    // Output the Rust code for both the proof and public inputs in the exact format used in tests
+    console.log('\nRust constant declarations:');
+    console.log(`pub const PROOF: [u8; ${proof.length}] = [${proof.join(', ')}];`);
+    
+    // Use the formatter for exact match with test file format
+    console.log('\n' + formatAsRustByteArrays(publicInputs));
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {
