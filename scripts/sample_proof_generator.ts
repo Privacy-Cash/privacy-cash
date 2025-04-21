@@ -290,7 +290,7 @@ async function generateSampleProof(options: {
   
   // Use provided values or defaults
   const amount1 = options.amount1 || '1000000000'; // 1 SOL in lamports
-  const amount2 = options.amount2 || '500000000';  // 0.5 SOL in lamports
+  const amount2 = options.amount2 || '100000000';  // 0.5 SOL in lamports
   const blinding1 = options.blinding1 ? new BN(options.blinding1.toString()) : new BN('1000000000'); // Use fixed value for consistency
   const blinding2 = options.blinding2 ? new BN(options.blinding2.toString()) : new BN('500000000');  // Use fixed value for consistency
   const fee = options.fee || '100000000'; // Default 0.1 SOL fee
@@ -315,7 +315,7 @@ async function generateSampleProof(options: {
   ];
 
   // Create outputs (UTXOs that are being created)
-  const outputAmount = '1900000000'; // Subtract fee
+  const outputAmount = '2900000000'; // Subtract fee
   const outputs = [
     new Utxo({ amount: outputAmount }), // Combined amount minus fee
     new Utxo({ amount: '0' }) // Empty UTXO
@@ -326,8 +326,10 @@ async function generateSampleProof(options: {
   const outputsSum = outputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
   const inputsSum = inputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
   const extAmount = outputsSum.sub(inputsSum).add(new BN(fee));
+  const publicAmount = extAmount.toString(10);
 
-  console.log(`outputsSum: ${outputsSum.toString(10)}, inputsSum: ${inputsSum.toString(10)}, extAmount: ${extAmount.toString(10)}`);
+  console.log(`outputsSum: ${outputsSum.toString(10)}, inputsSum: ${inputsSum.toString(10)},
+    extAmount: ${extAmount.toString(10)}, publicAmount: ${publicAmount}`);
 
   // Create mock Merkle path data (normally built from the tree)
   const inputMerklePathIndices = inputs.map((input) => input.index || 0);
@@ -366,7 +368,7 @@ async function generateSampleProof(options: {
     root: root,
     inputNullifier: inputs.map(x => x.getNullifier()),
     outputCommitment: outputs.map(x => x.getCommitment()),
-    publicAmount: extAmount.toString(10),
+    publicAmount: publicAmount,
     extDataHash: extDataHash,
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
