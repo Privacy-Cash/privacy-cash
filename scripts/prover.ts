@@ -16,6 +16,7 @@ import * as tmp from 'tmp-promise'
 import { promisify } from 'util'
 import { exec as execCallback } from 'child_process'
 import BN from 'bn.js'
+import { to32ByteBuffer, g1Uncompressed, g2Uncompressed, negateAndSerializeG1 } from './bn128_utils'
 
 // Type definitions for external modules
 type WtnsModule = {
@@ -51,31 +52,60 @@ interface ProofResult {
 }
 
 /**
- * Generates a ZK proof using snarkjs
+ * Generates a ZK proof using snarkjs and formats it for use on-chain
  * 
  * @param input The circuit inputs to generate a proof for
  * @param keyBasePath The base path for the circuit keys (.wasm and .zkey files)
- * @returns A concatenated hex string of the proof elements
+ * @returns A proof object with formatted proof elements and public signals
  */
-async function prove(input: any, keyBasePath: string): Promise<string> {
-  const { proof }: ProofResult = await groth16Typed.fullProve(
+async function prove(input: any, keyBasePath: string): Promise<{
+  proofA: Uint8Array;
+  proofB: Uint8Array;
+  proofC: Uint8Array;
+  publicSignals: Uint8Array[];
+}> {
+  console.log('Generating proof for inputs:', input)
+  
+  // Generate the proof using snarkjs
+  const { proof, publicSignals } = await groth16Typed.fullProve(
     utilsTyped.stringifyBigInts(input),
     `${keyBasePath}.wasm`,
     `${keyBasePath}.zkey`,
   )
   
-  // Format the proof as a single hex string for on-chain verification
-  return (
-    '0x' +
-    toFixedHex(proof.pi_a[0]).slice(2) +
-    toFixedHex(proof.pi_a[1]).slice(2) +
-    toFixedHex(proof.pi_b[0][1]).slice(2) +
-    toFixedHex(proof.pi_b[0][0]).slice(2) +
-    toFixedHex(proof.pi_b[1][1]).slice(2) +
-    toFixedHex(proof.pi_b[1][0]).slice(2) +
-    toFixedHex(proof.pi_c[0]).slice(2) +
-    toFixedHex(proof.pi_c[1]).slice(2)
+  console.log('Original proof:', JSON.stringify(proof, null, 2))
+  console.log('Public signals:', JSON.stringify(publicSignals, null, 2))
+  
+  // Process the proof similarly to Darklake's implementation
+  const proofProc = utilsTyped.unstringifyBigInts(proof)
+  const publicSignalsUnstringified = utilsTyped.unstringifyBigInts(publicSignals)
+  
+  // referencing https://github.com/darklakefi/darklake-monorepo/blob/d0357ebc791e1f369aa24309385e86b715bd2bff/web-old/lib/prepare-proof.ts#L61 for post processing
+  // Load ffjavascript curve utilities
+  // We use require instead of import due to TypeScript module issues
+  const ffjavascript = require('ffjavascript')
+  const curve = await ffjavascript.buildBn128()
+  
+  // Format proof elements
+  let proofA = g1Uncompressed(curve, proofProc.pi_a)
+  proofA = await negateAndSerializeG1(curve, proofA)
+  
+  const proofB = g2Uncompressed(curve, proofProc.pi_b)
+  const proofC = g1Uncompressed(curve, proofProc.pi_c)
+  
+  // Format public signals
+  const formattedPublicSignals = publicSignalsUnstringified.map(
+    (signal: any) => {
+      return to32ByteBuffer(BigInt(signal))
+    }
   )
+  
+  return {
+    proofA: proofA,
+    proofB: proofB,
+    proofC: proofC,
+    publicSignals: formattedPublicSignals,
+  }
 }
 
 /**

@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.5",
-    "@types/circomlibjs": "^0.1.6"
+    "@types/circomlibjs": "^0.1.6",
+    "bigint-buffer": "^1.1.5"
   }
 }

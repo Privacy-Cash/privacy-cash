@@ -237,10 +237,18 @@ class Utxo {
 }
 
 /**
+ * Format an array as a compact string representation
+ * Removes all spaces to keep it as a single line in any terminal
+ */
+function formatCompactArray(arr: number[]): string {
+  return `[${arr.join(',')}]`;
+}
+
+/**
  * Generates a sample ZK proof using the main proving method
  * 
  * @param options Optional parameters for the proof generation
- * @returns A promise that resolves to an object containing the proof byte array and public inputs
+ * @returns A promise that resolves to an object containing the proof components and public inputs
  */
 async function generateSampleProof(options: {
   amount1?: string,
@@ -250,7 +258,12 @@ async function generateSampleProof(options: {
   fee?: string,
   recipient?: string,
   relayer?: string
-} = {}): Promise<{ proof: number[], publicInputs: number[][] }> {
+} = {}): Promise<{
+  proofA: Uint8Array;
+  proofB: Uint8Array;
+  proofC: Uint8Array;
+  publicSignals: Uint8Array[];
+}> {
   console.log('Using test keypair with pubkey:', TEST_KEYPAIR.pubkey.substring(0, 20) + '...');
   
   // Use provided values or defaults
@@ -368,53 +381,21 @@ async function generateSampleProof(options: {
     // Preprocess the input to ensure all values are properly formatted
     const processedInput = utils.stringifyBigInts(input);
     
-    // Use the original prove function with only the expected parameters
-    const proof = await prove(processedInput, keyBasePath);
+    // Use the updated prove function that returns an object with proof components
+    const proofObj = await prove(processedInput, keyBasePath);
     console.log('Proof generated successfully!');
-    console.log('Proof hex:', proof);
     
-    // Convert the proof to a byte array
-    const proofByteArray = hexToByteArray(proof);
-    console.log(`Proof as byte array: [${proofByteArray.join(', ')}]`);
-
-    // Extract public inputs similar to the PUBLIC_INPUTS format in the Rust test file
-    // The Rust test expects 9 public inputs, each as a 32-byte array
-    const publicInputs: number[][] = [];
+    // Log proof components as compact single-line arrays
+    console.log('Proof components:');
+    console.log('proofA:', formatCompactArray(Array.from(proofObj.proofA)));
+    console.log('proofB:', formatCompactArray(Array.from(proofObj.proofB)));
+    console.log('proofC:', formatCompactArray(Array.from(proofObj.proofC)));
     
-    // 1. Root
-    publicInputs.push([...toBigEndianBytes(input.root)]);
+    // Log public signals as a single array of arrays
+    const allPublicSignals = proofObj.publicSignals.map(signal => Array.from(signal));
+    console.log('publicSignals:', JSON.stringify(allPublicSignals).replace(/],\[/g, '],\n  ['));
     
-    // 2-3. InputNullifiers (2 inputs)
-    for (const nullifier of input.inputNullifier) {
-      publicInputs.push([...toBigEndianBytes(nullifier)]);
-    }
-    
-    // 4-5. OutputCommitments (2 outputs)
-    for (const commitment of input.outputCommitment) {
-      publicInputs.push([...toBigEndianBytes(commitment)]);
-    }
-    
-    // 6. PublicAmount (extAmount)
-    publicInputs.push([...toBigEndianBytes(input.publicAmount)]);
-    
-    // 7. ExtDataHash
-    publicInputs.push([...toBigEndianBytes(input.extDataHash)]);
-    
-    // Log the public inputs for debugging
-    console.log('Generated public inputs:');
-    publicInputs.forEach((input, i) => {
-      console.log(`Public input ${i}: [${input.join(', ')}]`);
-    });
-    
-    // Format the public inputs as a Rust array declaration (exactly matching Rust test format)
-    const rustPublicInputs = formatAsRustByteArrays(publicInputs);
-    console.log('Rust PUBLIC_INPUTS declaration:');
-    console.log(rustPublicInputs);
-    
-    return { 
-      proof: proofByteArray,
-      publicInputs: publicInputs
-    };
+    return proofObj;
   } catch (error) {
     console.error('Error generating proof:', error);
     if (error instanceof Error) {
@@ -443,15 +424,18 @@ async function main() {
     };
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
-    const { proof, publicInputs } = await generateSampleProof(options);
+    const proofObj = await generateSampleProof(options);
     console.log('Proof generation completed successfully!');
     
-    // Output the Rust code for both the proof and public inputs in the exact format used in tests
-    console.log('\nRust constant declarations:');
-    console.log(`pub const PROOF: [u8; ${proof.length}] = [${proof.join(', ')}];`);
+    // Output the proof components as single-line arrays
+    console.log('\nProof components (single-line arrays):');
+    console.log('proofA:', formatCompactArray(Array.from(proofObj.proofA)));
+    console.log('proofB:', formatCompactArray(Array.from(proofObj.proofB)));
+    console.log('proofC:', formatCompactArray(Array.from(proofObj.proofC)));
     
-    // Use the formatter for exact match with test file format
-    console.log('\n' + formatAsRustByteArrays(publicInputs));
+    // Log public signals as a single array of arrays
+    const allPublicSignals = proofObj.publicSignals.map(signal => Array.from(signal));
+    console.log('publicSignals:', JSON.stringify(allPublicSignals).replace(/],\[/g, '],\n  ['));
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {
@@ -473,6 +457,10 @@ if (require.main === module) {
 
 export { generateSampleProof };
 
+/**
+ * Converts a hex string to a byte array
+ * Utility function for direct conversion of hex proofs if needed
+ */
 function hexToByteArray(hexString: string): number[] {
   // Remove the '0x' prefix if present
   if (hexString.startsWith('0x')) {
@@ -488,10 +476,3 @@ function hexToByteArray(hexString: string): number[] {
 
   return byteArray;
 }
-
-// Your hex string
-const hexProof = "030e9125d70e3e5298bc495978ddb4803ad51d5854355a366694a77add213331125a20bcbe76c5398e351b2e78034b1cbfee080603db32aa56f93833f40ea66a0512831a2e53e95d914c1d9c9e138ddf76b35f28861837b549b0545d09e334fa0afc06903e839f7763f9560c48b0c82de7e8c457a85ea00ff2cc8c284579a2501374b16e70cd762a2b5994b8bac6a8abd06196fcb2bf4b83a2493271d263cc3f00151ddd2c0af67cb47611974af8e576dc59addda85eced8a0c8569ecd6967df07629e24f6ce7c77c301baf0def9bdd1825e1dad0dd6964407e329983b90496a0270fe50a827d56456f4563cb696c534f0edde50e7a993a4ca03148fa753f362";
-
-// Convert and print the byte array
-const byteArray = hexToByteArray(hexProof);
-console.log(`pub const PROOF: [u8; ${byteArray.length}] = [${byteArray.join(', ')}];`);
