@@ -13,6 +13,7 @@ import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildPoseidon } from "circomlibjs";
+import { utils } from 'ffjavascript';
 
 /**
  * Converts a number to a fixed-length hex string
@@ -170,42 +171,6 @@ class Keypair {
 
 // Create a singleton instance of the keypair to use across all UTXOs
 const DEFAULT_KEYPAIR = new Keypair();
-
-/**
- * Prepares input data for the circuit by ensuring all values are properly formatted
- * This helps avoid BigInt conversion issues
- */
-function prepareInputForCircuit(input: any): any {
-  // Deep clone to avoid mutating the original input
-  const preparedInput = JSON.parse(JSON.stringify(input));
-  
-  // Recursively process all values
-  function processValue(value: any): any {
-    if (typeof value === 'string') {
-      // If it looks like a hex string without 0x prefix, convert to decimal
-      if (/^[0-9a-fA-F]+$/.test(value) && value.length > 8) {
-        try {
-          return new BN(value, 16).toString(10);
-        } catch (e) {
-          // If conversion fails, return the original value
-          return value;
-        }
-      }
-      return value;
-    } else if (Array.isArray(value)) {
-      return value.map(processValue);
-    } else if (value !== null && typeof value === 'object') {
-      const result: any = {};
-      for (const key in value) {
-        result[key] = processValue(value[key]);
-      }
-      return result;
-    }
-    return value;
-  }
-  
-  return processValue(preparedInput);
-}
 
 /**
  * Simplified Utxo class inspired by Tornado Cash Nova
@@ -401,7 +366,7 @@ async function generateSampleProof(options: {
     console.log('- outPubkey[0]:', input.outPubkey[0].substring(0, 20) + '...');
     
     // Preprocess the input to ensure all values are properly formatted
-    const processedInput = prepareInputForCircuit(input);
+    const processedInput = utils.stringifyBigInts(input);
     
     // Use the original prove function with only the expected parameters
     const proof = await prove(processedInput, keyBasePath);
