@@ -26,6 +26,7 @@ type WtnsModule = {
 
 type Groth16Module = {
   fullProve: (input: any, wasmFile: string, zkeyFile: string) => Promise<{ proof: Proof; publicSignals: any }>
+  verify: (vkeyData: any, publicSignals: any, proof: Proof) => Promise<boolean>
 }
 
 type UtilsModule = {
@@ -59,53 +60,64 @@ interface ProofResult {
  * @returns A proof object with formatted proof elements and public signals
  */
 async function prove(input: any, keyBasePath: string): Promise<{
-  proofA: Uint8Array;
-  proofB: Uint8Array;
-  proofC: Uint8Array;
+  proof: Proof
   publicSignals: Uint8Array[];
 }> {
   console.log('Generating proof for inputs:', input)
   
   // Generate the proof using snarkjs
-  const { proof, publicSignals } = await groth16Typed.fullProve(
+  // const { proof, publicSignals } = await groth16Typed.fullProve(
+  //   utilsTyped.stringifyBigInts(input),
+  //   `${keyBasePath}.wasm`,
+  //   `${keyBasePath}.zkey`,
+  // )
+
+  return await groth16Typed.fullProve(
     utilsTyped.stringifyBigInts(input),
     `${keyBasePath}.wasm`,
     `${keyBasePath}.zkey`,
   )
   
-  console.log('Original proof:', JSON.stringify(proof, null, 2))
-  console.log('Public signals:', JSON.stringify(publicSignals, null, 2))
+  // console.log('Original proof:', JSON.stringify(proof, null, 2))
+  // console.log('Public signals:', JSON.stringify(publicSignals, null, 2))
   
-  // Process the proof similarly to Darklake's implementation
-  const proofProc = utilsTyped.unstringifyBigInts(proof)
-  const publicSignalsUnstringified = utilsTyped.unstringifyBigInts(publicSignals)
+  // // Process the proof similarly to Darklake's implementation
+  // const proofProc = utilsTyped.unstringifyBigInts(proof)
+  // const publicSignalsUnstringified = utilsTyped.unstringifyBigInts(publicSignals)
   
-  // referencing https://github.com/darklakefi/darklake-monorepo/blob/d0357ebc791e1f369aa24309385e86b715bd2bff/web-old/lib/prepare-proof.ts#L61 for post processing
-  // Load ffjavascript curve utilities
-  // We use require instead of import due to TypeScript module issues
-  const ffjavascript = require('ffjavascript')
-  const curve = await ffjavascript.buildBn128()
+  // // referencing https://github.com/darklakefi/darklake-monorepo/blob/d0357ebc791e1f369aa24309385e86b715bd2bff/web-old/lib/prepare-proof.ts#L61 for post processing
+  // // Load ffjavascript curve utilities
+  // // We use require instead of import due to TypeScript module issues
+  // const ffjavascript = require('ffjavascript')
+  // const curve = await ffjavascript.buildBn128()
   
-  // Format proof elements
-  let proofA = g1Uncompressed(curve, proofProc.pi_a)
-  proofA = await negateAndSerializeG1(curve, proofA)
+  // // Format proof elements
+  // let proofA = g1Uncompressed(curve, proofProc.pi_a)
+  // proofA = await negateAndSerializeG1(curve, proofA)
   
-  const proofB = g2Uncompressed(curve, proofProc.pi_b)
-  const proofC = g1Uncompressed(curve, proofProc.pi_c)
+  // const proofB = g2Uncompressed(curve, proofProc.pi_b)
+  // const proofC = g1Uncompressed(curve, proofProc.pi_c)
   
-  // Format public signals
-  const formattedPublicSignals = publicSignalsUnstringified.map(
-    (signal: any) => {
-      return to32ByteBuffer(BigInt(signal))
-    }
-  )
+  // // Format public signals
+  // const formattedPublicSignals = publicSignalsUnstringified.map(
+  //   (signal: any) => {
+  //     return to32ByteBuffer(BigInt(signal))
+  //   }
+  // )
   
-  return {
-    proofA: proofA,
-    proofB: proofB,
-    proofC: proofC,
-    publicSignals: formattedPublicSignals,
-  }
+  // return {
+  //   proofA: proofA,
+  //   proofB: proofB,
+  //   proofC: proofC,
+  //   publicSignals: formattedPublicSignals,
+  // }
+}
+
+async function verify(verificationKeyPath: string, publicSignals: any, proof: any): Promise<boolean> {
+  // Load verification key from the specified path
+  const vKey = JSON.parse(fs.readFileSync(`${verificationKeyPath}`, 'utf8'));
+  const res = await groth16Typed.verify(vKey, publicSignals, proof);
+  return res;
 }
 
 /**
@@ -175,4 +187,4 @@ function toFixedHex(number: any, length = 32): string {
   return result
 }
 
-export { prove, proveZkutil }
+export { prove, proveZkutil, verify, Proof }

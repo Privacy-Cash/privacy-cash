@@ -8,7 +8,7 @@
 
 /// <reference path="./types.d.ts" />
 
-import { prove } from './prover';
+import { prove, verify, Proof } from './prover';
 import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -259,10 +259,10 @@ async function generateSampleProof(options: {
   recipient?: string,
   relayer?: string
 } = {}): Promise<{
-  proofA: Uint8Array;
-  proofB: Uint8Array;
-  proofC: Uint8Array;
-  publicSignals: Uint8Array[];
+  // proofA: Uint8Array;
+  // proofB: Uint8Array;
+  // proofC: Uint8Array;
+  // publicSignals: Uint8Array[];
 }> {
   console.log('Using test keypair with pubkey:', TEST_KEYPAIR.pubkey.substring(0, 20) + '...');
   
@@ -382,20 +382,28 @@ async function generateSampleProof(options: {
     const processedInput = utils.stringifyBigInts(input);
     
     // Use the updated prove function that returns an object with proof components
-    const proofObj = await prove(processedInput, keyBasePath);
-    console.log('Proof generated successfully!');
+    const {proof, publicSignals} = await prove(processedInput, keyBasePath);
+    console.log('Proof generated successfully!', {proof, publicSignals});
     
     // Log proof components as compact single-line arrays
-    console.log('Proof components:');
-    console.log('proofA:', formatCompactArray(Array.from(proofObj.proofA)));
-    console.log('proofB:', formatCompactArray(Array.from(proofObj.proofB)));
-    console.log('proofC:', formatCompactArray(Array.from(proofObj.proofC)));
+    // console.log('Proof components:');
+    // console.log('proofA:', formatCompactArray(Array.from(proofObj.proofA)));
+    // console.log('proofB:', formatCompactArray(Array.from(proofObj.proofB)));
+    // console.log('proofC:', formatCompactArray(Array.from(proofObj.proofC)));
     
-    // Log public signals as a single array of arrays
-    const allPublicSignals = proofObj.publicSignals.map(signal => Array.from(signal));
-    console.log('publicSignals:', JSON.stringify(allPublicSignals).replace(/],\[/g, '],\n  ['));
+    // // Log public signals as a single array of arrays
+    // const allPublicSignals = proofObj.publicSignals.map(signal => Array.from(signal));
+    // console.log('publicSignals:', JSON.stringify(allPublicSignals).replace(/],\[/g, '],\n  ['));
+
+    // const res = await verify("../artifacts/circuits/verificationkey2.json", allPublicSignals, {
+
+    // } as Proof);
+    // console.log('Verification result:', res);
+
+    const res = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"), publicSignals, proof);
+    console.log('!!!!!!Verification result:', res);
     
-    return proofObj;
+    return {proof, publicSignals};
   } catch (error) {
     console.error('Error generating proof:', error);
     if (error instanceof Error) {
@@ -425,17 +433,17 @@ async function main() {
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
     const proofObj = await generateSampleProof(options);
-    console.log('Proof generation completed successfully!');
+    // console.log('Proof generation completed successfully!');
     
-    // Output the proof components as single-line arrays
-    console.log('\nProof components (single-line arrays):');
-    console.log('proofA:', formatCompactArray(Array.from(proofObj.proofA)));
-    console.log('proofB:', formatCompactArray(Array.from(proofObj.proofB)));
-    console.log('proofC:', formatCompactArray(Array.from(proofObj.proofC)));
+    // // Output the proof components as single-line arrays
+    // console.log('\nProof components (single-line arrays):');
+    // console.log('proofA:', formatCompactArray(Array.from(proofObj.proofA)));
+    // console.log('proofB:', formatCompactArray(Array.from(proofObj.proofB)));
+    // console.log('proofC:', formatCompactArray(Array.from(proofObj.proofC)));
     
-    // Log public signals as a single array of arrays
-    const allPublicSignals = proofObj.publicSignals.map(signal => Array.from(signal));
-    console.log('publicSignals:', JSON.stringify(allPublicSignals).replace(/],\[/g, '],\n  ['));
+    // // Log public signals as a single array of arrays
+    // const allPublicSignals = proofObj.publicSignals.map(signal => Array.from(signal));
+    // console.log('publicSignals:', JSON.stringify(allPublicSignals).replace(/],\[/g, '],\n  ['));
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {
