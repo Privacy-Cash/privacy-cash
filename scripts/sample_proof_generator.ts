@@ -378,29 +378,15 @@ async function generateSampleProof(options: {
     console.log('- inPrivateKey[0]:', input.inPrivateKey[0].substring(0, 20) + '...');
     console.log('- outPubkey[0]:', input.outPubkey[0].substring(0, 20) + '...');
     
-    // Preprocess the input to ensure all values are properly formatted
-    const processedInput = utils.stringifyBigInts(input);
-    
     // Use the updated prove function that returns an object with proof components
-    const {proof, publicSignals} = await prove(processedInput, keyBasePath);
+    const {proof, publicSignals} = await prove(input, keyBasePath);
     console.log('Proof generated successfully!', {proof, publicSignals});
-    
-    // Log proof components as compact single-line arrays
-    // console.log('Proof components:');
-    // console.log('proofA:', formatCompactArray(Array.from(proofObj.proofA)));
-    // console.log('proofB:', formatCompactArray(Array.from(proofObj.proofB)));
-    // console.log('proofC:', formatCompactArray(Array.from(proofObj.proofC)));
-    
-    // // Log public signals as a single array of arrays
-    // const allPublicSignals = proofObj.publicSignals.map(signal => Array.from(signal));
-    // console.log('publicSignals:', JSON.stringify(allPublicSignals).replace(/],\[/g, '],\n  ['));
 
-    // const res = await verify("../artifacts/circuits/verificationkey2.json", allPublicSignals, {
+    const processedPublicSignals = utils.unstringifyBigInts(publicSignals);
+    const processedProof = utils.unstringifyBigInts(proof);
 
-    // } as Proof);
-    // console.log('Verification result:', res);
-
-    const res = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"), publicSignals, proof);
+    const res = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"),
+      processedPublicSignals, processedProof);
     console.log('!!!!!!Verification result:', res);
     
     return {proof, publicSignals};
