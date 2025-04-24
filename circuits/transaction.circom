@@ -16,26 +16,26 @@ nullifier = hash(commitment, merklePath, sign(privKey, commitment, merklePath))
 
 // Universal JoinSplit transaction with nIns inputs and 2 outputs
 template Transaction(levels, nIns, nOuts, zeroLeaf) {
-    signal input root;
-    // extAmount = external amount used for deposits and withdrawals
-    // correct extAmount range is enforced on the smart contract
-    // publicAmount = extAmount - fee
-    signal input publicAmount;
+    // signal input root;
+    // // extAmount = external amount used for deposits and withdrawals
+    // // correct extAmount range is enforced on the smart contract
+    // // publicAmount = extAmount - fee
+    // signal input publicAmount;
     signal input extDataHash;
 
     // data for transaction inputs
-    signal         input inputNullifier[nIns];
-    signal private input inAmount[nIns];
-    signal private input inPrivateKey[nIns];
-    signal private input inBlinding[nIns];
-    signal private input inPathIndices[nIns];
-    signal private input inPathElements[nIns][levels];
+    // signal         input inputNullifier[nIns];
+    // signal private input inAmount[nIns];
+    // signal private input inPrivateKey[nIns];
+    // signal private input inBlinding[nIns];
+    // signal private input inPathIndices[nIns];
+    // signal private input inPathElements[nIns][levels];
 
-    // data for transaction outputs
-    signal         input outputCommitment[nOuts];
-    signal private input outAmount[nOuts];
-    signal private input outPubkey[nOuts];
-    signal private input outBlinding[nOuts];
+    // // data for transaction outputs
+    // signal         input outputCommitment[nOuts];
+    // signal private input outAmount[nOuts];
+    // signal private input outPubkey[nOuts];
+    // signal private input outBlinding[nOuts];
 
     // Commenting out complex sections to simplify the circuit for debugging
     // component inKeypair[nIns];
@@ -112,5 +112,5 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
 
     // sumIns + publicAmount === sumOuts;
 
-    // signal extDataSquare <== extDataHash * extDataHash;
+    signal extDataSquare <== extDataHash * extDataHash;
 }

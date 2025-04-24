@@ -15,6 +15,10 @@ import * as path from 'path';
 import { buildPoseidon } from "circomlibjs";
 import { utils } from 'ffjavascript';
 
+const FIELD_SIZE = new BN(
+  '21888242871839275222246405745257275088548364400416034343698204186575808495617'
+)
+
 /**
  * Converts a number to a fixed-length hex string
  */
@@ -32,73 +36,13 @@ function toFixedHex(number: any, length = 32): string {
 }
 
 /**
- * Converts a string or BN to a 32-byte array with big-endian representation
- */
-function toBigEndianBytes(value: string | BN): Uint8Array {
-  let bnValue: BN;
-  
-  // Convert to BN if it's a string
-  if (typeof value === 'string') {
-    // If it's a hex string, convert from hex
-    if (value.startsWith('0x')) {
-      bnValue = new BN(value.slice(2), 16);
-    } else {
-      // Otherwise treat as decimal
-      bnValue = new BN(value, 10);
-    }
-  } else {
-    bnValue = value;
-  }
-  
-  // Convert to big-endian bytes and pad to 32 bytes
-  const hex = bnValue.toString(16).padStart(64, '0');
-  const bytes = new Uint8Array(32);
-  
-  // Fill the byte array
-  for (let i = 0; i < 32; i++) {
-    const idx = i * 2;
-    if (idx < hex.length) {
-      bytes[i] = parseInt(hex.slice(idx, idx + 2), 16);
-    }
-  }
-  
-  return bytes;
-}
-
-/**
- * Formats byte arrays as a Rust-style array declaration
- * Matches the exact format used in the groth16_test.rs file
- */
-function formatAsRustByteArrays(arrays: number[][]): string {
-  return `pub const PUBLIC_INPUTS: [[u8; 32]; ${arrays.length}] = [
-${arrays.map(arr => {
-  // Group bytes into lines of ~20 numbers each for readability
-  const lines = [];
-  let line = '';
-  for (let i = 0; i < arr.length; i++) {
-    line += arr[i] + ', ';
-    // Start a new line every ~20 numbers
-    if ((i + 1) % 20 === 0 || i === arr.length - 1) {
-      lines.push(line.trim());
-      line = '';
-    }
-  }
-  return `    [
-        ${lines.join('\n        ')}
-    ]`;
-}).join(',\n')}
-];`;
-}
-
-/**
- * Calculates the Poseidon hash of ext data, similar to keccak256 in Ethereum implementation
+ * Calculates the Poseidon hash of ext data
  */
 async function getExtDataHash(extData: any): Promise<string> {
   // Initialize Poseidon hasher
   const poseidon = await buildPoseidon();
   
   // Prepare inputs as array of field elements
-  // Handle different formats correctly and ensure deterministic behavior
   const inputs = [
     // For hex addresses, remove 0x prefix and convert from hex to decimal
     new BN(extData.recipient.toString().replace('0x', ''), 16),
@@ -108,7 +52,6 @@ async function getExtDataHash(extData: any): Promise<string> {
     new BN(extData.relayer.toString().replace('0x', ''), 16),
     new BN(extData.fee.toString()),
     // For encrypted outputs, use a deterministic numeric representation
-    // Instead of using Buffer, directly convert string to a numeric value
     new BN(extData.encryptedOutput1.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16),
     new BN(extData.encryptedOutput2.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16)
   ];
@@ -116,15 +59,16 @@ async function getExtDataHash(extData: any): Promise<string> {
   // Convert BNs to BigInts for Poseidon
   const bigIntInputs = inputs.map(bn => BigInt(bn.toString()));
   
-  // Log the exact inputs going into the hasher for debugging
-  console.log('Poseidon hash inputs:', bigIntInputs.map(n => n.toString()));
+  // Log the inputs for debugging
+  console.log('Poseidon inputs:', bigIntInputs.map(n => n.toString()));
   
   // Calculate the Poseidon hash
   const hash = poseidon(bigIntInputs);
   
-  // Convert the hash result to a string
+  // Convert the hash to a field element string (poseidon already ensures it's in the field)
   const hashStr = poseidon.F.toString(hash);
   
+  // Return the result as a string directly without additional modulo
   return hashStr;
 }
 
@@ -343,26 +287,27 @@ async function generateSampleProof(options: {
   // https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L76-L97
   const input = {
     // Common transaction data
-    root: root,
-    inputNullifier: inputs.map(x => x.getNullifier()),
-    outputCommitment: outputs.map(x => x.getCommitment()),
-    publicAmount: publicAmount,
+    // root: root,
+    // inputNullifier: inputs.map(x => x.getNullifier()),
+    // outputCommitment: outputs.map(x => x.getCommitment()),
+    // publicAmount: publicAmount,
     extDataHash: extDataHash,
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
-    inAmount: inputs.map(x => x.amount.toString(10)),
-    inPrivateKey: inputs.map(x => x.keypair.privkey),
-    inBlinding: inputs.map(x => x.blinding.toString(10)),
-    inPathIndices: inputMerklePathIndices,
-    inPathElements: inputMerklePathElements,
+    // inAmount: inputs.map(x => x.amount.toString(10)),
+    // inPrivateKey: inputs.map(x => x.keypair.privkey),
+    // inBlinding: inputs.map(x => x.blinding.toString(10)),
+    // inPathIndices: inputMerklePathIndices,
+    // inPathElements: inputMerklePathElements,
     
-    // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
-    outAmount: outputs.map(x => x.amount.toString(10)),
-    outBlinding: outputs.map(x => x.blinding.toString(10)),
-    outPubkey: outputs.map(x => x.keypair.pubkey),
+    // // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
+    // outAmount: outputs.map(x => x.amount.toString(10)),
+    // outBlinding: outputs.map(x => x.blinding.toString(10)),
+    // outPubkey: outputs.map(x => x.keypair.pubkey),
   };
 
   // Path to the proving key files (wasm and zkey)
+  // Try with both circuits to see which one works
   const keyBasePath = path.resolve(__dirname, '../artifacts/circuits/transaction2');
   
   console.log('Generating proof with inputs structured like Tornado Cash Nova...');
@@ -374,22 +319,69 @@ async function generateSampleProof(options: {
     console.log(`Checking files exist: ${fs.existsSync(keyBasePath + '.wasm')}, ${fs.existsSync(keyBasePath + '.zkey')}`);
     
     console.log('Sample input values:');
-    console.log('- inAmount[0]:', input.inAmount[0]);
-    console.log('- inPrivateKey[0]:', input.inPrivateKey[0].substring(0, 20) + '...');
-    console.log('- outPubkey[0]:', input.outPubkey[0].substring(0, 20) + '...');
+    // console.log('- inAmount[0]:', input.inAmount[0]);
+    // console.log('- inPrivateKey[0]:', input.inPrivateKey[0].substring(0, 20) + '...');
+    // console.log('- outPubkey[0]:', input.outPubkey[0].substring(0, 20) + '...');
     
     // Use the updated prove function that returns an object with proof components
     const {proof, publicSignals} = await prove(input, keyBasePath);
-    console.log('Proof generated successfully!', {proof, publicSignals});
-
+    
+    console.log('Proof generated successfully!');
+    console.log('Public signals:');
+    publicSignals.forEach((signal, index) => {
+      const signalStr = signal.toString();
+      let matchedKey = 'unknown';
+      
+      // Try to identify which input this signal matches
+      for (const [key, value] of Object.entries(input)) {
+        if (Array.isArray(value)) {
+          if (value.some(v => v.toString() === signalStr)) {
+            matchedKey = key;
+            break;
+          }
+        } else if (value.toString() === signalStr) {
+          matchedKey = key;
+          break;
+        }
+      }
+      
+      console.log(`[${index}]: ${signal} (${matchedKey})`);
+    });
+    
+    // Try verification with proper field element handling
     const processedPublicSignals = utils.unstringifyBigInts(publicSignals);
     const processedProof = utils.unstringifyBigInts(proof);
 
-    const res = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"),
-      processedPublicSignals, processedProof);
-    console.log('!!!!!!Verification result:', res);
-    
-    return {proof, publicSignals};
+    try {
+      // First attempt with processed signals
+      const res = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"),
+        processedPublicSignals, processedProof);
+      console.log('!!!!!!Verification result 1 (with processed signals):', res);
+      
+      if (!res) {
+        // Try alternative verification directly with the original values
+        console.log('Attempting alternative verification approach...');
+        
+        // Try with original signals without processing
+        const res2 = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"),
+          publicSignals, proof);
+        console.log('!!!!!!Verification result 2 (with original signals):', res2);
+        
+        // Check verification key path
+        console.log('Verification key path:', path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"));
+        console.log('Verification key exists:', fs.existsSync(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json")));
+      }
+      
+      return {proof, publicSignals};
+    } catch (error: any) {
+      console.error('Verification error:', error.message);
+      console.error('This indicates a mismatch between the circuit, prover, and verification key.');
+      console.log('You may need to:');
+      console.log('1. Recompile the circuit after making changes to transaction2.circom');
+      console.log('2. Regenerate the verification key');
+      console.log('3. Make sure field element encodings are consistent');
+      throw error;
+    }
   } catch (error) {
     console.error('Error generating proof:', error);
     if (error instanceof Error) {
