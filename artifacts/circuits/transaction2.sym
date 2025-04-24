@@ -1,2 +1,9 @@
-1,1,0,main.extDataHash
-2,2,0,main.extDataSquare
+1,1,0,main.root
+2,2,0,main.publicAmount
+3,3,0,main.extDataHash
+4,4,0,main.inputNullifier[0]
+5,5,0,main.inputNullifier[1]
+6,6,0,main.outputCommitment[0]
+7,7,0,main.outputCommitment[1]
+8,8,0,main.extDataSquare
+9,9,0,main.rootSquare

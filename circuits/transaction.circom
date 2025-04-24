@@ -16,15 +16,15 @@ nullifier = hash(commitment, merklePath, sign(privKey, commitment, merklePath))
 
 // Universal JoinSplit transaction with nIns inputs and 2 outputs
 template Transaction(levels, nIns, nOuts, zeroLeaf) {
-    // signal input root;
-    // // extAmount = external amount used for deposits and withdrawals
-    // // correct extAmount range is enforced on the smart contract
-    // // publicAmount = extAmount - fee
-    // signal input publicAmount;
+    signal input root;
+    // extAmount = external amount used for deposits and withdrawals
+    // correct extAmount range is enforced on the smart contract
+    // publicAmount = extAmount - fee
+    signal input publicAmount;
     signal input extDataHash;
 
     // data for transaction inputs
-    // signal         input inputNullifier[nIns];
+    signal         input inputNullifier[nIns];
     // signal private input inAmount[nIns];
     // signal private input inPrivateKey[nIns];
     // signal private input inBlinding[nIns];
@@ -32,7 +32,7 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     // signal private input inPathElements[nIns][levels];
 
     // // data for transaction outputs
-    // signal         input outputCommitment[nOuts];
+    signal         input outputCommitment[nOuts];
     // signal private input outAmount[nOuts];
     // signal private input outPubkey[nOuts];
     // signal private input outBlinding[nOuts];
@@ -113,4 +113,5 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     // sumIns + publicAmount === sumOuts;
 
     signal extDataSquare <== extDataHash * extDataHash;
+    signal rootSquare <== root * root;
 }

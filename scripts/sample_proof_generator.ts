@@ -287,10 +287,10 @@ async function generateSampleProof(options: {
   // https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L76-L97
   const input = {
     // Common transaction data
-    // root: root,
-    // inputNullifier: inputs.map(x => x.getNullifier()),
-    // outputCommitment: outputs.map(x => x.getCommitment()),
-    // publicAmount: publicAmount,
+    root: root,
+    inputNullifier: inputs.map(x => x.getNullifier()),
+    outputCommitment: outputs.map(x => x.getCommitment()),
+    publicAmount: publicAmount,
     extDataHash: extDataHash,
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
@@ -319,9 +319,9 @@ async function generateSampleProof(options: {
     console.log(`Checking files exist: ${fs.existsSync(keyBasePath + '.wasm')}, ${fs.existsSync(keyBasePath + '.zkey')}`);
     
     console.log('Sample input values:');
-    // console.log('- inAmount[0]:', input.inAmount[0]);
-    // console.log('- inPrivateKey[0]:', input.inPrivateKey[0].substring(0, 20) + '...');
-    // console.log('- outPubkey[0]:', input.outPubkey[0].substring(0, 20) + '...');
+    console.log('- root:', input.root);
+    console.log('- publicAmount:', input.publicAmount);
+    console.log('- extDataHash:', input.extDataHash);
     
     // Use the updated prove function that returns an object with proof components
     const {proof, publicSignals} = await prove(input, keyBasePath);
