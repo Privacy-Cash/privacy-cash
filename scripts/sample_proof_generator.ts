@@ -245,10 +245,12 @@ async function generateSampleProof(options: {
 
   // Calculate extAmount (amount being deposited or withdrawn)
   // outputs - inputs + fee (same formula as in Tornado Nova)
-  const outputsSum = outputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
-  const inputsSum = inputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
-  const extAmount = outputsSum.sub(inputsSum).add(new BN(fee));
-  const publicAmount = extAmount.toString(10);
+  const inputsSum = inputs.reduce((sum, x) => sum.add(x.amount), new BN(0))
+  const outputsSum = outputs.reduce((sum, x) => sum.add(x.amount), new BN(0))
+  const extAmount = new BN(fee)
+    .add(outputsSum)
+    .sub(inputsSum)
+  const publicAmount = new BN(extAmount).sub(new BN(fee)).add(FIELD_SIZE).mod(FIELD_SIZE).toString()
 
   console.log(`outputsSum: ${outputsSum.toString(10)}, inputsSum: ${inputsSum.toString(10)},
     extAmount: ${extAmount.toString(10)}, publicAmount: ${publicAmount}`);
@@ -294,14 +296,14 @@ async function generateSampleProof(options: {
     extDataHash: extDataHash,
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
-    // inAmount: inputs.map(x => x.amount.toString(10)),
-    // inPrivateKey: inputs.map(x => x.keypair.privkey),
-    // inBlinding: inputs.map(x => x.blinding.toString(10)),
+    inAmount: inputs.map(x => x.amount.toString(10)),
+    inPrivateKey: inputs.map(x => x.keypair.privkey),
+    inBlinding: inputs.map(x => x.blinding.toString(10)),
     // inPathIndices: inputMerklePathIndices,
     // inPathElements: inputMerklePathElements,
     
     // // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
-    // outAmount: outputs.map(x => x.amount.toString(10)),
+    outAmount: outputs.map(x => x.amount.toString(10)),
     // outBlinding: outputs.map(x => x.blinding.toString(10)),
     // outPubkey: outputs.map(x => x.keypair.pubkey),
   };
@@ -322,6 +324,10 @@ async function generateSampleProof(options: {
     console.log('- root:', input.root);
     console.log('- publicAmount:', input.publicAmount);
     console.log('- extDataHash:', input.extDataHash);
+    console.log('- inAmount[0]:', input.inAmount[0]);
+    console.log('- inPrivateKey[0]:', input.inPrivateKey[0].substring(0, 20) + '...');
+    console.log('- sumIns:', inputs.reduce((sum, x) => sum.add(x.amount), new BN(0)).toString(10));
+    console.log('- sumOuts:', outputs.reduce((sum, x) => sum.add(x.amount), new BN(0)).toString(10));
     
     // Use the updated prove function that returns an object with proof components
     const {proof, publicSignals} = await prove(input, keyBasePath);
