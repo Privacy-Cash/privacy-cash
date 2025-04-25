@@ -16,6 +16,7 @@ import { buildPoseidon } from "circomlibjs";
 import { utils } from 'ffjavascript';
 import bs58 from 'bs58';
 import MerkleTree from 'fixed-merkle-tree';
+import * as ethers from 'ethers';
 
 const FIELD_SIZE = new BN(
   '21888242871839275222246405745257275088548364400416034343698204186575808495617'
@@ -92,10 +93,16 @@ class Keypair {
   pubkey: string;
   privkey: string;
 
-  constructor() {
-    // Use the loaded test keypair
-    this.pubkey = TEST_KEYPAIR.pubkey;
-    this.privkey = TEST_KEYPAIR.privkey;
+  constructor(privkey?: string) {
+    if (privkey) {
+      this.privkey = privkey;
+      // Derive pubkey from private key (simplified for this example)
+      this.pubkey = Buffer.from(this.privkey).toString('hex').substring(0, 20);
+    } else {
+      // Use the loaded test keypair
+      this.pubkey = TEST_KEYPAIR.pubkey;
+      this.privkey = TEST_KEYPAIR.privkey;
+    }
   }
 
   getPrivateKeyAsBigInt(): BN {
@@ -103,6 +110,16 @@ class Keypair {
     const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
     const privateKeyBigInt = BigInt('0x' + privateKeyHex);
     return new BN(privateKeyBigInt.toString());
+  }
+
+  static generateNew(): Keypair {
+    // Use ethers.js to generate a random wallet
+    const wallet = ethers.Wallet.createRandom();
+    // Convert the private key to bs58 format
+    const privateKeyHex = wallet.privateKey.slice(2); // Remove '0x' prefix
+    const privateKeyBytes = Buffer.from(privateKeyHex, 'hex');
+    const privateKey = bs58.encode(privateKeyBytes);
+    return new Keypair(privateKey);
   }
 }
 
@@ -121,7 +138,15 @@ class Utxo {
 
   constructor({ 
     amount = new BN(0), 
-    keypair = DEFAULT_KEYPAIR, 
+    /**
+     * Tornado nova doesn't use solana eddsa with curve 25519 but their own "keypair"
+     * which is:
+     * - private key: random [31;u8]
+     * - public key: PoseidonHash(privateKey)
+     * 
+     * Generate a new keypair for each UTXO
+     */
+    keypair = Keypair.generateNew(), 
     blinding = new BN('1000000000'), // Use fixed value for consistency instead of randomBN()
     index = null 
   }: { 
