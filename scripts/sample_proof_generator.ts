@@ -15,6 +15,7 @@ import * as path from 'path';
 import { buildPoseidon } from "circomlibjs";
 import { utils } from 'ffjavascript';
 import bs58 from 'bs58';
+import MerkleTree from 'fixed-merkle-tree';
 
 const FIELD_SIZE = new BN(
   '21888242871839275222246405745257275088548364400416034343698204186575808495617'
@@ -210,6 +211,40 @@ async function generateSampleProof(options: {
   const fee = options.fee || '100000000'; // Default 0.1 SOL fee
   const recipient = options.recipient || '0x1111111111111111111111111111111111111111'; // Default recipient address
   const relayer = options.relayer || '0x2222222222222222222222222222222222222222';   // Default relayer address
+
+  // Initialize Poseidon hasher first
+  const poseidon = await buildPoseidon();
+  
+  // Create Tornado-style poseidon hash functions
+  const poseidonHash = (items: any[]) => {
+    // Convert inputs to BigInts if they're not already
+    const bigIntInputs = items.map(item => {
+      if (typeof item === 'string') {
+        return BigInt(item);
+      } else if (typeof item === 'number') {
+        return BigInt(item);
+      } else if (BN.isBN(item)) {
+        return BigInt(item.toString());
+      }
+      return item; // Assume it's already a BigInt
+    });
+    
+    // Calculate hash and convert to proper field element string
+    const hash = poseidon(bigIntInputs);
+    return poseidon.F.toString(hash);
+  };
+  
+  const poseidonHash2 = (a: any, b: any) => poseidonHash([a, b]);
+  
+  // Create the merkle tree with the pre-initialized poseidon hash
+  const tree = new MerkleTree(20, [], {
+    hashFunction: poseidonHash2,
+    zeroElement: 11850551329423159860688778991827824730037759162201783566284850822760196767874
+  });
+  
+  // Log the root in decimal
+  console.log(`Merkle tree root (decimal): ${tree.root.toString()}`);
+  console.log(`Merkle tree root (hex): 0x${BigInt(tree.root.toString()).toString(16)}`);
   
   console.log(`Using amounts: ${amount1}, ${amount2}`);
   console.log(`Using blinding factors: ${blinding1.toString(10).substring(0, 10)}..., ${blinding2.toString(10).substring(0, 10)}...`);
@@ -249,17 +284,30 @@ async function generateSampleProof(options: {
 
   // Create mock Merkle path data (normally built from the tree)
   const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+  
+  // For first deposit into an empty tree, we need to create empty/zero paths
+  // We'll create an array of zero elements for each level of the Merkle tree
+  const zeroElements: string[] = [];
+  
+  // Access the zero element from the tree options configuration
+  let currentZero = '0x29f9a0a07a22ab214d00aaa0190f54509e853f3119009baecb0035347606b0a9'; // Level 20 zero value
+  
+  // Generate the zero elements for each level
+  for (let i = 0; i < 20; i++) {
+    zeroElements.push(currentZero);
+    // Calculate the next level's zero element by hashing the current zero with itself
+    currentZero = poseidonHash2(currentZero, currentZero);
+  }
+  
+  // Create the Merkle paths for each input
   const inputMerklePathElements = inputs.map(() => {
-    return [
-      '14897476871511737208931101624454160146487338617261778552768757778567922609957', 
-      '11065032086434745150434600392406097478262460959173502027269731908506534612166',
-      '7063717813858192909384753650399516649568754120595406505542418585608798093572',
-      '3352960798171081805132557483734353395757811113441681938313497614205113992983'
-    ];
+    // Return an array of zero elements as the path for each input
+    // Create a copy of the zeroElements array to avoid modifying the original
+    return [...zeroElements];
   });
 
-  // Construct the root (normally derived from the Merkle tree)
-  const root = '14897476871511737208931101624454160146487338617261778552768757778567922609957';
+  // Use the properly calculated Merkle tree root
+  const root = tree.root.toString();
   
   // Create extData structure following Tornado Nova approach
   // See: https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L61

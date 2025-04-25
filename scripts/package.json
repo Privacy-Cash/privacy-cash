@@ -21,6 +21,7 @@
     "circomlibjs": "^0.1.7",
     "dotenv": "^16.4.7",
     "ffjavascript": "^0.2.36",
+    "fixed-merkle-tree": "^0.7.3",
     "snarkjs": "git+https://github.com/tornadocash/snarkjs.git#f37f146948f3b28086493e71512006b030588fc2",
     "tmp-promise": "^3.0.2",
     "ts-node": "^10.9.1",
