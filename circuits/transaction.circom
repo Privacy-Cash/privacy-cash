@@ -37,8 +37,9 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     // signal private input outPubkey[nOuts];
     // signal private input outBlinding[nOuts];
 
-    // Commenting out complex sections to simplify the circuit for debugging
-    // component inKeypair[nIns];
+    // Add back the keypair component
+    component inKeypair[nIns];
+    // Other components still commented out
     // component inSignature[nIns];
     // component inCommitmentHasher[nIns];
     // component inNullifierHasher[nIns];
@@ -46,8 +47,9 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     var sumIns = 0;
 
     for (var tx = 0; tx < nIns; tx++) {
-    //     inKeypair[tx] = Keypair();
-    //     inKeypair[tx].privateKey <== inPrivateKey[tx];
+        // Add back the keypair initialization
+        inKeypair[tx] = Keypair();
+        inKeypair[tx].privateKey <== inPrivateKey[tx];
 
     //     inCommitmentHasher[tx] = Poseidon(3);
     //     inCommitmentHasher[tx].inputs[0] <== inAmount[tx];

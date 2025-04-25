@@ -302,7 +302,7 @@ async function generateSampleProof(options: {
     // inPathIndices: inputMerklePathIndices,
     // inPathElements: inputMerklePathElements,
     
-    // // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
+    // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
     outAmount: outputs.map(x => x.amount.toString(10)),
     // outBlinding: outputs.map(x => x.blinding.toString(10)),
     // outPubkey: outputs.map(x => x.keypair.pubkey),
