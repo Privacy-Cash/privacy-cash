@@ -21,22 +21,6 @@ const FIELD_SIZE = new BN(
 )
 
 /**
- * Converts a number to a fixed-length hex string
- */
-function toFixedHex(number: any, length = 32): string {
-  let result =
-    '0x' +
-    (number instanceof Buffer
-      ? number.toString('hex')
-      : new BN(number).toString('hex')
-    ).padStart(length * 2, '0');
-  if (result.indexOf('-') > -1) {
-    result = '-' + result.replace('-', '');
-  }
-  return result;
-}
-
-/**
  * Calculates the Poseidon hash of ext data
  */
 async function getExtDataHash(extData: any): Promise<string> {
@@ -424,18 +408,7 @@ async function main() {
     };
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
-    const proofObj = await generateSampleProof(options);
-    // console.log('Proof generation completed successfully!');
-    
-    // // Output the proof components as single-line arrays
-    // console.log('\nProof components (single-line arrays):');
-    // console.log('proofA:', formatCompactArray(Array.from(proofObj.proofA)));
-    // console.log('proofB:', formatCompactArray(Array.from(proofObj.proofB)));
-    // console.log('proofC:', formatCompactArray(Array.from(proofObj.proofC)));
-    
-    // // Log public signals as a single array of arrays
-    // const allPublicSignals = proofObj.publicSignals.map(signal => Array.from(signal));
-    // console.log('publicSignals:', JSON.stringify(allPublicSignals).replace(/],\[/g, '],\n  ['));
+    await generateSampleProof(options);
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {
@@ -456,23 +429,3 @@ if (require.main === module) {
 }
 
 export { generateSampleProof };
-
-/**
- * Converts a hex string to a byte array
- * Utility function for direct conversion of hex proofs if needed
- */
-function hexToByteArray(hexString: string): number[] {
-  // Remove the '0x' prefix if present
-  if (hexString.startsWith('0x')) {
-    hexString = hexString.slice(2);
-  }
-
-  // Convert hex string to byte array
-  const byteArray: number[] = [];
-  for (let i = 0; i < hexString.length; i += 2) {
-    const byte = parseInt(hexString.substr(i, 2), 16);
-    byteArray.push(byte);
-  }
-
-  return byteArray;
-}
