@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { buildPoseidon } from "circomlibjs";
 import { utils } from 'ffjavascript';
+import bs58 from 'bs58';
 
 const FIELD_SIZE = new BN(
   '21888242871839275222246405745257275088548364400416034343698204186575808495617'
@@ -110,6 +111,13 @@ class Keypair {
     // Use the loaded test keypair
     this.pubkey = TEST_KEYPAIR.pubkey;
     this.privkey = TEST_KEYPAIR.privkey;
+  }
+
+  getPrivateKeyAsBigInt(): BN {
+    const privateKeyBytes = bs58.decode(this.privkey);
+    const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
+    const privateKeyBigInt = BigInt('0x' + privateKeyHex);
+    return new BN(privateKeyBigInt.toString());
   }
 }
 
@@ -297,7 +305,7 @@ async function generateSampleProof(options: {
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
     inAmount: inputs.map(x => x.amount.toString(10)),
-    inPrivateKey: inputs.map(x => x.keypair.privkey),
+    inPrivateKey: inputs.map(x => x.keypair.getPrivateKeyAsBigInt()),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
     // inPathIndices: inputMerklePathIndices,
     // inPathElements: inputMerklePathElements,
@@ -325,7 +333,7 @@ async function generateSampleProof(options: {
     console.log('- publicAmount:', input.publicAmount);
     console.log('- extDataHash:', input.extDataHash);
     console.log('- inAmount[0]:', input.inAmount[0]);
-    console.log('- inPrivateKey[0]:', input.inPrivateKey[0].substring(0, 20) + '...');
+    console.log('- inPrivateKey[0]:', input.inPrivateKey[0]);
     console.log('- sumIns:', inputs.reduce((sum, x) => sum.add(x.amount), new BN(0)).toString(10));
     console.log('- sumOuts:', outputs.reduce((sum, x) => sum.add(x.amount), new BN(0)).toString(10));
     
