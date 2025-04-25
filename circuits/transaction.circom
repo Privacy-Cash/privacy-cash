@@ -39,22 +39,22 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
 
     // Add back the keypair component
     component inKeypair[nIns];
+    // Add back the commitment hasher
+    component inCommitmentHasher[nIns];
     // Other components still commented out
     // component inSignature[nIns];
-    // component inCommitmentHasher[nIns];
     // component inNullifierHasher[nIns];
     // component inTree[nIns];
     var sumIns = 0;
 
     for (var tx = 0; tx < nIns; tx++) {
-        // Add back the keypair initialization
         inKeypair[tx] = Keypair();
         inKeypair[tx].privateKey <== inPrivateKey[tx];
 
-    //     inCommitmentHasher[tx] = Poseidon(3);
-    //     inCommitmentHasher[tx].inputs[0] <== inAmount[tx];
-    //     inCommitmentHasher[tx].inputs[1] <== inKeypair[tx].publicKey;
-    //     inCommitmentHasher[tx].inputs[2] <== inBlinding[tx];
+        inCommitmentHasher[tx] = Poseidon(3);
+        inCommitmentHasher[tx].inputs[0] <== inAmount[tx];
+        inCommitmentHasher[tx].inputs[1] <== inKeypair[tx].publicKey;
+        inCommitmentHasher[tx].inputs[2] <== inBlinding[tx];
 
     //     inSignature[tx] = Signature();
     //     inSignature[tx].privateKey <== inPrivateKey[tx];
