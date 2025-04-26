@@ -90,19 +90,12 @@ console.log('Using pubkey:', TEST_KEYPAIR.pubkey.substring(0, 10) + '...');
  * Simplified version of Keypair
  */
 class Keypair {
-  pubkey: string;
-  privkey: string;
+  private privkey: string;
+  private cachedPubkey: string | null = null;
+  private cachedPubkeyBN: BN | null = null;
 
-  constructor(privkey?: string) {
-    if (privkey) {
-      this.privkey = privkey;
-      // Derive pubkey from private key (simplified for this example)
-      this.pubkey = Buffer.from(this.privkey).toString('hex').substring(0, 20);
-    } else {
-      // Use the loaded test keypair
-      this.pubkey = TEST_KEYPAIR.pubkey;
-      this.privkey = TEST_KEYPAIR.privkey;
-    }
+  constructor(privkey: string) {
+    this.privkey = privkey;
   }
 
   getPrivateKeyAsBigInt(): BN {
@@ -110,6 +103,31 @@ class Keypair {
     const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
     const privateKeyBigInt = BigInt('0x' + privateKeyHex);
     return new BN(privateKeyBigInt.toString());
+  }
+
+  async getPubkeyAsync(): Promise<string> {
+    if (this.cachedPubkey) {
+      return this.cachedPubkey;
+    }
+
+    const poseidon = await buildPoseidon();
+    const privateKeyBigInt = this.getPrivateKeyAsBigInt();
+    const pubkey = poseidon.F.toString(poseidon([BigInt(privateKeyBigInt.toString())]));
+    console.log(`!!!!!!pubkey inside getPubkeyAsync: ${pubkey}`);
+    this.cachedPubkey = pubkey;
+    this.cachedPubkeyBN = new BN(pubkey);
+    return pubkey;
+  }
+
+  async getPubkeyAsBN(): Promise<BN> {
+    if (this.cachedPubkeyBN) {
+      return this.cachedPubkeyBN;
+    }
+    
+    // Get the pubkey string and convert to BN
+    const pubkeyStr = await this.getPubkeyAsync();
+    this.cachedPubkeyBN = new BN(pubkeyStr);
+    return this.cachedPubkeyBN;
   }
 
   static generateNew(): Keypair {
@@ -122,9 +140,6 @@ class Keypair {
     return new Keypair(privateKey);
   }
 }
-
-// Create a singleton instance of the keypair to use across all UTXOs
-const DEFAULT_KEYPAIR = new Keypair();
 
 /**
  * Simplified Utxo class inspired by Tornado Cash Nova
@@ -161,11 +176,11 @@ class Utxo {
     this.index = index;
   }
 
-  getCommitment(): string {
+  async getCommitment(): Promise<string> {
     // In the real implementation this would hash [amount, pubkey, blinding]
     // Here we create a deterministic value for testing
     const amountStr = this.amount.toString(10);
-    const pubkeyNum = this.keypair.pubkey.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+    const pubkeyNum = await this.keypair.getPubkeyAsync();
     const blinding = this.blinding.toString(10);
     
     // Use BN instead of parseInt to handle large numbers consistently
@@ -180,10 +195,10 @@ class Utxo {
     return combined.toString(10);
   }
 
-  getNullifier(): string {
+  async getNullifier(): Promise<string> {
     // In the real implementation this would be a complex hash 
     // Here we create a deterministic value for testing
-    const commitmentValue = this.getCommitment();
+    const commitmentValue = await this.getCommitment();
     const indexValue = this.index || 0;
     
     // Use BN instead of parseInt to handle large numbers consistently
@@ -226,8 +241,6 @@ async function generateSampleProof(options: {
   // proofC: Uint8Array;
   // publicSignals: Uint8Array[];
 }> {
-  console.log('Using test keypair with pubkey:', TEST_KEYPAIR.pubkey.substring(0, 20) + '...');
-  
   // Use provided values or defaults
   const amount1 = options.amount1 || '1000000000'; // 1 SOL in lamports
   const amount2 = options.amount2 || '100000000';  // 0.5 SOL in lamports
@@ -288,6 +301,9 @@ async function generateSampleProof(options: {
     })
   ];
 
+  const pubkeys = await Promise.all(inputs.map(async (x) => await x.keypair.getPubkeyAsync()));
+  console.log("!!!!!!pubkeys outside getPubkeyAsync", {pubkeys});
+
   // Create outputs (UTXOs that are being created)
   const outputAmount = '2900000000'; // Subtract fee
   const outputs = [
@@ -334,6 +350,11 @@ async function generateSampleProof(options: {
   // Use the properly calculated Merkle tree root
   const root = tree.root.toString();
   
+  // Resolve all async operations before creating the input object
+  // Await nullifiers and commitments to get actual values instead of Promise objects
+  const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+  const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+  
   // Create extData structure following Tornado Nova approach
   // See: https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L61
   const extData = {
@@ -341,22 +362,22 @@ async function generateSampleProof(options: {
     extAmount: extAmount.toString(10),
     relayer: relayer,
     fee: fee,
-    encryptedOutput1: mockEncrypt(outputs[0].getCommitment()),
-    encryptedOutput2: mockEncrypt(outputs[1].getCommitment()),
+    encryptedOutput1: mockEncrypt(await outputs[0].getCommitment()),
+    encryptedOutput2: mockEncrypt(await outputs[1].getCommitment()),
   };
   
   // Generate extDataHash from the extData structure
   // See: https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L74
   const extDataHash = await getExtDataHash(extData);
   console.log(`Using extDataHash: ${extDataHash}`);
-
+  
   // Following the exact input structure from Tornado Cash Nova
   // https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L76-L97
   const input = {
     // Common transaction data
     root: root,
-    inputNullifier: inputs.map(x => x.getNullifier()),
-    outputCommitment: outputs.map(x => x.getCommitment()),
+    inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
+    outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
     publicAmount: publicAmount,
     extDataHash: extDataHash,
     
@@ -372,6 +393,10 @@ async function generateSampleProof(options: {
     // outBlinding: outputs.map(x => x.blinding.toString(10)),
     // outPubkey: outputs.map(x => x.keypair.pubkey),
   };
+
+  // Log the input object structure for debugging
+  console.log('Generating proof for inputs:', JSON.stringify(input, (key, value) => 
+    BN.isBN(value) ? `<BN: ${value.toString(16)}>` : value, 2));
 
   // Path to the proving key files (wasm and zkey)
   // Try with both circuits to see which one works
