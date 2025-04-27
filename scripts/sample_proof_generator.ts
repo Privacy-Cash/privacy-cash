@@ -141,21 +141,7 @@ class Utxo {
   }
 
   async getCommitment(): Promise<string> {
-    // In the real implementation this would hash [amount, pubkey, blinding]
-    // Here we create a deterministic value for testing
-    const amountStr = this.amount.toString(10);
-    const pubkeyBN = this.keypair.pubkey;
-    const blinding = this.blinding.toString(10);
-    
-    // Use BN instead of parseInt to handle large numbers consistently
-    const amountBN = new BN(amountStr);
-    const blindingBN = new BN(blinding);
-    
-    // Add using BN methods for consistent and deterministic results
-    const combined = amountBN.add(pubkeyBN).add(blindingBN);
-    
-    // Return the result as a string
-    return combined.toString(10);
+    return poseidonHash([this.amount, this.keypair.pubkey, this.blinding]).toString();
   }
 
   async getNullifier(): Promise<string> {
@@ -190,28 +176,19 @@ function formatCompactArray(arr: number[]): string {
  * @param options Optional parameters for the proof generation
  * @returns A promise that resolves to an object containing the proof components and public inputs
  */
-async function generateSampleProof(options: {
-  amount1?: string,
-  amount2?: string,
-  blinding1?: string | BN,
-  blinding2?: string | BN,
-  fee?: string,
-  recipient?: string,
-  relayer?: string
-} = {}): Promise<{
+async function generateSampleProof(): Promise<{
   // proofA: Uint8Array;
   // proofB: Uint8Array;
   // proofC: Uint8Array;
   // publicSignals: Uint8Array[];
 }> {
   // Use provided values or defaults
-  const amount1 = options.amount1 || '1000000000'; // 1 SOL in lamports
-  const amount2 = options.amount2 || '100000000';  // 0.5 SOL in lamports
-  const blinding1 = options.blinding1 ? new BN(options.blinding1.toString()) : new BN('1000000000'); // Use fixed value for consistency
-  const blinding2 = options.blinding2 ? new BN(options.blinding2.toString()) : new BN('500000000');  // Use fixed value for consistency
-  const fee = options.fee || '100000000'; // Default 0.1 SOL fee
-  const recipient = options.recipient || '0x1111111111111111111111111111111111111111'; // Default recipient address
-  const relayer = options.relayer || '0x2222222222222222222222222222222222222222';   // Default relayer address
+  const amount1 = '1000000000'; // 1 SOL in lamports
+  const amount2 = '100000000';  // 0.5 SOL in lamports
+  const blinding1 = new BN('1000000000'); // Use fixed value for consistency
+  const blinding2 = new BN('500000000');  // Use fixed value for consistency
+  const fee = '100000000'; // Default 0.1 SOL fee
+  const recipient = '0x1111111111111111111111111111111111111111'; // Default recipient address
   
   // Create the merkle tree with the pre-initialized poseidon hash
   const tree = new MerkleTree(20, [], {
@@ -443,7 +420,7 @@ async function main() {
     };
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
-    await generateSampleProof(options);
+    await generateSampleProof();
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {
