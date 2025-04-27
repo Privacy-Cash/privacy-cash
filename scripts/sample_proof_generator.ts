@@ -12,32 +12,29 @@ import { prove, verify, Proof } from './prover';
 import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildPoseidon } from "circomlibjs";
 import { utils } from 'ffjavascript';
 import bs58 from 'bs58';
 import MerkleTree from 'fixed-merkle-tree';
-import * as ethers from 'ethers';
-
+import { ethers } from 'ethers';
 const FIELD_SIZE = new BN(
   '21888242871839275222246405745257275088548364400416034343698204186575808495617'
 )
+
+const poseidon = require("circomlib/src/poseidon.js");
+
+const poseidonHash = (items: any[]) => new BN(poseidon(items).toString())
+const poseidonHash2ToString = (a: any, b: any) => poseidonHash([a, b]).toString();
 
 /**
  * Calculates the Poseidon hash of ext data
  */
 async function getExtDataHash(extData: any): Promise<string> {
-  // Initialize Poseidon hasher
-  const poseidon = await buildPoseidon();
-  
   // Prepare inputs as array of field elements
   const inputs = [
     // For hex addresses, remove 0x prefix and convert from hex to decimal
     new BN(extData.recipient.toString().replace('0x', ''), 16),
     // For numeric values, parse directly
     new BN(extData.extAmount.toString()),
-    // For hex addresses, remove 0x prefix and convert from hex to decimal
-    new BN(extData.relayer.toString().replace('0x', ''), 16),
-    new BN(extData.fee.toString()),
     // For encrypted outputs, use a deterministic numeric representation
     new BN(extData.encryptedOutput1.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16),
     new BN(extData.encryptedOutput2.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16)
@@ -51,12 +48,7 @@ async function getExtDataHash(extData: any): Promise<string> {
   
   // Calculate the Poseidon hash
   const hash = poseidon(bigIntInputs);
-  
-  // Convert the hash to a field element string (poseidon already ensures it's in the field)
-  const hashStr = poseidon.F.toString(hash);
-  
-  // Return the result as a string directly without additional modulo
-  return hashStr;
+  return hash.toString();
 }
 
 /**
@@ -90,44 +82,16 @@ console.log('Using pubkey:', TEST_KEYPAIR.pubkey.substring(0, 10) + '...');
  * Simplified version of Keypair
  */
 class Keypair {
-  private privkey: string;
-  private cachedPubkey: string | null = null;
-  private cachedPubkeyBN: BN | null = null;
+  public privkey: BN;
+  public pubkey: BN;
 
   constructor(privkey: string) {
-    this.privkey = privkey;
-  }
-
-  getPrivateKeyAsBigInt(): BN {
-    const privateKeyBytes = bs58.decode(this.privkey);
-    const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
-    const privateKeyBigInt = BigInt('0x' + privateKeyHex);
-    return new BN(privateKeyBigInt.toString());
-  }
-
-  async getPubkeyAsync(): Promise<string> {
-    if (this.cachedPubkey) {
-      return this.cachedPubkey;
-    }
-
-    const poseidon = await buildPoseidon();
-    const privateKeyBigInt = this.getPrivateKeyAsBigInt();
-    const pubkey = poseidon.F.toString(poseidon([BigInt(privateKeyBigInt.toString())]));
-    console.log(`!!!!!!pubkey inside getPubkeyAsync: ${pubkey}`);
-    this.cachedPubkey = pubkey;
-    this.cachedPubkeyBN = new BN(pubkey);
-    return pubkey;
-  }
-
-  async getPubkeyAsBN(): Promise<BN> {
-    if (this.cachedPubkeyBN) {
-      return this.cachedPubkeyBN;
-    }
-    
-    // Get the pubkey string and convert to BN
-    const pubkeyStr = await this.getPubkeyAsync();
-    this.cachedPubkeyBN = new BN(pubkeyStr);
-    return this.cachedPubkeyBN;
+    const privateKeyHex = "9b2bfd26c9509fbf9838f6eb2146516816f28ff349f4f28bfa2bee1755bbe7a7";
+  
+    const rawDecimal = BigInt("0x" + privateKeyHex);
+    this.privkey = new BN((rawDecimal % BigInt(FIELD_SIZE.toString())).toString());
+    // TODO: lazily compute pubkey
+    this.pubkey = poseidonHash([this.privkey])
   }
 
   static generateNew(): Keypair {
@@ -180,12 +144,11 @@ class Utxo {
     // In the real implementation this would hash [amount, pubkey, blinding]
     // Here we create a deterministic value for testing
     const amountStr = this.amount.toString(10);
-    const pubkeyNum = await this.keypair.getPubkeyAsync();
+    const pubkeyBN = this.keypair.pubkey;
     const blinding = this.blinding.toString(10);
     
     // Use BN instead of parseInt to handle large numbers consistently
     const amountBN = new BN(amountStr);
-    const pubkeyBN = new BN(pubkeyNum);
     const blindingBN = new BN(blinding);
     
     // Add using BN methods for consistent and deterministic results
@@ -249,34 +212,10 @@ async function generateSampleProof(options: {
   const fee = options.fee || '100000000'; // Default 0.1 SOL fee
   const recipient = options.recipient || '0x1111111111111111111111111111111111111111'; // Default recipient address
   const relayer = options.relayer || '0x2222222222222222222222222222222222222222';   // Default relayer address
-
-  // Initialize Poseidon hasher first
-  const poseidon = await buildPoseidon();
-  
-  // Create Tornado-style poseidon hash functions
-  const poseidonHash = (items: any[]) => {
-    // Convert inputs to BigInts if they're not already
-    const bigIntInputs = items.map(item => {
-      if (typeof item === 'string') {
-        return BigInt(item);
-      } else if (typeof item === 'number') {
-        return BigInt(item);
-      } else if (BN.isBN(item)) {
-        return BigInt(item.toString());
-      }
-      return item; // Assume it's already a BigInt
-    });
-    
-    // Calculate hash and convert to proper field element string
-    const hash = poseidon(bigIntInputs);
-    return poseidon.F.toString(hash);
-  };
-  
-  const poseidonHash2 = (a: any, b: any) => poseidonHash([a, b]);
   
   // Create the merkle tree with the pre-initialized poseidon hash
   const tree = new MerkleTree(20, [], {
-    hashFunction: poseidonHash2,
+    hashFunction: poseidonHash2ToString,
     zeroElement: 11850551329423159860688778991827824730037759162201783566284850822760196767874
   });
   
@@ -301,7 +240,7 @@ async function generateSampleProof(options: {
     })
   ];
 
-  const pubkeys = await Promise.all(inputs.map(async (x) => await x.keypair.getPubkeyAsync()));
+  const pubkeys = await Promise.all(inputs.map(async (x) => await x.keypair.pubkey));
   console.log("!!!!!!pubkeys outside getPubkeyAsync", {pubkeys});
 
   // Create outputs (UTXOs that are being created)
@@ -337,7 +276,7 @@ async function generateSampleProof(options: {
   for (let i = 0; i < 20; i++) {
     zeroElements.push(currentZero);
     // Calculate the next level's zero element by hashing the current zero with itself
-    currentZero = poseidonHash2(currentZero, currentZero);
+    currentZero = poseidonHash2ToString(currentZero, currentZero);
   }
   
   // Create the Merkle paths for each input
@@ -360,8 +299,6 @@ async function generateSampleProof(options: {
   const extData = {
     recipient: recipient,
     extAmount: extAmount.toString(10),
-    relayer: relayer,
-    fee: fee,
     encryptedOutput1: mockEncrypt(await outputs[0].getCommitment()),
     encryptedOutput2: mockEncrypt(await outputs[1].getCommitment()),
   };
@@ -383,7 +320,7 @@ async function generateSampleProof(options: {
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
     inAmount: inputs.map(x => x.amount.toString(10)),
-    inPrivateKey: inputs.map(x => x.keypair.getPrivateKeyAsBigInt()),
+    inPrivateKey: inputs.map(x => x.keypair.privkey),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
     // inPathIndices: inputMerklePathIndices,
     // inPathElements: inputMerklePathElements,
