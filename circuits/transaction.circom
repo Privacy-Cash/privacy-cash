@@ -34,8 +34,8 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     // // data for transaction outputs
     signal         input outputCommitment[nOuts];
     signal private input outAmount[nOuts];
-    // signal private input outPubkey[nOuts];
-    // signal private input outBlinding[nOuts];
+    signal private input outPubkey[nOuts];
+    signal private input outBlinding[nOuts];
 
     // Add back the keypair component
     component inKeypair[nIns];
@@ -81,13 +81,23 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
         sumIns += inAmount[tx];
     }
 
-    // component outCommitmentHasher[nOuts];
-    // component outAmountCheck[nOuts];
+    component outCommitmentHasher[nOuts];
+    component outAmountCheck[nOuts];
     var sumOuts = 0;
 
-    // Manually sum the output amounts
-    for (var i = 0; i < nOuts; i++) {
-        sumOuts += outAmount[i];
+    // verify correctness of transaction outputs
+    for (var tx = 0; tx < nOuts; tx++) {
+        outCommitmentHasher[tx] = Poseidon(3);
+        outCommitmentHasher[tx].inputs[0] <== outAmount[tx];
+        outCommitmentHasher[tx].inputs[1] <== outPubkey[tx];
+        outCommitmentHasher[tx].inputs[2] <== outBlinding[tx];
+        outCommitmentHasher[tx].out === outputCommitment[tx];
+
+        // Check that amount fits into 248 bits to prevent overflow
+        outAmountCheck[tx] = Num2Bits(248);
+        outAmountCheck[tx].in <== outAmount[tx];
+
+        sumOuts += outAmount[tx];
     }
 
     component sameNullifiers[nIns * (nIns - 1) / 2];
