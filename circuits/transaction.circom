@@ -90,19 +90,18 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
         sumOuts += outAmount[i];
     }
 
-    // component sameNullifiers[nIns * (nIns - 1) / 2];
-    // var index = 0;
-    // for (var i = 0; i < nIns - 1; i++) {
-    //   for (var j = i + 1; j < nIns; j++) {
-    //       sameNullifiers[index] = IsEqual();
-    //       sameNullifiers[index].in[0] <== inputNullifier[i];
-    //       sameNullifiers[index].in[1] <== inputNullifier[j];
-    //       sameNullifiers[index].out === 0;
-    //       index++;
-    //   }
-    // }
+    component sameNullifiers[nIns * (nIns - 1) / 2];
+    var index = 0;
+    for (var i = 0; i < nIns - 1; i++) {
+      for (var j = i + 1; j < nIns; j++) {
+          sameNullifiers[index] = IsEqual();
+          sameNullifiers[index].in[0] <== inputNullifier[i];
+          sameNullifiers[index].in[1] <== inputNullifier[j];
+          sameNullifiers[index].out === 0;
+          index++;
+      }
+    }
 
-    // sumIns + publicAmount === sumOuts;
     sumIns + publicAmount === sumOuts;
 
     signal extDataSquare <== extDataHash * extDataHash;
