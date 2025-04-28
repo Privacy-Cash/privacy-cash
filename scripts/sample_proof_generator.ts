@@ -13,7 +13,6 @@ import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { utils } from 'ffjavascript';
-import bs58 from 'bs58';
 import MerkleTree from 'fixed-merkle-tree';
 import { ethers } from 'ethers';
 const FIELD_SIZE = new BN(
@@ -58,25 +57,6 @@ async function getExtDataHash(extData: any): Promise<string> {
 function mockEncrypt(value: string): string {
   return 'enc_' + value;
 }
-
-/**
- * Load keypair from test-keypair.json
- */
-function loadTestKeypair(): { pubkey: string, privkey: string } {
-  try {
-    const keypairPath = path.join(__dirname, 'test-keypair.json');
-    const keypairJson = fs.readFileSync(keypairPath, 'utf8');
-    return JSON.parse(keypairJson);
-  } catch (error) {
-    console.error('Failed to load test-keypair.json:', error);
-    throw new Error('Failed to load test-keypair.json. Make sure the file exists in the scripts directory.');
-  }
-}
-
-// Initialize the test keypair from the JSON file
-const TEST_KEYPAIR = loadTestKeypair();
-console.log('Loaded test keypair from test-keypair.json');
-console.log('Using pubkey:', TEST_KEYPAIR.pubkey.substring(0, 10) + '...');
 
 /**
  * Simplified version of Keypair
