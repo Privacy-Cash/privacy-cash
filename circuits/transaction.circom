@@ -29,23 +29,23 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     signal private input inPrivateKey[nIns];
     signal private input inBlinding[nIns];
     signal private input inPathIndices[nIns];
-    // signal private input inPathElements[nIns][levels];
+    signal private input inPathElements[nIns][levels];
 
-    // // data for transaction outputs
+    // data for transaction outputs
     signal         input outputCommitment[nOuts];
     signal private input outAmount[nOuts];
     signal private input outPubkey[nOuts];
     signal private input outBlinding[nOuts];
 
-    // Add back the keypair component
     component inKeypair[nIns];
-    // Add back the commitment hasher
-    component inCommitmentHasher[nIns];
     component inSignature[nIns];
+    component inCommitmentHasher[nIns];
     component inNullifierHasher[nIns];
-    // component inTree[nIns];
+    component inTree[nIns];
+    component inCheckRoot[nIns];
     var sumIns = 0;
 
+    // verify correctness of transaction inputs
     for (var tx = 0; tx < nIns; tx++) {
         inKeypair[tx] = Keypair();
         inKeypair[tx].privateKey <== inPrivateKey[tx];
@@ -66,17 +66,22 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
         inNullifierHasher[tx].inputs[2] <== inSignature[tx].out;
         inNullifierHasher[tx].out === inputNullifier[tx];
 
-    //     inTree[tx] = MerkleProof(levels);
-    //     inTree[tx].leaf <== inCommitmentHasher[tx].out;
-    //     inTree[tx].pathIndices <== inPathIndices[tx];
-    //     for (var i = 0; i < levels; i++) {
-    //         inTree[tx].pathElements[i] <== inPathElements[tx][i];
-    //     }
+        inTree[tx] = MerkleProof(levels);
+        inTree[tx].leaf <== inCommitmentHasher[tx].out;
+        inTree[tx].pathIndices <== inPathIndices[tx];
+        for (var i = 0; i < levels; i++) {
+            inTree[tx].pathElements[i] <== inPathElements[tx][i];
+        }
 
-    //     inCheckRoot[tx] = ForceEqualIfEnabled();
-    //     inCheckRoot[tx].in[0] <== root;
-    //     inCheckRoot[tx].in[1] <== inTree[tx].root;
-    //     inCheckRoot[tx].enabled <== inAmount[tx];
+        // check merkle proof only if amount is non-zero
+        inCheckRoot[tx] = ForceEqualIfEnabled();
+        inCheckRoot[tx].in[0] <== root;
+        inCheckRoot[tx].in[1] <== inTree[tx].root;
+        inCheckRoot[tx].enabled <== inAmount[tx];
+
+        // We don't need to range check input amounts, since all inputs are valid UTXOs that
+        // were already checked as outputs in the previous transaction (or zero amount UTXOs that don't
+        // need to be checked either).
 
         sumIns += inAmount[tx];
     }
@@ -100,6 +105,7 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
         sumOuts += outAmount[tx];
     }
 
+    // check that there are no same nullifiers among all inputs
     component sameNullifiers[nIns * (nIns - 1) / 2];
     var index = 0;
     for (var i = 0; i < nIns - 1; i++) {
@@ -112,8 +118,9 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
       }
     }
 
+    // verify amount invariant
     sumIns + publicAmount === sumOuts;
 
+    // optional safety constraint to make sure extDataHash cannot be changed
     signal extDataSquare <== extDataHash * extDataHash;
-    signal rootSquare <== root * root;
 }

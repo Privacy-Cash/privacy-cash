@@ -161,20 +161,12 @@ class Utxo {
 }
 
 /**
- * Format an array as a compact string representation
- * Removes all spaces to keep it as a single line in any terminal
- */
-function formatCompactArray(arr: number[]): string {
-  return `[${arr.join(',')}]`;
-}
-
-/**
  * Generates a sample ZK proof using the main proving method
  * 
  * @param options Optional parameters for the proof generation
  * @returns A promise that resolves to an object containing the proof components and public inputs
  */
-async function generateSampleProof(): Promise<{
+async function generateSampleProofForFirstDeposit(): Promise<{
   // proofA: Uint8Array;
   // proofB: Uint8Array;
   // proofC: Uint8Array;
@@ -187,11 +179,12 @@ async function generateSampleProof(): Promise<{
   const blinding2 = new BN('500000000');  // Use fixed value for consistency
   const fee = '100000000'; // Default 0.1 SOL fee
   const recipient = '0x1111111111111111111111111111111111111111'; // Default recipient address
+  const zeroValue = 11850551329423159860688778991827824730037759162201783566284850822760196767874
   
   // Create the merkle tree with the pre-initialized poseidon hash
   const tree = new MerkleTree(20, [], {
     hashFunction: poseidonHash2ToString,
-    zeroElement: 11850551329423159860688778991827824730037759162201783566284850822760196767874
+    zeroElement: zeroValue
   });
   
   // Log the root in decimal
@@ -201,18 +194,10 @@ async function generateSampleProof(): Promise<{
   console.log(`Using amounts: ${amount1}, ${amount2}`);
   console.log(`Using blinding factors: ${blinding1.toString(10).substring(0, 10)}..., ${blinding2.toString(10).substring(0, 10)}...`);
 
-  // Create inputs (UTXOs that are being spent)
+  // Create inputs for the first deposit
   const inputs = [
-    new Utxo({ 
-      amount: amount1,
-      blinding: blinding1,
-      index: 0
-    }),
-    new Utxo({ 
-      amount: amount2,
-      blinding: blinding2,
-      index: 1
-    })
+    new Utxo({ }),
+    new Utxo({ })
   ];
 
   const pubkeys = await Promise.all(inputs.map(async (x) => await x.keypair.pubkey));
@@ -298,7 +283,7 @@ async function generateSampleProof(): Promise<{
     inPrivateKey: inputs.map(x => x.keypair.privkey),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
     inPathIndices: inputMerklePathIndices,
-    // inPathElements: inputMerklePathElements,
+    inPathElements: inputMerklePathElements,
     
     // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
     outAmount: outputs.map(x => x.amount.toString(10)),
@@ -366,21 +351,7 @@ async function generateSampleProof(): Promise<{
       // First attempt with processed signals
       const res = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"),
         processedPublicSignals, processedProof);
-      console.log('!!!!!!Verification result 1 (with processed signals):', res);
-      
-      if (!res) {
-        // Try alternative verification directly with the original values
-        console.log('Attempting alternative verification approach...');
-        
-        // Try with original signals without processing
-        const res2 = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"),
-          publicSignals, proof);
-        console.log('!!!!!!Verification result 2 (with original signals):', res2);
-        
-        // Check verification key path
-        console.log('Verification key path:', path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"));
-        console.log('Verification key exists:', fs.existsSync(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json")));
-      }
+      console.log('!!!!!!Verification result (with processed signals):', res);
       
       return {proof, publicSignals};
     } catch (error: any) {
@@ -420,7 +391,7 @@ async function main() {
     };
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
-    await generateSampleProof();
+    await generateSampleProofForFirstDeposit();
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {
@@ -439,5 +410,3 @@ if (require.main === module) {
       process.exit(1);
     });
 }
-
-export { generateSampleProof };
