@@ -86,12 +86,25 @@ class Keypair {
   public pubkey: BN;
 
   constructor(privkey: string) {
+    // TODO: update to: 
+    // const privateKeyHex = privkey;
     const privateKeyHex = "9b2bfd26c9509fbf9838f6eb2146516816f28ff349f4f28bfa2bee1755bbe7a7";
   
     const rawDecimal = BigInt("0x" + privateKeyHex);
     this.privkey = new BN((rawDecimal % BigInt(FIELD_SIZE.toString())).toString());
     // TODO: lazily compute pubkey
     this.pubkey = poseidonHash([this.privkey])
+  }
+
+   /**
+   * Sign a message using keypair private key
+   *
+   * @param {string|number|BigNumber} commitment a hex string with commitment
+   * @param {string|number|BigNumber} merklePath a hex string with merkle path
+   * @returns {BigNumber} a hex string with signature
+   */
+  sign(commitment: string, merklePath: string): string {
+    return poseidonHash([this.privkey, commitment, merklePath]).toString();
   }
 
   static generateNew(): Keypair {
@@ -113,7 +126,7 @@ class Utxo {
   amount: BN;
   blinding: BN;
   keypair: Keypair;
-  index: number | null;
+  index: number;
 
   constructor({ 
     amount = new BN(0), 
@@ -127,12 +140,12 @@ class Utxo {
      */
     keypair = Keypair.generateNew(), 
     blinding = new BN('1000000000'), // Use fixed value for consistency instead of randomBN()
-    index = null 
+    index = 0 
   }: { 
     amount?: BN | number | string, 
     keypair?: Keypair, 
     blinding?: BN | number | string, 
-    index?: number | null 
+    index?: number 
   }) {
     this.amount = new BN(amount.toString());
     this.blinding = new BN(blinding.toString());
@@ -145,20 +158,10 @@ class Utxo {
   }
 
   async getNullifier(): Promise<string> {
-    // In the real implementation this would be a complex hash 
-    // Here we create a deterministic value for testing
     const commitmentValue = await this.getCommitment();
-    const indexValue = this.index || 0;
+    const signature = this.keypair.sign(commitmentValue, new BN(this.index).toString());
     
-    // Use BN instead of parseInt to handle large numbers consistently
-    const commitmentBN = new BN(commitmentValue);
-    const indexBN = new BN(indexValue);
-    
-    // Add using BN methods for consistent and deterministic results
-    const result = commitmentBN.add(indexBN);
-    
-    // Return the result as a string
-    return result.toString(10);
+    return poseidonHash([commitmentValue, new BN(this.index).toString(), signature]).toString();
   }
 }
 
@@ -299,7 +302,7 @@ async function generateSampleProof(): Promise<{
     inAmount: inputs.map(x => x.amount.toString(10)),
     inPrivateKey: inputs.map(x => x.keypair.privkey),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
-    // inPathIndices: inputMerklePathIndices,
+    inPathIndices: inputMerklePathIndices,
     // inPathElements: inputMerklePathElements,
     
     // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
@@ -332,6 +335,8 @@ async function generateSampleProof(): Promise<{
     console.log('- inPrivateKey[0]:', input.inPrivateKey[0]);
     console.log('- sumIns:', inputs.reduce((sum, x) => sum.add(x.amount), new BN(0)).toString(10));
     console.log('- sumOuts:', outputs.reduce((sum, x) => sum.add(x.amount), new BN(0)).toString(10));
+    console.log('- inPathIndices:', input.inPathIndices);
+    console.log('- outputCommitment:', input.outputCommitment);
     
     // Use the updated prove function that returns an object with proof components
     const {proof, publicSignals} = await prove(input, keyBasePath);

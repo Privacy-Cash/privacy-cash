@@ -28,7 +28,7 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     signal private input inAmount[nIns];
     signal private input inPrivateKey[nIns];
     signal private input inBlinding[nIns];
-    // signal private input inPathIndices[nIns];
+    signal private input inPathIndices[nIns];
     // signal private input inPathElements[nIns][levels];
 
     // // data for transaction outputs
@@ -41,8 +41,8 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     component inKeypair[nIns];
     // Add back the commitment hasher
     component inCommitmentHasher[nIns];
-    // component inSignature[nIns];
-    // component inNullifierHasher[nIns];
+    component inSignature[nIns];
+    component inNullifierHasher[nIns];
     // component inTree[nIns];
     var sumIns = 0;
 
@@ -55,16 +55,16 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
         inCommitmentHasher[tx].inputs[1] <== inKeypair[tx].publicKey;
         inCommitmentHasher[tx].inputs[2] <== inBlinding[tx];
 
-        // inSignature[tx] = Signature();
-        // inSignature[tx].privateKey <== inPrivateKey[tx];
-        // inSignature[tx].commitment <== inCommitmentHasher[tx].out;
-        // inSignature[tx].merklePath <== inPathIndices[tx];
+        inSignature[tx] = Signature();
+        inSignature[tx].privateKey <== inPrivateKey[tx];
+        inSignature[tx].commitment <== inCommitmentHasher[tx].out;
+        inSignature[tx].merklePath <== inPathIndices[tx];
 
-    //     inNullifierHasher[tx] = Poseidon(3);
-    //     inNullifierHasher[tx].inputs[0] <== inCommitmentHasher[tx].out;
-    //     inNullifierHasher[tx].inputs[1] <== inPathIndices[tx];
-    //     inNullifierHasher[tx].inputs[2] <== inSignature[tx].out;
-    //     inNullifierHasher[tx].out === inputNullifier[tx];
+        inNullifierHasher[tx] = Poseidon(3);
+        inNullifierHasher[tx].inputs[0] <== inCommitmentHasher[tx].out;
+        inNullifierHasher[tx].inputs[1] <== inPathIndices[tx];
+        inNullifierHasher[tx].inputs[2] <== inSignature[tx].out;
+        inNullifierHasher[tx].out === inputNullifier[tx];
 
     //     inTree[tx] = MerkleProof(levels);
     //     inTree[tx].leaf <== inCommitmentHasher[tx].out;
