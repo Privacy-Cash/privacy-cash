@@ -85,12 +85,8 @@ class Keypair {
   public privkey: BN;
   public pubkey: BN;
 
-  constructor(privkey: string) {
-    // TODO: update to: 
-    // const privateKeyHex = privkey;
-    const privateKeyHex = "9b2bfd26c9509fbf9838f6eb2146516816f28ff349f4f28bfa2bee1755bbe7a7";
-  
-    const rawDecimal = BigInt("0x" + privateKeyHex);
+  constructor(privkeyHex: string) {
+    const rawDecimal = BigInt(privkeyHex);
     this.privkey = new BN((rawDecimal % BigInt(FIELD_SIZE.toString())).toString());
     // TODO: lazily compute pubkey
     this.pubkey = poseidonHash([this.privkey])
@@ -108,13 +104,12 @@ class Keypair {
   }
 
   static generateNew(): Keypair {
-    // Use ethers.js to generate a random wallet
+    // Tornado Cash Nova uses ethers.js to generate a random private key
+    // We can't generate Solana keypairs because it won't fit in the field size
+    // It's OK to use ethereum secret keys, because the secret key is only used for the proof generation.
+    // Namely, it's used to guarantee the uniqueness of the nullifier.
     const wallet = ethers.Wallet.createRandom();
-    // Convert the private key to bs58 format
-    const privateKeyHex = wallet.privateKey.slice(2); // Remove '0x' prefix
-    const privateKeyBytes = Buffer.from(privateKeyHex, 'hex');
-    const privateKey = bs58.encode(privateKeyBytes);
-    return new Keypair(privateKey);
+    return new Keypair(wallet.privateKey);
   }
 }
 
