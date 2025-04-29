@@ -467,6 +467,7 @@ async function main() {
     };
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
+    await generateSampleProofForFirstDeposit();
     await generateSampleProofForWithdraw();
   } catch (error) {
     console.error('Failed to generate proof:', error);

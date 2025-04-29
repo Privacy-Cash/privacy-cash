@@ -52,7 +52,7 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ```bash
    cd scripts
    ```
-2. Generate a sample proof
+2. Generate a sample proof (with a first deposit proof, and another withdrawal proof):
    ```bash
    ts-node sample_proof_generator.ts
    ```
