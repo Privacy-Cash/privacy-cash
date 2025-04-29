@@ -6,6 +6,7 @@
  */
 
 import BN from 'bn.js';
+import { Utxo } from '../models/utxo';
 
 const poseidon = require("circomlib/src/poseidon.js");
 export const poseidonHash = (items: any[]) => new BN(poseidon(items).toString())
@@ -17,8 +18,8 @@ export const poseidonHash2ToString = (a: any, b: any) => poseidonHash([a, b]).to
  * @param value Value to encrypt
  * @returns Encrypted string representation
  */
-export function mockEncrypt(value: string): string {
-  return 'enc_' + value;
+export function mockEncrypt(value: Utxo): string {
+  return JSON.stringify(value);
 }
 
 /**
