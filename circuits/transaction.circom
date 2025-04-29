@@ -29,7 +29,7 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     signal private input inPrivateKey[nIns];
     signal private input inBlinding[nIns];
     signal private input inPathIndices[nIns];
-    // signal private input inPathElements[nIns][levels];
+    signal private input inPathElements[nIns][levels];
 
     // data for transaction outputs
     signal         input outputCommitment[nOuts];
@@ -41,8 +41,8 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
     component inSignature[nIns];
     component inCommitmentHasher[nIns];
     component inNullifierHasher[nIns];
-    // component inTree[nIns];
-    // component inCheckRoot[nIns];
+    component inTree[nIns];
+    component inCheckRoot[nIns];
     var sumIns = 0;
 
     // verify correctness of transaction inputs
@@ -66,18 +66,18 @@ template Transaction(levels, nIns, nOuts, zeroLeaf) {
         inNullifierHasher[tx].inputs[2] <== inSignature[tx].out;
         inNullifierHasher[tx].out === inputNullifier[tx];
 
-        // inTree[tx] = MerkleProof(levels);
-        // inTree[tx].leaf <== inCommitmentHasher[tx].out;
-        // inTree[tx].pathIndices <== inPathIndices[tx];
-        // for (var i = 0; i < levels; i++) {
-        //     inTree[tx].pathElements[i] <== inPathElements[tx][i];
-        // }
+        inTree[tx] = MerkleProof(levels);
+        inTree[tx].leaf <== inCommitmentHasher[tx].out;
+        inTree[tx].pathIndices <== inPathIndices[tx];
+        for (var i = 0; i < levels; i++) {
+            inTree[tx].pathElements[i] <== inPathElements[tx][i];
+        }
 
-        // // check merkle proof only if amount is non-zero
-        // inCheckRoot[tx] = ForceEqualIfEnabled();
-        // inCheckRoot[tx].in[0] <== root;
-        // inCheckRoot[tx].in[1] <== inTree[tx].root;
-        // inCheckRoot[tx].enabled <== inAmount[tx];
+        // check merkle proof only if amount is non-zero
+        inCheckRoot[tx] = ForceEqualIfEnabled();
+        inCheckRoot[tx].in[0] <== root;
+        inCheckRoot[tx].in[1] <== inTree[tx].root;
+        inCheckRoot[tx].enabled <== inAmount[tx];
 
         // We don't need to range check input amounts, since all inputs are valid UTXOs that
         // were already checked as outputs in the previous transaction (or zero amount UTXOs that don't

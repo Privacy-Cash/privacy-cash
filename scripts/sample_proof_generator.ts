@@ -13,9 +13,9 @@ import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { utils } from 'ffjavascript';
-import MerkleTree from 'fixed-merkle-tree';
+import MerkleTree, { Element } from 'fixed-merkle-tree';
 import { Utxo } from './models/utxo';
-import { getExtDataHash, mockEncrypt, poseidonHash,poseidonHash2ToString } from './utils/utils';
+import { getExtDataHash, mockEncrypt, poseidonHash,poseidonHash2ToString, toFixedHex } from './utils/utils';
 import { FIELD_SIZE } from './utils/constants';
 import { Keypair } from './models/keypair';
 
@@ -245,7 +245,8 @@ async function generateSampleProofForWithdraw(): Promise<{
   const blinding2 = new BN('500000000');  // Use fixed value for consistency
   const fee = '100000000'; // Default 0.1 SOL fee
   const recipient = '0x1111111111111111111111111111111111111111'; // Default recipient address
-  const zeroValue = 11850551329423159860688778991827824730037759162201783566284850822760196767874
+  // from https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/contracts/MerkleTreeWithHistory.sol#L125C32-L125C98
+  const zeroValue = '0x2fe54c60d3acabf3343a35b6eba15db4821b340f76e741e2249685ed4899af6c'
   
   // Create the merkle tree with the pre-initialized poseidon hash
   const tree = new MerkleTree(20, [], {
@@ -253,10 +254,6 @@ async function generateSampleProofForWithdraw(): Promise<{
     zeroElement: zeroValue
   });
 
-  // insert two previous deposit commitments.
-  tree.insert(6925783782823180762666452088177303749957844385635749945188123259850455728862);
-  tree.insert(7797253490895431525581109256470238346983032365418618212857884041419117590127);
-  
   // Log the root in decimal
   console.log(`Merkle tree root (decimal): ${tree.root.toString()}`);
   console.log(`Merkle tree root (hex): 0x${BigInt(tree.root.toString()).toString(16)}`);
@@ -276,6 +273,32 @@ async function generateSampleProofForWithdraw(): Promise<{
     new Utxo({
     })
   ];
+
+  const inCommitments = [];
+  for (const input of inputs) {
+    const commitment = await input.getCommitment();
+    const hexedCommitment = toFixedHex(commitment);
+    tree.insert(hexedCommitment);
+    inCommitments.push(hexedCommitment);
+  }
+
+  const inputMerklePathIndices = []
+  const inputMerklePathElements: Element[][] = []
+  for (let i = 0; i < inputs.length; i++) {
+    const input = inputs[i]
+    if (input.amount > new BN(0)) {
+      const commitment = inCommitments[i]
+      input.index = tree.indexOf(commitment)
+      if (input.index < 0) {
+        throw new Error(`Input commitment ${commitment} was not found`)
+      }
+      inputMerklePathIndices.push(input.index)
+      inputMerklePathElements.push(tree.path(input.index).pathElements)
+    } else {
+      inputMerklePathIndices.push(0)
+      inputMerklePathElements.push(new Array(tree.levels).fill(0))
+    }
+  }
 
   const pubkeys = await Promise.all(inputs.map(async (x) => await x.keypair.pubkey));
   console.log("!!!!!!pubkeys outside getPubkeyAsync", {pubkeys});
@@ -298,30 +321,6 @@ async function generateSampleProofForWithdraw(): Promise<{
 
   console.log(`outputsSum: ${outputsSum.toString(10)}, inputsSum: ${inputsSum.toString(10)},
     extAmount: ${extAmount.toString(10)}, publicAmount: ${publicAmount}`);
-
-  // Create mock Merkle path data (normally built from the tree)
-  const inputMerklePathIndices = inputs.map((input) => input.index || 0);
-  
-  // For first deposit into an empty tree, we need to create empty/zero paths
-  // We'll create an array of zero elements for each level of the Merkle tree
-  const zeroElements: string[] = [];
-  
-  // Access the zero element from the tree options configuration
-  let currentZero = '0x29f9a0a07a22ab214d00aaa0190f54509e853f3119009baecb0035347606b0a9'; // Level 20 zero value
-  
-  // Generate the zero elements for each level
-  for (let i = 0; i < 20; i++) {
-    zeroElements.push(currentZero);
-    // Calculate the next level's zero element by hashing the current zero with itself
-    currentZero = poseidonHash2ToString(currentZero, currentZero);
-  }
-  
-  // Create the Merkle paths for each input
-  const inputMerklePathElements = inputs.map(() => {
-    // Return an array of zero elements as the path for each input
-    // Create a copy of the zeroElements array to avoid modifying the original
-    return [...zeroElements];
-  });
 
   // Use the properly calculated Merkle tree root
   const root = tree.root.toString();
@@ -360,7 +359,7 @@ async function generateSampleProofForWithdraw(): Promise<{
     inPrivateKey: inputs.map(x => x.keypair.privkey),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
     inPathIndices: inputMerklePathIndices,
-    // inPathElements: inputMerklePathElements,
+    inPathElements: inputMerklePathElements,
     
     // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
     outAmount: outputs.map(x => x.amount.toString(10)),
