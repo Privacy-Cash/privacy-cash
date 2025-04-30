@@ -303,49 +303,47 @@ fn wrong_verifying_key_verification_should_not_succeed() {
     );
 }
 
-// #[test]
-// fn public_input_greater_than_field_size_should_not_suceed() {
-//     let proof_a: G1 = G1::deserialize_with_mode(
-//         &*[&change_endianness(&PROOF[0..64]), &[0u8][..]].concat(),
-//         Compress::No,
-//         Validate::Yes,
-//     )
-//     .unwrap();
-//     let mut proof_a_neg = [0u8; 65];
-//     proof_a
-//         .neg()
-//         .x
-//         .serialize_with_mode(&mut proof_a_neg[..32], Compress::No)
-//         .unwrap();
-//     proof_a
-//         .neg()
-//         .y
-//         .serialize_with_mode(&mut proof_a_neg[32..], Compress::No)
-//         .unwrap();
+#[test]
+fn public_input_greater_than_field_size_should_not_suceed() {
+    let proof_a: G1 = G1::deserialize_with_mode(
+        &*[&change_endianness(&PROOF_A[0..64]), &[0u8][..]].concat(),
+        Compress::No,
+        Validate::Yes,
+    )
+    .unwrap();
+    let mut proof_a_neg = [0u8; 65];
+    proof_a
+        .neg()
+        .x
+        .serialize_with_mode(&mut proof_a_neg[..32], Compress::No)
+        .unwrap();
+    proof_a
+        .neg()
+        .y
+        .serialize_with_mode(&mut proof_a_neg[32..], Compress::No)
+        .unwrap();
 
-//     let proof_a = change_endianness(&proof_a_neg[..64]).try_into().unwrap();
-//     let proof_b = PROOF[64..192].try_into().unwrap();
-//     let proof_c = PROOF[192..256].try_into().unwrap();
+    let proof_a = change_endianness(&proof_a_neg[..64]).try_into().unwrap();
     
-//     let mut public_inputs = PUBLIC_INPUTS;
-//     public_inputs[0] = BigUint::from(ark_bn254::Fr::MODULUS)
-//         .to_bytes_be()
-//         .try_into()
-//         .unwrap();
-//     let mut verifier = Groth16Verifier::new(
-//         &proof_a,
-//         &proof_b,
-//         &proof_c,
-//         &public_inputs,
-//         &VERIFYING_KEY,
-//     )
-//     .unwrap();
-//     assert_eq!(
-//         verifier.verify_unchecked(),
-//         Err(Groth16Error::ProofVerificationFailed)
-//     );
-//     assert_eq!(
-//         verifier.verify(),
-//         Err(Groth16Error::PublicInputGreaterThanFieldSize)
-//     );
-// }
+    let mut public_inputs = PUBLIC_INPUTS;
+    public_inputs[0] = BigUint::from(ark_bn254::Fr::MODULUS)
+        .to_bytes_be()
+        .try_into()
+        .unwrap();
+    let mut verifier = Groth16Verifier::new(
+        &proof_a,
+        &PROOF_B,
+        &PROOF_C,
+        &public_inputs,
+        &VERIFYING_KEY,
+    )
+    .unwrap();
+    assert_eq!(
+        verifier.verify_unchecked(),
+        Err(Groth16Error::ProofVerificationFailed)
+    );
+    assert_eq!(
+        verifier.verify(),
+        Err(Groth16Error::PublicInputGreaterThanFieldSize)
+    );
+}
