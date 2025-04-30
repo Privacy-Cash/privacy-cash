@@ -8,14 +8,14 @@
 
 /// <reference path="./types.d.ts" />
 
-import { prove, verify, Proof } from './prover';
+import { prove, verify, Proof, parseProofToBytesArray, parseToBytesArray } from './prover';
 import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { utils } from 'ffjavascript';
 import MerkleTree, { Element } from 'fixed-merkle-tree';
 import { Utxo } from './models/utxo';
-import { getExtDataHash, mockEncrypt, poseidonHash,poseidonHash2ToString, toFixedHex } from './utils/utils';
+import { getExtDataHash, mockEncrypt,poseidonHash2ToString, toFixedHex } from './utils/utils';
 import { FIELD_SIZE } from './utils/constants';
 import { Keypair } from './models/keypair';
 
@@ -211,7 +211,11 @@ async function generateSampleProofForFirstDeposit(): Promise<{
       const res = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"),
         processedPublicSignals, processedProof);
       console.log('!!!!!!Verification result (with processed signals):', res);
-      
+
+      const proofInBytes = parseProofToBytesArray(proof);
+      // const inputsInBytes = parseToBytesArray(utils.stringifyBigInts(input));
+      console.log('!!!!!!parsedProofBytes', proofInBytes);
+      // console.log('!!!!!!inputsInBytes', inputsInBytes);
       return {proof, publicSignals};
     } catch (error: any) {
       console.error('Verification error:', error.message);
@@ -428,6 +432,11 @@ async function generateSampleProofForWithdraw(): Promise<{
       const res = await verify(path.resolve(__dirname, "../artifacts/circuits/verifyingkey2.json"),
         processedPublicSignals, processedProof);
       console.log('!!!!!!Verification result (with processed signals):', res);
+
+      const proofInBytes = parseProofToBytesArray(proof);
+      //const inputsInBytes = parseToBytesArray(utils.stringifyBigInts(input));
+      console.log('!!!!!!parsedProofBytes', proofInBytes);
+      //console.log('!!!!!!inputsInBytes', inputsInBytes);
       
       return {proof, publicSignals};
     } catch (error: any) {
@@ -468,7 +477,7 @@ async function main() {
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
     await generateSampleProofForFirstDeposit();
-    await generateSampleProofForWithdraw();
+    // await generateSampleProofForWithdraw();
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {
