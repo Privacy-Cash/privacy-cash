@@ -16,7 +16,7 @@ import * as tmp from 'tmp-promise'
 import { promisify } from 'util'
 import { exec as execCallback } from 'child_process'
 import BN from 'bn.js'
-import { FIELD_SIZE } from './utils/constants'
+import { FIELD_SIZE } from '../utils/constants'
 
 // Type definitions for external modules
 type WtnsModule = {

@@ -8,7 +8,7 @@
 
 /// <reference path="./types.d.ts" />
 
-import { prove, verify, Proof, parseProofToBytesArray, parseToBytesArray } from './prover';
+import { prove, verify, Proof, parseProofToBytesArray, parseToBytesArray } from './prover/prover';
 import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
