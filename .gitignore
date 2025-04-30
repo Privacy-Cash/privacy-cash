@@ -2,3 +2,10 @@
 program/target/
 scripts/node_modules/
 artifacts/circuits/powersOfTau28_hez_final_18.ptau
+anchor/.anchor
+anchor/.DS_Store
+anchor/target
+anchor/**/*.rs.bk
+anchor/node_modules
+anchor/test-ledger
+anchor/.yarn
