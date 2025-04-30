@@ -25,7 +25,7 @@ type WtnsModule = {
 }
 
 type Groth16Module = {
-  fullProve: (input: any, wasmFile: string, zkeyFile: string) => Promise<{ proof: Proof; publicSignals: any }>
+  fullProve: (input: any, wasmFile: string, zkeyFile: string) => Promise<{ proof: Proof; publicSignals: string[] }>
   verify: (vkeyData: any, publicSignals: any, proof: Proof) => Promise<boolean>
 }
 
@@ -63,7 +63,7 @@ interface ProofResult {
  */
 async function prove(input: any, keyBasePath: string): Promise<{
   proof: Proof
-  publicSignals: Uint8Array[];
+  publicSignals: string[];
 }> {
   console.log('Generating proof for inputs:', input)
   

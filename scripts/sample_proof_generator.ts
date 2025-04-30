@@ -213,9 +213,9 @@ async function generateSampleProofForFirstDeposit(): Promise<{
       console.log('!!!!!!Verification result (with processed signals):', res);
 
       const proofInBytes = parseProofToBytesArray(proof);
-      // const inputsInBytes = parseToBytesArray(utils.stringifyBigInts(input));
+      const inputsInBytes = parseToBytesArray(publicSignals);
       console.log('!!!!!!parsedProofBytes', proofInBytes);
-      // console.log('!!!!!!inputsInBytes', inputsInBytes);
+      console.log('!!!!!!inputsInBytes', inputsInBytes);
       return {proof, publicSignals};
     } catch (error: any) {
       console.error('Verification error:', error.message);
@@ -434,9 +434,9 @@ async function generateSampleProofForWithdraw(): Promise<{
       console.log('!!!!!!Verification result (with processed signals):', res);
 
       const proofInBytes = parseProofToBytesArray(proof);
-      //const inputsInBytes = parseToBytesArray(utils.stringifyBigInts(input));
+      const inputsInBytes = parseToBytesArray(publicSignals);
       console.log('!!!!!!parsedProofBytes', proofInBytes);
-      //console.log('!!!!!!inputsInBytes', inputsInBytes);
+      console.log('!!!!!!inputsInBytes', inputsInBytes);
       
       return {proof, publicSignals};
     } catch (error: any) {
