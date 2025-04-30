@@ -169,7 +169,7 @@ function proveZkutil(input: any, keyBasePath: string): Promise<string> {
 
 export function parseProofToBytesArray(
   proof: Proof,
-  compressed: boolean = true,
+  compressed: boolean = false,
 ): {
   proofA: number[];
   proofB: number[][];

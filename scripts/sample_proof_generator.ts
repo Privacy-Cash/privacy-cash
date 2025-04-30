@@ -214,7 +214,11 @@ async function generateSampleProofForFirstDeposit(): Promise<{
 
       const proofInBytes = parseProofToBytesArray(proof);
       const inputsInBytes = parseToBytesArray(publicSignals);
-      console.log('!!!!!!parsedProofBytes', proofInBytes);
+      console.log('!!!!!!proofA', {
+        proofA: "[" + proofInBytes.proofA.join(', ') + "]",
+        proofB: "[" + proofInBytes.proofB.join(', ') + "]",
+        proofC: "[" + proofInBytes.proofC.join(', ') + "]",
+      });
       console.log('!!!!!!inputsInBytes', inputsInBytes);
       return {proof, publicSignals};
     } catch (error: any) {
@@ -435,7 +439,11 @@ async function generateSampleProofForWithdraw(): Promise<{
 
       const proofInBytes = parseProofToBytesArray(proof);
       const inputsInBytes = parseToBytesArray(publicSignals);
-      console.log('!!!!!!parsedProofBytes', proofInBytes);
+      console.log('!!!!!!proofA', {
+        proofA: "[" + proofInBytes.proofA.join(', ') + "]",
+        proofB: "[" + proofInBytes.proofB.join(', ') + "]",
+        proofC: "[" + proofInBytes.proofC.join(', ') + "]",
+      });
       console.log('!!!!!!inputsInBytes', inputsInBytes);
       
       return {proof, publicSignals};
