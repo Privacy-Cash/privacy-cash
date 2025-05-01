@@ -42,7 +42,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   // Create the merkle tree with the pre-initialized poseidon hash
   const tree = new MerkleTree(20, [], {
     hashFunction: poseidonHash2ToString,
-    zeroElement: '0x2fe54c60d3acabf3343a35b6eba15db4821b340f76e741e2249685ed4899af6c'
+    zeroElement: '0x0000000000000000000000000000000000000000000000000000000000000000'
   });
   
   // Log the root in decimal
@@ -83,25 +83,12 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   // Create mock Merkle path data (normally built from the tree)
   const inputMerklePathIndices = inputs.map((input) => input.index || 0);
   
-  // For first deposit into an empty tree, we need to create empty/zero paths
-  // We'll create an array of zero elements for each level of the Merkle tree
-  const zeroElements: string[] = [];
-  
-  // Access the zero element from the tree options configuration
-  let currentZero = '0x2fe54c60d3acabf3343a35b6eba15db4821b340f76e741e2249685ed4899af6c'; // Level 20 zero value
-  
-  // Generate the zero elements for each level
-  for (let i = 0; i < 20; i++) {
-    zeroElements.push(currentZero);
-    // Calculate the next level's zero element by hashing the current zero with itself
-    currentZero = poseidonHash2ToString(currentZero, currentZero);
-  }
-  
+  // inputMerklePathElements won't be checked for empty utxos. so we need to create a sample full path
   // Create the Merkle paths for each input
   const inputMerklePathElements = inputs.map(() => {
     // Return an array of zero elements as the path for each input
     // Create a copy of the zeroElements array to avoid modifying the original
-    return [...zeroElements];
+    return [...new Array(tree.levels).fill(0)];
   });
 
   // Use the properly calculated Merkle tree root
@@ -253,7 +240,7 @@ async function generateSampleProofForWithdraw(): Promise<{
   const fee = '100000000'; // Default 0.1 SOL fee
   const recipient = '0x1111111111111111111111111111111111111111'; // Default recipient address
   // from https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/contracts/MerkleTreeWithHistory.sol#L125C32-L125C98
-  const zeroValue = '0x2fe54c60d3acabf3343a35b6eba15db4821b340f76e741e2249685ed4899af6c'
+  const zeroValue = '0x0000000000000000000000000000000000000000000000000000000000000000'
   
   // Create the merkle tree with the pre-initialized poseidon hash
   const tree = new MerkleTree(20, [], {
