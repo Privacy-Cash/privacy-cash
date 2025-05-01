@@ -38,12 +38,11 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   const blinding2 = new BN('500000000');  // Use fixed value for consistency
   const fee = '100000000'; // Default 0.1 SOL fee
   const recipient = '0x1111111111111111111111111111111111111111'; // Default recipient address
-  const zeroValue = 11850551329423159860688778991827824730037759162201783566284850822760196767874
-  
+
   // Create the merkle tree with the pre-initialized poseidon hash
   const tree = new MerkleTree(20, [], {
     hashFunction: poseidonHash2ToString,
-    zeroElement: zeroValue
+    zeroElement: '0x2fe54c60d3acabf3343a35b6eba15db4821b340f76e741e2249685ed4899af6c'
   });
   
   // Log the root in decimal
@@ -89,7 +88,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   const zeroElements: string[] = [];
   
   // Access the zero element from the tree options configuration
-  let currentZero = '0x29f9a0a07a22ab214d00aaa0190f54509e853f3119009baecb0035347606b0a9'; // Level 20 zero value
+  let currentZero = '0x2fe54c60d3acabf3343a35b6eba15db4821b340f76e741e2249685ed4899af6c'; // Level 20 zero value
   
   // Generate the zero elements for each level
   for (let i = 0; i < 20; i++) {
@@ -485,7 +484,7 @@ async function main() {
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
     await generateSampleProofForFirstDeposit();
-    // await generateSampleProofForWithdraw();
+    await generateSampleProofForWithdraw();
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {
