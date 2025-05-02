@@ -7,7 +7,7 @@ const ROOT_HISTORY_SIZE: usize = 100;
 const DEFAULT_HEIGHT: usize = 20;
 
 #[program]
-pub mod anchor {
+pub mod zkcash {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {

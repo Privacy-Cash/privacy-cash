@@ -1,16 +1,16 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { Anchor } from "../target/types/anchor"; // This should be `zkcash` unless the program name is actually "anchor"
-import { SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Zkcash } from "../target/types/zkcash"; // This should be `zkcash` unless the program name is actually "anchor"
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { expect } from "chai";
+import { DEFAULT_HEIGHT, ROOT_HISTORY_SIZE, ZERO_BYTES } from "./constants";
 
-describe("anchor", () => {
+describe("zkcash", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-
-  // Make sure the program name matches what's generated
-  const program = anchor.workspace.Anchor as Program<Anchor>;
+  
+  const program = anchor.workspace.Zkcash as Program<Zkcash>;
 
   // Generate keypairs for the accounts needed in the test
   const treeAccount = anchor.web3.Keypair.generate();
@@ -50,29 +50,25 @@ describe("anchor", () => {
       .accounts({
         treeAccount: treeAccount.publicKey,
         authority: authority.publicKey,
-        systemProgram: SystemProgram.programId,
+        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([treeAccount, authority])
       .rpc();
     
     console.log("Initialization transaction signature", tx);
 
-    // Since tree_account is an AccountLoader in the Rust program, we need to load it
-    // Instead of:
-    // const accountData = await program.account.treeAccount.fetch(treeAccountPDA.publicKey);
-    
-    // Try using the correct account name from your Rust program
-    try {
-      const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(treeAccount.publicKey);
-      console.log("Tree account data:", merkleTreeAccount);
-      
-      // Add assertions based on your initialize function's logic
-      // expect(merkleTreeAccount.authority.equals(authority.publicKey)).to.be.true;
-    } catch (e) {
-      console.log("Error fetching account:", e);
-      
-      // Debug - list available account types
-      console.log("Available account types:", Object.keys(program.account));
+    const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(treeAccount.publicKey);
+    // console.log("Tree account data:", merkleTreeAccount);
+
+    expect(merkleTreeAccount.authority.equals(authority.publicKey)).to.be.true;
+    expect(merkleTreeAccount.nextIndex.toString()).to.equal("0");
+    expect(merkleTreeAccount.rootIndex.toString()).to.equal("0");
+    expect(merkleTreeAccount.rootHistory.length).to.equal(ROOT_HISTORY_SIZE);
+    expect(merkleTreeAccount.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
+    expect(merkleTreeAccount.rootHistory[0]).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
+
+    for (let i = 0; i < DEFAULT_HEIGHT; i++) {
+      expect(merkleTreeAccount.subtrees[i]).to.deep.equal(ZERO_BYTES[i]);
     }
   });
 });
