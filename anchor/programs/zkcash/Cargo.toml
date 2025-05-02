@@ -1,12 +1,12 @@
 [package]
-name = "anchor"
+name = "zkcash"
 version = "0.1.0"
-description = "Created with Anchor"
+description = "Anchor program for zkcash"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "anchor"
+name = "zkcash"
 
 [features]
 default = []
@@ -19,4 +19,5 @@ idl-build = ["anchor-lang/idl-build"]
 
 [dependencies]
 anchor-lang = "0.31.0"
+bytemuck = { version = "1.20.0", features = ["min_const_generics"] }
 
