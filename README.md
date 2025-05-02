@@ -57,7 +57,28 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ts-node sample_proof_generator.ts
    ```
 
-### Solana Program
+### Anchor Program
+1. Navigate to the program directory:
+   ```bash
+   cd anchor
+   ```
+
+2. Build the program:
+   ```bash
+   anchor build
+   ```
+
+3. Run unit test:
+   ```bash
+   cargo test
+   ```
+
+4. Run integration test:
+   ```bash
+   anchor test
+   ```
+
+### Rust Program (Only for testing ZK/merkle tree lib... Deprecated)
 
 1. Navigate to the program directory:
    ```bash
