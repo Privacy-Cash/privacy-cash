@@ -106,6 +106,8 @@ async function generateSampleProofForFirstDeposit(): Promise<{
     extAmount: extAmount.toString(10),
     encryptedOutput1: mockEncrypt(outputs[0]),
     encryptedOutput2: mockEncrypt(outputs[1]),
+    fee: fee,
+    tokenMint: '0x0000000000000000000000000000000000000000000000000000000000000000',
   };
   
   // Generate extDataHash from the extData structure
@@ -331,6 +333,8 @@ async function generateSampleProofForWithdraw(): Promise<{
     extAmount: extAmount.toString(10),
     encryptedOutput1: mockEncrypt(outputs[0]),
     encryptedOutput2: mockEncrypt(outputs[1]),
+    fee: fee,
+    tokenMint: '0x0000000000000000000000000000000000000000000000000000000000000000',
   };
   
   // Generate extDataHash from the extData structure
@@ -431,7 +435,6 @@ async function generateSampleProofForWithdraw(): Promise<{
         proofC: "[" + proofInBytes.proofC.join(', ') + "]",
       });
       console.log('!!!!!!inputsInBytes', inputsInBytes);
-      
       return {proof, publicSignals};
     } catch (error: any) {
       console.error('Verification error:', error.message);

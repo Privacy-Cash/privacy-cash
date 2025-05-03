@@ -7,6 +7,7 @@
 
 import BN from 'bn.js';
 import { Utxo } from '../models/utxo';
+import { keccak256 } from '@ethersproject/keccak256';
 
 const poseidon = require("circomlib/src/poseidon.js");
 export const poseidonHash = (items: any[]) => new BN(poseidon(items).toString())
@@ -45,6 +46,8 @@ export async function getExtDataHash(extData: {
   extAmount: string | number;
   encryptedOutput1: string;
   encryptedOutput2: string;
+  fee: string | number;
+  tokenMint: string;
 }): Promise<string> {
   // Prepare inputs as array of field elements
   const inputs = [
@@ -54,16 +57,20 @@ export async function getExtDataHash(extData: {
     new BN(extData.extAmount.toString()),
     // For encrypted outputs, use a deterministic numeric representation
     new BN(extData.encryptedOutput1.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16),
-    new BN(extData.encryptedOutput2.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16)
+    new BN(extData.encryptedOutput2.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16),
+    new BN(extData.fee.toString()),
+    new BN(extData.tokenMint.toString().replace('0x', ''), 16)
   ];
   
-  // Convert BNs to BigInts for Poseidon
-  const bigIntInputs = inputs.map(bn => BigInt(bn.toString()));
+  // Convert to a single string and then to bytes
+  const inputStr = inputs.map(bn => bn.toString()).join('');
   
   // Log the inputs for debugging
-  console.log('Poseidon inputs:', bigIntInputs.map(n => n.toString()));
+  console.log('Keccak inputs:', inputStr);
   
-  // Calculate the Poseidon hash
-  const hash = poseidon(bigIntInputs);
-  return hash.toString();
+  // Calculate the keccak256 hash
+  const hash = keccak256(Buffer.from(inputStr, 'utf8'));
+  
+  // Remove '0x' prefix and return
+  return new BN(hash.slice(2), 16).toString(10);
 } 
