@@ -61,6 +61,8 @@ pub struct ExtData {
     pub ext_amount: i64,
     pub encrypted_output1: Vec<u8>,
     pub encrypted_output2: Vec<u8>,
+    pub fee: u64,
+    pub token_mint: Pubkey,
 }
 
 #[derive(Accounts)]

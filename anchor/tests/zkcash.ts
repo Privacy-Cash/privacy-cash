@@ -94,7 +94,9 @@ describe("zkcash", () => {
         recipient: recipient.publicKey,
         extAmount: new anchor.BN(-100),
         encryptedOutput1: Buffer.from("encryptedOutput1Data"),
-        encryptedOutput2: Buffer.from("encryptedOutput2Data")
+        encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+        fee: new anchor.BN(100),
+        tokenMint: new PublicKey("11111111111111111111111111111111")
       };
 
       // Execute the transaction
