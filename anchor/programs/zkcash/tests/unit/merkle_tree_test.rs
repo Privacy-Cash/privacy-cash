@@ -229,4 +229,116 @@ fn test_root_history_circular_buffer() {
        assert_eq!(root_history[i], all_roots[i], 
            "Root history at index {} doesn't match expected root", i);
    }
-} 
+}
+
+#[test]
+fn test_is_known_root_with_empty_tree() {
+    let account = create_test_account();
+
+    // Initial root should be recognized as a known root
+    let initial_root = account.root;
+    assert!(MerkleTree::is_known_root(&account, initial_root), 
+        "Initial root should be recognized as a known root");
+
+    // A zero root should always be rejected
+    let zero_root = [0u8; 32];
+    assert!(!MerkleTree::is_known_root(&account, zero_root), 
+        "Zero root should always be rejected");
+
+    // Any other root should be rejected
+    let unknown_root = [1u8; 32];
+    assert!(!MerkleTree::is_known_root(&account, unknown_root), 
+        "Unknown root should be rejected");
+
+    let another_unknown_root = Poseidon::zero_bytes()[1];
+    assert!(!MerkleTree::is_known_root(&account, another_unknown_root), 
+        "Unknown root should be rejected");
+}
+
+#[test]
+fn test_is_known_root_with_appends() {
+    let mut account = create_test_account();
+    
+    // Store roots as we append leaves
+    let mut roots = Vec::new();
+    roots.push(account.root); // Initial root
+    
+    // Append 5 leaves and store their roots
+    for i in 0..5 {
+        let mut leaf = [0u8; 32];
+        leaf[0] = (i + 1) as u8; // Make each leaf unique
+        
+        MerkleTree::append::<Poseidon>(leaf, &mut account);
+        roots.push(account.root);
+    }
+    
+    // Verify all roots are recognized
+    for i in 0..6 {
+        assert!(MerkleTree::is_known_root(&account, roots[i]), 
+            "Root at index {} should be recognized", i);
+    }
+    
+    // Unknown root should be rejected
+    let unknown_root = [42u8; 32];
+    assert!(!MerkleTree::is_known_root(&account, unknown_root), 
+        "Unknown root should be rejected");
+}
+
+#[test]
+fn test_is_known_root_circular_buffer() {
+    let mut account = create_test_account();
+    
+    // Store all roots as we append leaves
+    let mut all_roots = Vec::new();
+    all_roots.push(account.root); // Initial root
+    
+    // Append 101 leaves to test circular buffer wraparound
+    for i in 0..101 {
+        let mut leaf = [0u8; 32];
+        leaf[0] = ((i + 1) % 8) as u8;
+        
+        MerkleTree::append::<Poseidon>(leaf, &mut account);
+        all_roots.push(account.root);
+    }
+    
+    // After 101 appends, the buffer will have wrapped around
+    // The first root (index 0) should no longer be in the history
+    assert!(!MerkleTree::is_known_root(&account, all_roots[0]), 
+        "Overwritten root should not be recognized");
+    
+    // The most recent 100 roots should be recognized
+    for i in 2..102 {
+        assert!(MerkleTree::is_known_root(&account, all_roots[i]), 
+            "Root at index {} should be recognized", i);
+    }
+}
+
+#[test]
+fn test_is_zero_root_always_rejected() {
+    let mut account = create_test_account();
+    
+    let zero_root = [0u8; 32];
+    assert!(!MerkleTree::is_known_root(&account, zero_root), 
+        "Zero root should always be rejected");
+
+    for i in 0..200 {
+        let mut leaf = [0u8; 32];
+        leaf[0] = ((i + 1) % 8) as u8;
+        
+        MerkleTree::append::<Poseidon>(leaf, &mut account);
+        assert!(!MerkleTree::is_known_root(&account, zero_root), 
+            "Zero root should always be rejected");
+    }
+}
+
+#[test]
+fn test_modification_of_root_history_is_rejected() {
+    let mut account = create_test_account();
+    
+    let initial_root = account.root;
+    let mut modified_root = initial_root;
+    modified_root[0] = 42; // Modify first byte
+    
+    assert!(!MerkleTree::is_known_root(&account, modified_root), 
+        "Modified root should be rejected");
+}

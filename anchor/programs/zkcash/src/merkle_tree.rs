@@ -58,4 +58,31 @@ impl MerkleTree {
         
         proof
     }
+
+    pub fn is_known_root(tree_account: &MerkleTreeAccount, root: [u8; 32]) -> bool {
+        if root == [0u8; 32] {
+            return false;
+        }
+        
+        let current_root_index = tree_account.root_index as usize;
+        let mut i = current_root_index;
+        
+        loop {
+            if root == tree_account.root_history[i] {
+                return true;
+            }
+            
+            if i == 0 {
+                i = ROOT_HISTORY_SIZE - 1;
+            } else {
+                i -= 1;
+            }
+            
+            if i == current_root_index {
+                break;
+            }
+        }
+        
+        false
+    }
 } 
