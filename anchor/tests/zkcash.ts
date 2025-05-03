@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Zkcash } from "../target/types/zkcash"; // This should be `zkcash` unless the program name is actually "anchor"
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
 import { DEFAULT_HEIGHT, ROOT_HISTORY_SIZE, ZERO_BYTES } from "./constants";
 
@@ -15,6 +15,7 @@ describe("zkcash", () => {
   // Generate keypairs for the accounts needed in the test
   const treeAccount = anchor.web3.Keypair.generate();
   const authority = anchor.web3.Keypair.generate();
+  const recipient = anchor.web3.Keypair.generate();
 
   // --- Funding the Authority Wallet ---
   before(async () => {
@@ -50,7 +51,6 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccount.publicKey,
         authority: authority.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([treeAccount, authority])
       .rpc();
@@ -70,6 +70,46 @@ describe("zkcash", () => {
     for (let i = 0; i < DEFAULT_HEIGHT; i++) {
       expect(merkleTreeAccount.subtrees[i]).to.deep.equal(ZERO_BYTES[i]);
     }
+  });
+
+  it("Can execute transact instruction", async () => {
+    console.log(`Testing transact instruction with recipient: ${recipient.publicKey.toBase58()}`);
+    
+    const proof: any = {
+        proof: Buffer.from("mockProofData"),
+        root: ZERO_BYTES[DEFAULT_HEIGHT],
+        inputNullifiers: [
+          Array(32).fill(1),
+          Array(32).fill(2)
+        ],
+        outputCommitments: [
+          Array(32).fill(3),
+          Array(32).fill(4)
+        ],
+        publicAmount: new anchor.BN(100),
+        extDataHash: Array(32).fill(5)
+      };
+
+      const extData: any = {
+        recipient: recipient.publicKey,
+        extAmount: new anchor.BN(-100),
+        encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+        encryptedOutput2: Buffer.from("encryptedOutput2Data")
+      };
+
+      // Execute the transaction
+      const tx = await program.methods
+        .transact(proof, extData)
+        .accounts({
+          treeAccount: treeAccount.publicKey,
+          recipient: recipient.publicKey,
+          signer: authority.publicKey,
+        })
+        .signers([authority])
+        .rpc();
+      
+      console.log("Transact transaction signature:", tx);
+      expect(tx).to.be.a('string');
   });
 });
 
