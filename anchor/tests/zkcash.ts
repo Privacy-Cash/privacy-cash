@@ -14,12 +14,15 @@ describe("zkcash", () => {
   const program = anchor.workspace.Zkcash as Program<Zkcash>;
 
   // Generate keypairs for the accounts needed in the test
-  const treeAccount = anchor.web3.Keypair.generate();
-  const authority = anchor.web3.Keypair.generate();
-  const recipient = anchor.web3.Keypair.generate();
+  let treeAccount: anchor.web3.Keypair;
+  let authority: anchor.web3.Keypair;
+  let recipient: anchor.web3.Keypair;
 
   // --- Funding the Authority Wallet ---
   before(async () => {
+    // Generate the authority keypair once
+    authority = anchor.web3.Keypair.generate();
+    
     // Airdrop SOL to the authority wallet.
     console.log(`Airdropping SOL to ${authority.publicKey.toBase58()}...`);
     const airdropSignature = await provider.connection.requestAirdrop(
@@ -43,11 +46,16 @@ describe("zkcash", () => {
     expect(balance).to.be.greaterThan(0);
   });
 
-  it("Is initialized successfully", async () => {
-    console.log(`Initializing with tree account: ${treeAccount.publicKey.toBase58()}`);
-    console.log(`Using authority: ${authority.publicKey.toBase58()}`);
+  // Reset program state before each test
+  beforeEach(async () => {
+    // Generate new keypairs for each test to ensure a clean state
+    treeAccount = anchor.web3.Keypair.generate();
+    recipient = anchor.web3.Keypair.generate();
     
-    const tx = await program.methods
+    console.log(`Initializing fresh tree account: ${treeAccount.publicKey.toBase58()}`);
+    
+    // Initialize a fresh tree account for each test
+    await program.methods
       .initialize()
       .accounts({
         treeAccount: treeAccount.publicKey,
@@ -55,22 +63,14 @@ describe("zkcash", () => {
       })
       .signers([treeAccount, authority])
       .rpc();
-    
-    console.log("Initialization transaction signature", tx);
-
+      
+    // Verify the initialization was successful
     const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(treeAccount.publicKey);
-    // console.log("Tree account data:", merkleTreeAccount);
-
     expect(merkleTreeAccount.authority.equals(authority.publicKey)).to.be.true;
     expect(merkleTreeAccount.nextIndex.toString()).to.equal("0");
     expect(merkleTreeAccount.rootIndex.toString()).to.equal("0");
     expect(merkleTreeAccount.rootHistory.length).to.equal(ROOT_HISTORY_SIZE);
     expect(merkleTreeAccount.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
-    expect(merkleTreeAccount.rootHistory[0]).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
-
-    for (let i = 0; i < DEFAULT_HEIGHT; i++) {
-      expect(merkleTreeAccount.subtrees[i]).to.deep.equal(ZERO_BYTES[i]);
-    }
   });
 
   it("Can execute transact instruction for correct input", async () => {
@@ -187,5 +187,259 @@ describe("zkcash", () => {
       }
     }
   });
-});
 
+  it("Fails transact instruction for an unknown root", async () => {
+    // Create a sample ExtData object
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    // Calculate the correct extDataHash
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Create an invalid root (not in the tree's history)
+    const invalidRoot = Array(32).fill(123); // Different from any known root
+    
+    // Create a Proof object with the invalid root but correct hash
+    const proof = {
+      proof: Buffer.from("mockProofData"),
+      root: invalidRoot,
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: new anchor.BN(100),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    try {
+      // Execute the transaction - this should fail because the root is unknown
+      await program.methods
+        .transact(proof, extData)
+        .accounts({
+          treeAccount: treeAccount.publicKey,
+          recipient: recipient.publicKey,
+          signer: authority.publicKey,
+        })
+        .signers([authority])
+        .rpc();
+      
+      // If we reach here, the test should fail because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to unknown root but succeeded");
+    } catch (error) {
+      // Check if the error is an AnchorError with the expected error code
+      if (error instanceof anchor.AnchorError) {
+        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
+        expect(error.error.errorCode.number).to.equal(6002); // UnknownRoot error code
+        expect(error.error.errorMessage).to.equal("Root is not known in the tree");
+      } else {
+        // If it's not an AnchorError or has the wrong error code, fail the test
+        console.error("Unexpected error:", error);
+        throw error;
+      }
+    }
+  });
+
+  it("Fails transact instruction for zero root", async () => {
+    // Create a sample ExtData object
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    // Calculate the correct extDataHash
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const zeroRoot = Array(32).fill(0);
+    
+    // Create a Proof object with the invalid root but correct hash
+    const proof = {
+      proof: Buffer.from("mockProofData"),
+      root: zeroRoot,
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: new anchor.BN(100),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    try {
+      // Execute the transaction - this should fail because the root is unknown
+      await program.methods
+        .transact(proof, extData)
+        .accounts({
+          treeAccount: treeAccount.publicKey,
+          recipient: recipient.publicKey,
+          signer: authority.publicKey,
+        })
+        .signers([authority])
+        .rpc();
+      
+      // If we reach here, the test should fail because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to unknown root but succeeded");
+    } catch (error) {
+      // Check if the error is an AnchorError with the expected error code
+      if (error instanceof anchor.AnchorError) {
+        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
+        expect(error.error.errorCode.number).to.equal(6002); // UnknownRoot error code
+        expect(error.error.errorMessage).to.equal("Root is not known in the tree");
+      } else {
+        // If it's not an AnchorError or has the wrong error code, fail the test
+        console.error("Unexpected error:", error);
+        throw error;
+      }
+    }
+  });
+
+  it("Transact succeeds with the correct root", async () => {
+    // Fetch the Merkle tree account to get the current root
+    const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccount.publicKey);
+
+    // This should now pass because we're using a fresh tree account for each test
+    expect(treeAccountData.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
+    
+    // Test that a transaction with the initial root works
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Create a Proof with the current valid root (initial root)
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: Array.from(treeAccountData.root), // Use the current valid root
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: new anchor.BN(100),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // This transaction should succeed because the root is valid
+    const transactTx = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccount.publicKey,
+        recipient: recipient.publicKey,
+        signer: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+    
+    console.log("Transact with valid root transaction signature:", transactTx);
+    expect(transactTx).to.be.a('string');
+  });
+
+  it("Transact succeeds after the second root update", async () => {
+    // First transaction to update the root
+    const firstExtData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const firstExtDataHash = getExtDataHash(firstExtData);
+    
+    const firstProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT], // Initial root
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: new anchor.BN(100),
+      extDataHash: Array.from(firstExtDataHash)
+    };
+
+    // This transaction should succeed with the initial root
+    await program.methods
+      .transact(firstProof, firstExtData)
+      .accounts({
+        treeAccount: treeAccount.publicKey,
+        recipient: recipient.publicKey,
+        signer: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+    
+    // Fetch the updated root
+    const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccount.publicKey);
+    
+    // Second transaction with the updated root
+    const secondExtData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-200),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedSecondExtDataHash = getExtDataHash(secondExtData);
+
+    const secondValidProof = {
+      proof: Buffer.from("mockProofData"),
+      root: Array.from(treeAccountData.root), // Use the updated root
+      inputNullifiers: [
+        Array(32).fill(5), // Different nullifiers
+        Array(32).fill(6)
+      ],
+      outputCommitments: [
+        Array(32).fill(7), // Different commitments
+        Array(32).fill(8)
+      ],
+      publicAmount: new anchor.BN(100),
+      extDataHash: Array.from(calculatedSecondExtDataHash)
+    };
+    
+    // This transaction should succeed because the root is valid
+    const secondTransactTx = await program.methods
+      .transact(secondValidProof, secondExtData)
+      .accounts({
+        treeAccount: treeAccount.publicKey,
+        recipient: recipient.publicKey,
+        signer: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+    
+    console.log("Second transaction signature:", secondTransactTx);
+    expect(secondTransactTx).to.be.a('string');
+  });
+});

@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use light_hasher::Poseidon;
-use anchor_lang::solana_program::hash::{hash, Hash};
-use anchor_lang::solana_program::keccak;
+use anchor_lang::solana_program::hash::{hash};
 
 declare_id!("F12PAMjHff2QHDwBTghE4BFzaaqNscKwno978La2vfQ5");
 
@@ -41,6 +40,15 @@ pub mod zkcash {
     }
 
     pub fn transact(ctx: Context<Transact>, proof: Proof, ext_data: ExtData) -> Result<()> {
+        let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
+
+        // check if proof.root is in the tree_account's proof history
+        require!(
+            MerkleTree::is_known_root(&tree_account, proof.root),
+            ErrorCode::UnknownRoot
+        );
+
+        // check if the ext_data hashes to the same ext_data in the proof
         let mut serialized_ext_data = Vec::new();
         ext_data.serialize(&mut serialized_ext_data)?;
         
@@ -48,6 +56,9 @@ pub mod zkcash {
             hash(&serialized_ext_data).to_bytes() == proof.ext_data_hash,
             ErrorCode::ExtDataHashMismatch
         );
+
+        MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account);
+        MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account);
         
         // Additional verification logic would go here
         // For example, verifying zero-knowledge proofs, checking nullifiers, etc.
@@ -129,4 +140,6 @@ pub enum ErrorCode {
     Unauthorized,
     #[msg("External data hash does not match the one in the proof")]
     ExtDataHashMismatch,
+    #[msg("Root is not known in the tree")]
+    UnknownRoot,
 } 
