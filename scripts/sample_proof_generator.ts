@@ -18,6 +18,7 @@ import { Utxo } from './models/utxo';
 import { getExtDataHash, mockEncrypt,poseidonHash2ToString, toFixedHex } from './utils/utils';
 import { FIELD_SIZE } from './utils/constants';
 import { Keypair } from './models/keypair';
+import { PublicKey } from '@solana/web3.js';
 
 /**
  * Generates a sample ZK proof using the main proving method
@@ -37,7 +38,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   const blinding1 = new BN('1000000000'); // Use fixed value for consistency
   const blinding2 = new BN('500000000');  // Use fixed value for consistency
   const fee = '100000000'; // Default 0.1 SOL fee
-  const recipient = '0x1111111111111111111111111111111111111111'; // Default recipient address
+  const recipient = new PublicKey("BxuZn19npE43qkrQycBSb12vgruyD3vLygxwZss7eXLU");
 
   // Create the merkle tree with the pre-initialized poseidon hash
   const tree = new MerkleTree(20, [], {
@@ -107,7 +108,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
     encryptedOutput1: mockEncrypt(outputs[0]),
     encryptedOutput2: mockEncrypt(outputs[1]),
     fee: fee,
-    tokenMint: '0x0000000000000000000000000000000000000000000000000000000000000000',
+    tokenMint: new PublicKey("JCeoBX79HfatfaY6xvuNyCHf86hwgkCCWDpEycVHtime"),
   };
   
   // Generate extDataHash from the extData structure
@@ -240,7 +241,7 @@ async function generateSampleProofForWithdraw(): Promise<{
   const blinding1 = new BN('1000000000'); // Use fixed value for consistency
   const blinding2 = new BN('500000000');  // Use fixed value for consistency
   const fee = '100000000'; // Default 0.1 SOL fee
-  const recipient = '0x1111111111111111111111111111111111111111'; // Default recipient address
+  const recipient = new PublicKey("BxuZn19npE43qkrQycBSb12vgruyD3vLygxwZss7eXLU"); // Default recipient address
   // from https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/contracts/MerkleTreeWithHistory.sol#L125C32-L125C98
   const zeroValue = '0x0000000000000000000000000000000000000000000000000000000000000000'
   
@@ -334,7 +335,7 @@ async function generateSampleProofForWithdraw(): Promise<{
     encryptedOutput1: mockEncrypt(outputs[0]),
     encryptedOutput2: mockEncrypt(outputs[1]),
     fee: fee,
-    tokenMint: '0x0000000000000000000000000000000000000000000000000000000000000000',
+    tokenMint: new PublicKey("JCeoBX79HfatfaY6xvuNyCHf86hwgkCCWDpEycVHtime"),
   };
   
   // Generate extDataHash from the extData structure

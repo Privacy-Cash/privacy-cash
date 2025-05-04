@@ -12,9 +12,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@ethersproject/keccak256": "^5.8.0",
+    "@solana/web3.js": "^1.98.2",
     "@types/node": "^22.14.0",
-    "bn.js": "^5.2.1",
     "bs58": "^6.0.0",
     "circom": "^0.5.45",
     "circom_runtime": "^0.1.13",
@@ -31,8 +30,11 @@
     "typescript": "^5.0.0"
   },
   "devDependencies": {
+    "@ethersproject/sha2": "^5.8.0",
     "@types/bn.js": "^5.1.5",
     "@types/circomlibjs": "^0.1.6",
-    "bigint-buffer": "^1.1.5"
+    "bigint-buffer": "^1.1.5",
+    "bn.js": "^5.2.2",
+    "borsh": "^2.0.0"
   }
 }

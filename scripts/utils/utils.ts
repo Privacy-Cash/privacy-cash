@@ -7,7 +7,9 @@
 
 import BN from 'bn.js';
 import { Utxo } from '../models/utxo';
-import { keccak256 } from '@ethersproject/keccak256';
+import * as borsh from 'borsh';
+import { sha256 } from '@ethersproject/sha2';
+import { PublicKey } from '@solana/web3.js';
 
 const poseidon = require("circomlib/src/poseidon.js");
 export const poseidonHash = (items: any[]) => new BN(poseidon(items).toString())
@@ -37,40 +39,61 @@ export function toFixedHex(number: any, length = 32) {
 }
 
 /**
- * Calculates the Poseidon hash of ext data
+ * Calculates the hash of ext data using Borsh serialization
  * @param extData External data object containing recipient, amount, and encrypted outputs
- * @returns Promise resolving to the hash as a string
+ * @returns The hash as a Uint8Array (32 bytes)
  */
-export async function getExtDataHash(extData: {
-  recipient: string;
-  extAmount: string | number;
-  encryptedOutput1: string;
-  encryptedOutput2: string;
-  fee: string | number;
-  tokenMint: string;
-}): Promise<string> {
-  // Prepare inputs as array of field elements
-  const inputs = [
-    // For hex addresses, remove 0x prefix and convert from hex to decimal
-    new BN(extData.recipient.toString().replace('0x', ''), 16),
-    // For numeric values, parse directly
-    new BN(extData.extAmount.toString()),
-    // For encrypted outputs, use a deterministic numeric representation
-    new BN(extData.encryptedOutput1.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16),
-    new BN(extData.encryptedOutput2.toString().split('').map((c: string) => c.charCodeAt(0).toString(16)).join(''), 16),
-    new BN(extData.fee.toString()),
-    new BN(extData.tokenMint.toString().replace('0x', ''), 16)
-  ];
+export function getExtDataHash(extData: {
+  recipient: string | PublicKey;
+  extAmount: string | number | BN;
+  encryptedOutput1: string | Uint8Array;
+  encryptedOutput2: string | Uint8Array;
+  fee: string | number | BN;
+  tokenMint: string | PublicKey;
+}): Uint8Array {
+  // Convert all inputs to their appropriate types
+  const recipient = extData.recipient instanceof PublicKey 
+    ? extData.recipient 
+    : new PublicKey(extData.recipient);
   
-  // Convert to a single string and then to bytes
-  const inputStr = inputs.map(bn => bn.toString()).join('');
+  // Convert to BN for proper i64/u64 handling
+  const extAmount = new BN(extData.extAmount.toString());
+  const fee = new BN(extData.fee.toString());
   
-  // Log the inputs for debugging
-  console.log('Keccak inputs:', inputStr);
+  // Always convert to Buffer
+  const encryptedOutput1 = Buffer.from(extData.encryptedOutput1 as any);
+  const encryptedOutput2 = Buffer.from(extData.encryptedOutput2 as any);
   
-  // Calculate the keccak256 hash
-  const hash = keccak256(Buffer.from(inputStr, 'utf8'));
+  const tokenMint = extData.tokenMint instanceof PublicKey 
+    ? extData.tokenMint 
+    : new PublicKey(extData.tokenMint);
+
+  // Define the borsh schema matching the Rust struct
+  const schema = {
+    struct: {
+      recipient: { array: { type: 'u8', len: 32 } },
+      extAmount: 'i64',
+      encryptedOutput1: { array: { type: 'u8' } },
+      encryptedOutput2: { array: { type: 'u8' } },
+      fee: 'u64',
+      tokenMint: { array: { type: 'u8', len: 32 } },
+    }
+  };
+
+  const value = {
+    recipient: recipient.toBytes(),
+    extAmount: extAmount,  // BN instance - Borsh handles it correctly with i64 type
+    encryptedOutput1: encryptedOutput1,
+    encryptedOutput2: encryptedOutput2,
+    fee: fee,  // BN instance - Borsh handles it correctly with u64 type
+    tokenMint: tokenMint.toBytes(),
+  };
   
-  // Remove '0x' prefix and return
-  return new BN(hash.slice(2), 16).toString(10);
+  // Serialize with Borsh
+  const serializedData = borsh.serialize(schema, value);
+  
+  // Calculate the SHA-256 hash
+  const hashHex = sha256(serializedData);
+  // Convert from hex string to Uint8Array
+  return Buffer.from(hashHex.slice(2), 'hex');
 } 

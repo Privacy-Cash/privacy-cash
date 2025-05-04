@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 use light_hasher::Poseidon;
+use anchor_lang::solana_program::hash::{hash, Hash};
+use anchor_lang::solana_program::keccak;
 
 declare_id!("F12PAMjHff2QHDwBTghE4BFzaaqNscKwno978La2vfQ5");
 
@@ -38,9 +40,19 @@ pub mod zkcash {
         Ok(())
     }
 
-    // Add the transact instruction
     pub fn transact(ctx: Context<Transact>, proof: Proof, ext_data: ExtData) -> Result<()> {
-        msg!("Transact instruction called");
+        let mut serialized_ext_data = Vec::new();
+        ext_data.serialize(&mut serialized_ext_data)?;
+        
+        require!(
+            hash(&serialized_ext_data).to_bytes() == proof.ext_data_hash,
+            ErrorCode::ExtDataHashMismatch
+        );
+        
+        // Additional verification logic would go here
+        // For example, verifying zero-knowledge proofs, checking nullifiers, etc.
+        
+        msg!("External data hash verification successful");
         Ok(())
     }
 }
@@ -115,4 +127,6 @@ pub struct MerkleTreeAccount {
 pub enum ErrorCode {
     #[msg("Not authorized to perform this action")]
     Unauthorized,
-}
+    #[msg("External data hash does not match the one in the proof")]
+    ExtDataHashMismatch,
+} 
