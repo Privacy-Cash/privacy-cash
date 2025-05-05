@@ -3,8 +3,9 @@ import { Program } from "@coral-xyz/anchor";
 import { Zkcash } from "../target/types/zkcash"; // This should be `zkcash` unless the program name is actually "anchor"
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
-import { DEFAULT_HEIGHT, ROOT_HISTORY_SIZE, ZERO_BYTES } from "./constants";
+import { DEFAULT_HEIGHT, ROOT_HISTORY_SIZE, ZERO_BYTES } from "./lib/constants";
 import { getExtDataHash } from "../../scripts/utils/utils";
+import { bnToBytes } from "./lib/utils";
 
 describe("zkcash", () => {
   // Configure the client to use the local cluster.
@@ -101,7 +102,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: new anchor.BN(100),
+      publicAmount: bnToBytes(new anchor.BN(100)),
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -156,7 +157,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: new anchor.BN(100),
+      publicAmount: bnToBytes(new anchor.BN(100)),
       extDataHash: Array.from(incorrectExtDataHash)
     };
 
@@ -217,7 +218,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: new anchor.BN(100),
+      publicAmount: bnToBytes(new anchor.BN(100)),
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -277,7 +278,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: new anchor.BN(100),
+      publicAmount: bnToBytes(new anchor.BN(100)),
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -340,7 +341,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: new anchor.BN(100),
+      publicAmount: bnToBytes(new anchor.BN(100)),
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -383,7 +384,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: new anchor.BN(100),
+      publicAmount: bnToBytes(new anchor.BN(100)),
       extDataHash: Array.from(firstExtDataHash)
     };
 
@@ -424,7 +425,7 @@ describe("zkcash", () => {
         Array(32).fill(7), // Different commitments
         Array(32).fill(8)
       ],
-      publicAmount: new anchor.BN(100),
+      publicAmount: bnToBytes(new anchor.BN(100)),
       extDataHash: Array.from(calculatedSecondExtDataHash)
     };
     

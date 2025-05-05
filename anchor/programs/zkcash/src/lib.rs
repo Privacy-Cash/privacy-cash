@@ -74,7 +74,7 @@ pub struct Proof {
     pub root: [u8; 32],
     pub input_nullifiers: Vec<[u8; 32]>,
     pub output_commitments: [[u8; 32]; 2],
-    pub public_amount: u64,
+    pub public_amount: [u8; 32],
     pub ext_data_hash: [u8; 32],
 }
 
