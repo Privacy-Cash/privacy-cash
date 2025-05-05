@@ -2,7 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { utils } from "ffjavascript";
 
 /**
- * Converts an anchor.BN to a byte array of length 32 (little-endian format)
+ * Converts an anchor.BN to a byte array of length 32 (big-endian format)
  * @param bn - The anchor.BN to convert
  * @returns A number array representing the bytes
  */

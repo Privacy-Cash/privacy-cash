@@ -74,7 +74,7 @@ describe("zkcash", () => {
     expect(merkleTreeAccount.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
   });
 
-  it("Can execute transact instruction for correct input", async () => {
+  it("Can execute transact instruction for correct input, and negative extAmount", async () => {
     console.log(`Testing transact instruction with recipient: ${recipient.publicKey.toBase58()}`);
     
     // Create a sample ExtData object
@@ -102,7 +102,55 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(100)),
+      publicAmount: bnToBytes(new anchor.BN(200)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // Execute the transaction
+    const tx = await program.methods
+      .transact(proof, extData)
+      .accounts({
+        treeAccount: treeAccount.publicKey,
+        recipient: recipient.publicKey,
+        signer: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+    
+    console.log("Transact transaction signature:", tx);
+    expect(tx).to.be.a('string');
+  });
+
+  it("Can execute transact instruction for correct input, and positive extAmount", async () => {
+    console.log(`Testing transact instruction with recipient: ${recipient.publicKey.toBase58()}`);
+    
+    // Create a sample ExtData object
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(300),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    // Calculate the hash correctly using our utility
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Create a Proof object with the correctly calculated hash
+    const proof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      // For positive extAmount (deposit), publicAmount = extAmount - fee
+      publicAmount: bnToBytes(new anchor.BN(200)), // 300 - 100 = 200
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -157,7 +205,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(100)),
+      publicAmount: bnToBytes(new anchor.BN(200)),
       extDataHash: Array.from(incorrectExtDataHash)
     };
 
@@ -218,7 +266,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(100)),
+      publicAmount: bnToBytes(new anchor.BN(200)),
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -278,7 +326,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(100)),
+      publicAmount: bnToBytes(new anchor.BN(200)),
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -341,7 +389,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(100)),
+      publicAmount: bnToBytes(new anchor.BN(200)),
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -384,7 +432,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(100)),
+      publicAmount: bnToBytes(new anchor.BN(200)),
       extDataHash: Array.from(firstExtDataHash)
     };
 
@@ -425,7 +473,7 @@ describe("zkcash", () => {
         Array(32).fill(7), // Different commitments
         Array(32).fill(8)
       ],
-      publicAmount: bnToBytes(new anchor.BN(100)),
+      publicAmount: bnToBytes(new anchor.BN(300)), // |ext_amount| + fee = 200 + 100 = 300
       extDataHash: Array.from(calculatedSecondExtDataHash)
     };
     
@@ -442,5 +490,374 @@ describe("zkcash", () => {
     
     console.log("Second transaction signature:", secondTransactTx);
     expect(secondTransactTx).to.be.a('string');
+  });
+
+  it("Succeeds with valid external amount and fee (withdrawal)", async () => {
+    // For withdrawal: ext_amount is negative, fee is positive, and |ext_amount| + fee = public_amount
+    const extAmount = new anchor.BN(-100);
+    const fee = new anchor.BN(50);
+    const publicAmount = new anchor.BN(150); // |ext_amount| + fee = 100 + 50 = 150
+    
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // Transaction should succeed with valid withdrawal amounts
+    const tx = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccount.publicKey,
+        recipient: recipient.publicKey,
+        signer: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+    
+    console.log("Valid withdrawal transaction signature:", tx);
+    expect(tx).to.be.a('string');
+  });
+
+  it("Succeeds with valid external amount and fee (deposit)", async () => {
+    // For deposit: ext_amount is positive, fee is positive, and ext_amount - fee = public_amount
+    const extAmount = new anchor.BN(200);
+    const fee = new anchor.BN(50);
+    const publicAmount = new anchor.BN(150); // ext_amount - fee = 200 - 50 = 150
+    
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // Transaction should succeed with valid deposit amounts
+    const tx = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccount.publicKey,
+        recipient: recipient.publicKey,
+        signer: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+    
+    console.log("Valid deposit transaction signature:", tx);
+    expect(tx).to.be.a('string');
+  });
+
+  it("Succeeds with zero fee", async () => {
+    // Case with zero fee
+    const extAmount = new anchor.BN(-100);
+    const fee = new anchor.BN(0);
+    const publicAmount = new anchor.BN(100); // |ext_amount| + fee = 100 + 0 = 100
+    
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // Transaction should succeed with zero fee
+    const tx = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccount.publicKey,
+        recipient: recipient.publicKey,
+        signer: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+    
+    console.log("Zero fee transaction signature:", tx);
+    expect(tx).to.be.a('string');
+  });
+
+  it("Fails with invalid external amount and public amount relation (withdrawal)", async () => {
+    // For invalid withdrawal: ext_amount is negative, fee is positive, 
+    // but |ext_amount| + fee != public_amount
+    const extAmount = new anchor.BN(-100);
+    const fee = new anchor.BN(50);
+    const publicAmount = new anchor.BN(200); // Should be 150 but we set 200 to cause failure
+    
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const invalidProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    try {
+      // Transaction should fail due to invalid amount relation
+      await program.methods
+        .transact(invalidProof, extData)
+        .accounts({
+          treeAccount: treeAccount.publicKey,
+          recipient: recipient.publicKey,
+          signer: authority.publicKey,
+        })
+        .signers([authority])
+        .rpc();
+      
+      // If we reach here, the test should fail because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to invalid amount relation but succeeded");
+    } catch (error) {
+      // Check if the error is an AnchorError with the expected error code
+      if (error instanceof anchor.AnchorError) {
+        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
+        // Use the correct error code for InvalidPublicAmountData
+        expect(error.error.errorCode.number).to.equal(6003);
+        expect(error.error.errorMessage).to.equal("Public amount is invalid");
+      } else {
+        // If it's not an AnchorError or has the wrong error code, fail the test
+        console.error("Unexpected error:", error);
+        throw error;
+      }
+    }
+  });
+
+  it("Fails with invalid external amount and public amount relation (deposit)", async () => {
+    // For invalid deposit: ext_amount is positive, fee is positive, 
+    // but ext_amount - fee != public_amount
+    const extAmount = new anchor.BN(200);
+    const fee = new anchor.BN(50);
+    const publicAmount = new anchor.BN(100); // Should be 150 but we set 100 to cause failure
+    
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const invalidProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    try {
+      // Transaction should fail due to invalid amount relation
+      await program.methods
+        .transact(invalidProof, extData)
+        .accounts({
+          treeAccount: treeAccount.publicKey,
+          recipient: recipient.publicKey,
+          signer: authority.publicKey,
+        })
+        .signers([authority])
+        .rpc();
+      
+      // If we reach here, the test should fail because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to invalid amount relation but succeeded");
+    } catch (error) {
+      // Check if the error is an AnchorError with the expected error code
+      if (error instanceof anchor.AnchorError) {
+        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
+        // Use the correct error code for InvalidPublicAmountData
+        expect(error.error.errorCode.number).to.equal(6003);
+        expect(error.error.errorMessage).to.equal("Public amount is invalid");
+      } else {
+        // If it's not an AnchorError or has the wrong error code, fail the test
+        console.error("Unexpected error:", error);
+        throw error;
+      }
+    }
+  });
+
+  it("Fails with negative fee, as hash check isn't valid for negative fee", async () => {
+    // Case with negative fee, which should not be allowed
+    const extAmount = new anchor.BN(-100);
+    const fee = new anchor.BN(-10); // Negative fee should cause failure
+    const publicAmount = new anchor.BN(90); // We're intentionally using the wrong formula to test fee validation
+    
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const invalidProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    try {
+      // Transaction should fail due to negative fee
+      await program.methods
+        .transact(invalidProof, extData)
+        .accounts({
+          treeAccount: treeAccount.publicKey,
+          recipient: recipient.publicKey,
+          signer: authority.publicKey,
+        })
+        .signers([authority])
+        .rpc();
+      
+      // If we reach here, the test should fail because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to negative fee but succeeded");
+    } catch (error) {
+      // Check if the error is an AnchorError with the expected error code
+      if (error instanceof anchor.AnchorError) {
+        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
+        // ExtDataHashMismatch happens because negative fee is detected in a different way
+        expect(error.error.errorCode.number).to.equal(6001);
+        expect(error.error.errorMessage).to.equal("External data hash does not match the one in the proof");
+      } else {
+        // If it's not an AnchorError or has the wrong error code, fail the test
+        console.error("Unexpected error:", error);
+        throw error;
+      }
+    }
+  });
+
+  it("Succeeds with correct authority", async () => {
+    // Use the correct authority
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(200)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // This transaction should succeed with the correct authority
+    const tx = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccount.publicKey,
+        recipient: recipient.publicKey,
+        signer: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+
+    console.log("Transaction with correct authority signature:", tx);
+    expect(tx).to.be.a('string');
   });
 });

@@ -3,63 +3,49 @@ use ark_ff::biginteger::BigInteger256;
 use crate::ErrorCode;
 
 pub fn check_external_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 32]) -> Result<(u64, u64)> {
-    let mut pub_amount = BigInteger256::new([0u64; 4]);
-    for (i, chunk) in public_amount_bytes.chunks(8).enumerate() {
-        if i >= 4 { break; } // BigInteger256 has 4 u64 values
-        
-        let mut val = 0u64;
-        for (j, byte) in chunk.iter().enumerate() {
-            if j < 8 { // Ensure we don't go beyond 8 bytes for a u64
-                val |= (*byte as u64) << (j * 8);
-            }
-        }
-        pub_amount.0[i] = val;
-    }
-
-    if ext_amount > 0 {
-        if pub_amount.0[1] != 0 || pub_amount.0[2] != 0 || pub_amount.0[3] != 0 {
+    // Check that the first 24 bytes are all 0 (for a u64 value)
+    for i in 0..24 {
+        if public_amount_bytes[i] != 0 {
             msg!("Public amount is larger than u64.");
             return Err(ErrorCode::InvalidPublicAmountData.into());
         }
-
-        let pub_amount_fits_i64 = i64::try_from(pub_amount.0[0]);
-
-        if pub_amount_fits_i64.is_err() {
-            msg!("Public amount is larger than i64.");
-            return Err(ErrorCode::InvalidPublicAmountData.into());
-        }
-
+    }
+    
+    // Extract the u64 value from the last 8 bytes (big-endian format)
+    let mut public_amount_bytes_u64 = [0u8; 8];
+    public_amount_bytes_u64.copy_from_slice(&public_amount_bytes[24..32]);
+    
+    // Convert from big-endian bytes to u64
+    let public_amount = u64::from_be_bytes(public_amount_bytes_u64);
+    
+    // Check if the value fits in i64
+    if public_amount > i64::MAX as u64 {
+        msg!("Public amount is larger than i64.");
+        return Err(ErrorCode::InvalidPublicAmountData.into());
+    }
+    
+    if ext_amount > 0 {
         // Convert ext_amount to u64 safely
         let ext_amount_u64: u64 = ext_amount.try_into().unwrap();
         
         //check amount
-        if pub_amount.0[0].checked_add(fee).unwrap() != ext_amount_u64 {
+        if public_amount.checked_add(fee).unwrap() != ext_amount_u64 {
             msg!(
                 "Deposit invalid external amount (fee) {} != {}",
-                pub_amount.0[0] + fee,
+                public_amount + fee,
                 ext_amount
             );
             return Err(ErrorCode::InvalidPublicAmountData.into());
         }
         Ok((ext_amount_u64, fee))
     } else if ext_amount < 0 {
-        if pub_amount.0[1] != 0 || pub_amount.0[2] != 0 || pub_amount.0[3] != 0 {
-            msg!("Public amount is larger than u64.");
-            return Err(ErrorCode::InvalidPublicAmountData.into());
-        }
-        
-        let pub_amount_fits_i64 = i64::try_from(pub_amount.0[0]);
-        if pub_amount_fits_i64.is_err() {
-            msg!("Public amount is larger than i64.");
-            return Err(ErrorCode::InvalidPublicAmountData.into());
-        }
-
+        // Convert negative ext_amount to positive u64
         let ext_amount_abs: u64 = u64::try_from(-ext_amount).unwrap();
         
-        if pub_amount.0[0] != ext_amount_abs.checked_add(fee).unwrap() {
+        if public_amount != ext_amount_abs.checked_add(fee).unwrap() {
             msg!(
                 "Withdrawal invalid external amount: {} != {}",
-                pub_amount.0[0],
+                public_amount,
                 fee + ext_amount_abs
             );
             return Err(ErrorCode::InvalidPublicAmountData.into());

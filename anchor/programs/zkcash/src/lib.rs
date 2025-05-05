@@ -43,6 +43,9 @@ pub mod zkcash {
             ErrorCode::ExtDataHashMismatch
         );
 
+        // check if the public amount is valid
+        let (ext_amount, fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
+
         MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account);
         MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account);
         
@@ -54,6 +57,7 @@ pub mod zkcash {
     }
 }
 
+// all public inputs needs to be in big endian format
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct Proof {
     pub proof: Vec<u8>,
