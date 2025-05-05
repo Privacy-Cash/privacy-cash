@@ -25,22 +25,6 @@ pub mod zkcash {
         Ok(())
     }
 
-    pub fn append(ctx: Context<Append>, leaf: [u8; 32]) -> Result<()> {
-        let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
-        
-        // Verify authority
-        require!(
-            tree_account.authority == ctx.accounts.authority.key(),
-            ErrorCode::Unauthorized
-        );
-        
-        // Append leaf to tree using the MerkleTree struct
-        let _proof = MerkleTree::append::<Poseidon>(leaf, tree_account);
-        
-        msg!("Leaf appended successfully at index: {}", tree_account.next_index - 1);
-        Ok(())
-    }
-
     pub fn transact(ctx: Context<Transact>, proof: Proof, ext_data: ExtData) -> Result<()> {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
 
@@ -116,14 +100,6 @@ pub struct Initialize<'info> {
     pub authority: Signer<'info>,
     
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct Append<'info> {
-    #[account(mut)]
-    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
-    
-    pub authority: Signer<'info>,
 }
 
 #[account(zero_copy)]
