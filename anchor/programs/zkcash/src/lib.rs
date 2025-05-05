@@ -5,6 +5,8 @@ use anchor_lang::solana_program::hash::{hash};
 declare_id!("F12PAMjHff2QHDwBTghE4BFzaaqNscKwno978La2vfQ5");
 
 pub mod merkle_tree;
+pub mod utils;
+
 use merkle_tree::{ROOT_HISTORY_SIZE, DEFAULT_HEIGHT, MerkleTree};
 
 #[program]
@@ -142,4 +144,6 @@ pub enum ErrorCode {
     ExtDataHashMismatch,
     #[msg("Root is not known in the tree")]
     UnknownRoot,
-} 
+    #[msg("Public amount is invalid")]
+    InvalidPublicAmountData
+}
