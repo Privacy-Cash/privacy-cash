@@ -1,6 +1,10 @@
 use anchor_lang::prelude::*;
 use crate::ErrorCode;
 
+// ext_amount is the amount the user wants to deposit or withdraw, it includes the fee.
+// public_amount is the absolute amount changed in the pool, and is always positive.
+// thus, if ext_amount is positive, public_amount = ext_amount - fee
+// if ext_amount is negative, public_amount = -ext_amount - fee
 pub fn check_external_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 32]) -> Result<(u64, u64)> {
     // Check that the first 24 bytes are all 0 (for a u64 value)
     for i in 0..24 {

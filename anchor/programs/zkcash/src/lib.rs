@@ -14,6 +14,7 @@ pub mod zkcash {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        // TODO: support trees for SPL tokens.
         let tree_account = &mut ctx.accounts.tree_account.load_init()?;
         tree_account.authority = ctx.accounts.authority.key();
         tree_account.next_index = 0;
