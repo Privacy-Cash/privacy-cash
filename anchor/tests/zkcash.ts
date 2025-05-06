@@ -960,4 +960,311 @@ describe("zkcash", () => {
     console.log("Transaction with correct authority signature:", tx);
     expect(tx).to.be.a('string');
   });
+
+  it("Fails with mismatched tree account authority", async () => {
+    // Create a different authority
+    const wrongAuthority = anchor.web3.Keypair.generate();
+    
+    // Fund the wrong authority
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: wrongAuthority.publicKey,
+        lamports: 1 * LAMPORTS_PER_SOL, // Increase to 1 SOL to ensure enough for rent
+      })
+    );
+    
+    // Send and confirm the transfer transaction
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+    
+    // Verify the wrong authority has received funds
+    const wrongBalance = await provider.connection.getBalance(wrongAuthority.publicKey);
+    expect(wrongBalance).to.be.greaterThan(0);
+    
+    // Create PDAs for wrong authority
+    const [wrongTreePDA, _wrongTreeBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("merkle_tree"), wrongAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
+    const [wrongFeePDA, _wrongFeeBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("fee_recipient"), wrongAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
+    // Initialize accounts with the wrong authority
+    await program.methods
+      .initialize()
+      .accounts({
+        treeAccount: wrongTreePDA,
+        feeRecipientAccount: wrongFeePDA,
+        authority: wrongAuthority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([wrongAuthority])
+      .rpc();
+      
+    // Verify the initialization was successful
+    const wrongTreeAccount = await program.account.merkleTreeAccount.fetch(wrongTreePDA);
+    expect(wrongTreeAccount.authority.equals(wrongAuthority.publicKey)).to.be.true;
+    
+    // Now try to execute transaction with mismatched authorities
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+    
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(200)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+    
+    try {
+      // Try to use wrongTreePDA but with original authority - should fail
+      await program.methods
+        .transact(validProof, extData)
+        .accounts({
+          treeAccount: wrongTreePDA,
+          recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipientPDA,
+          authority: authority.publicKey, // This doesn't match wrongTreePDA's authority
+          signer: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([authority])
+        .rpc();
+      
+      expect.fail("Transaction should have failed due to mismatched tree account authority but succeeded");
+    } catch (error) {
+      if (error instanceof anchor.AnchorError) {
+        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
+        expect(error.error.errorCode.number).to.equal(2006); // Seeds constraint was violated error code
+        expect(error.error.errorMessage).to.equal("A seeds constraint was violated");
+      } else {
+        console.error("Unexpected error:", error);
+        throw error;
+      }
+    }
+  });
+
+  it("Fails with mismatched fee recipient account authority", async () => {
+    // Create a different authority
+    const wrongAuthority = anchor.web3.Keypair.generate();
+    
+    // Fund the wrong authority
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: wrongAuthority.publicKey,
+        lamports: 1 * LAMPORTS_PER_SOL, // Increase to 1 SOL to ensure enough for rent
+      })
+    );
+    
+    // Send and confirm the transfer transaction
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+    
+    // Verify the wrong authority has received funds
+    const wrongBalance = await provider.connection.getBalance(wrongAuthority.publicKey);
+    expect(wrongBalance).to.be.greaterThan(0);
+    
+    // Create PDAs for wrong authority
+    const [wrongTreePDA, _wrongTreeBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("merkle_tree"), wrongAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
+    const [wrongFeePDA, _wrongFeeBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("fee_recipient"), wrongAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
+    // Initialize accounts with the wrong authority
+    await program.methods
+      .initialize()
+      .accounts({
+        treeAccount: wrongTreePDA,
+        feeRecipientAccount: wrongFeePDA,
+        authority: wrongAuthority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([wrongAuthority])
+      .rpc();
+      
+    // Verify the initialization was successful
+    const wrongFeeAccount = await program.account.feeRecipientAccount.fetch(wrongFeePDA);
+    expect(wrongFeeAccount.authority.equals(wrongAuthority.publicKey)).to.be.true;
+    
+    // Now try to execute transaction with mismatched authorities
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+    
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(200)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+    
+    try {
+      // Try to use wrongFeePDA but with original authority - should fail
+      await program.methods
+        .transact(validProof, extData)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          recipient: recipient.publicKey,
+          feeRecipientAccount: wrongFeePDA,
+          authority: authority.publicKey, // This doesn't match wrongFeePDA's authority
+          signer: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([authority])
+        .rpc();
+      
+      expect.fail("Transaction should have failed due to mismatched fee recipient account authority but succeeded");
+    } catch (error) {
+      if (error instanceof anchor.AnchorError) {
+        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
+        expect(error.error.errorCode.number).to.equal(2006); // Seeds constraint was violated error code
+        expect(error.error.errorMessage).to.equal("A seeds constraint was violated");
+      } else {
+        console.error("Unexpected error:", error);
+        throw error;
+      }
+    }
+  });
+
+  it("Succeeds with explicitly matching authority for both accounts", async () => {
+    // Create an alternative authority to emphasize the matching requirement
+    const matchingAuthority = anchor.web3.Keypair.generate();
+    
+    // Fund the matching authority
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: matchingAuthority.publicKey,
+        lamports: 1 * LAMPORTS_PER_SOL,
+      })
+    );
+    
+    // Send and confirm the transfer transaction
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+    
+    // Verify the matching authority has received funds
+    const matchingBalance = await provider.connection.getBalance(matchingAuthority.publicKey);
+    expect(matchingBalance).to.be.greaterThan(0);
+    
+    // Calculate the PDAs for matching authority
+    const [matchingTreePDA, _matchingTreeBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("merkle_tree"), matchingAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
+    const [matchingFeePDA, _matchingFeeBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("fee_recipient"), matchingAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
+    // Initialize accounts with the matching authority
+    await program.methods
+      .initialize()
+      .accounts({
+        treeAccount: matchingTreePDA,
+        feeRecipientAccount: matchingFeePDA,
+        authority: matchingAuthority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([matchingAuthority])
+      .rpc();
+      
+    // Verify the initialization was successful
+    const matchingTreeAccount = await program.account.merkleTreeAccount.fetch(matchingTreePDA);
+    expect(matchingTreeAccount.authority.equals(matchingAuthority.publicKey)).to.be.true;
+    
+    const matchingFeeAccount = await program.account.feeRecipientAccount.fetch(matchingFeePDA);
+    expect(matchingFeeAccount.authority.equals(matchingAuthority.publicKey)).to.be.true;
+    
+    // Now execute transaction with explicitly matching authorities
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+    
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(200)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+    
+    // This transaction should succeed with the matching authority for both accounts
+    const tx = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: matchingTreePDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: matchingFeePDA,
+        authority: matchingAuthority.publicKey, // Explicitly matching authority
+        signer: matchingAuthority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([matchingAuthority])
+      .rpc();
+    
+    console.log("Transaction with matching authority signature:", tx);
+    expect(tx).to.be.a("string");
+    
+    // Additional assertion to emphasize that the transaction succeeded
+    // Fetch the tree account to verify it was updated after the transaction
+    const updatedTreeAccount = await program.account.merkleTreeAccount.fetch(matchingTreePDA);
+    expect(updatedTreeAccount.nextIndex.toString()).to.equal("2"); // Should be 2 because we appended 2 output commitments
+  });
 });
