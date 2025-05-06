@@ -15,20 +15,22 @@ describe("zkcash", () => {
   const program = anchor.workspace.Zkcash as Program<Zkcash>;
 
   // Generate keypairs for the accounts needed in the test
-  let treeAccount: anchor.web3.Keypair;
+  let treeAccountPDA: PublicKey;
+  let bump: number;
   let authority: anchor.web3.Keypair;
   let recipient: anchor.web3.Keypair;
+  let fundingAccount: anchor.web3.Keypair;
 
-  // --- Funding the Authority Wallet ---
+  // --- Funding a wallet to use for paying transaction fees ---
   before(async () => {
-    // Generate the authority keypair once
-    authority = anchor.web3.Keypair.generate();
+    // Generate a funding account to pay for transactions
+    fundingAccount = anchor.web3.Keypair.generate();
     
-    // Airdrop SOL to the authority wallet.
-    console.log(`Airdropping SOL to ${authority.publicKey.toBase58()}...`);
+    // Airdrop SOL to the funding account
+    console.log(`Airdropping SOL to funding account ${fundingAccount.publicKey.toBase58()}...`);
     const airdropSignature = await provider.connection.requestAirdrop(
-      authority.publicKey,
-      2 * LAMPORTS_PER_SOL // Airdrop 2 SOL
+      fundingAccount.publicKey,
+      50 * LAMPORTS_PER_SOL // Airdrop 50 SOL
     );
 
     // Confirm the transaction
@@ -42,36 +44,74 @@ describe("zkcash", () => {
     console.log("Airdrop complete.");
 
     // Check the balance
-    const balance = await provider.connection.getBalance(authority.publicKey);
-    console.log(`Authority balance: ${balance / LAMPORTS_PER_SOL} SOL`);
+    const balance = await provider.connection.getBalance(fundingAccount.publicKey);
+    console.log(`Funding account balance: ${balance / LAMPORTS_PER_SOL} SOL`);
     expect(balance).to.be.greaterThan(0);
   });
 
   // Reset program state before each test
   beforeEach(async () => {
-    // Generate new keypairs for each test to ensure a clean state
-    treeAccount = anchor.web3.Keypair.generate();
+    // Generate a fresh authority keypair for each test (ensuring unique PDAs)
+    authority = anchor.web3.Keypair.generate();
+
+    // Transfer enough SOL from funding account to the new authority
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: authority.publicKey,
+        lamports: 0.5 * LAMPORTS_PER_SOL, // Increase to 0.5 SOL to ensure enough for rent
+      })
+    );
+    
+    // Send and confirm the transfer transaction
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+    
+    // Verify the authority has received funds
+    const authorityBalance = await provider.connection.getBalance(authority.publicKey);
+    console.log(`Authority balance: ${authorityBalance / LAMPORTS_PER_SOL} SOL`);
+    expect(authorityBalance).to.be.greaterThan(0);
+    
+    // Generate new recipient keypair for each test
     recipient = anchor.web3.Keypair.generate();
     
-    console.log(`Initializing fresh tree account: ${treeAccount.publicKey.toBase58()}`);
+    // Calculate the PDA for the tree account with the new authority
+    const [pda, pdaBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("merkle_tree"), authority.publicKey.toBuffer()],
+      program.programId
+    );
+    treeAccountPDA = pda;
+    bump = pdaBump;
+    
+    console.log(`Initializing fresh tree account: ${treeAccountPDA.toBase58()}`);
     
     // Initialize a fresh tree account for each test
-    await program.methods
-      .initialize()
-      .accounts({
-        treeAccount: treeAccount.publicKey,
-        authority: authority.publicKey,
-      })
-      .signers([treeAccount, authority])
-      .rpc();
-      
-    // Verify the initialization was successful
-    const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(treeAccount.publicKey);
-    expect(merkleTreeAccount.authority.equals(authority.publicKey)).to.be.true;
-    expect(merkleTreeAccount.nextIndex.toString()).to.equal("0");
-    expect(merkleTreeAccount.rootIndex.toString()).to.equal("0");
-    expect(merkleTreeAccount.rootHistory.length).to.equal(ROOT_HISTORY_SIZE);
-    expect(merkleTreeAccount.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
+    try {
+      await program.methods
+        .initialize()
+        .accounts({
+          treeAccount: treeAccountPDA,
+          authority: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([authority]) // Only authority is a signer
+        .rpc();
+        
+      // Verify the initialization was successful
+      const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
+      expect(merkleTreeAccount.authority.equals(authority.publicKey)).to.be.true;
+      expect(merkleTreeAccount.nextIndex.toString()).to.equal("0");
+      expect(merkleTreeAccount.rootIndex.toString()).to.equal("0");
+      expect(merkleTreeAccount.rootHistory.length).to.equal(ROOT_HISTORY_SIZE);
+      expect(merkleTreeAccount.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
+    } catch (error) {
+      console.error("Error initializing tree account:", error);
+      // Get more detailed error information if available
+      if ('logs' in error) {
+        console.error("Error logs:", error.logs);
+      }
+      throw error;
+    }
   });
 
   it("Can execute transact instruction for correct input, and negative extAmount", async () => {
@@ -110,9 +150,10 @@ describe("zkcash", () => {
     const tx = await program.methods
       .transact(proof, extData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
@@ -158,9 +199,10 @@ describe("zkcash", () => {
     const tx = await program.methods
       .transact(proof, extData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
@@ -214,9 +256,10 @@ describe("zkcash", () => {
       await program.methods
         .transact(proof, extData)
         .accounts({
-          treeAccount: treeAccount.publicKey,
+          treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           signer: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([authority])
         .rpc();
@@ -275,9 +318,10 @@ describe("zkcash", () => {
       await program.methods
         .transact(proof, extData)
         .accounts({
-          treeAccount: treeAccount.publicKey,
+          treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           signer: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([authority])
         .rpc();
@@ -335,9 +379,10 @@ describe("zkcash", () => {
       await program.methods
         .transact(proof, extData)
         .accounts({
-          treeAccount: treeAccount.publicKey,
+          treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           signer: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([authority])
         .rpc();
@@ -360,7 +405,7 @@ describe("zkcash", () => {
 
   it("Transact succeeds with the correct root", async () => {
     // Fetch the Merkle tree account to get the current root
-    const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccount.publicKey);
+    const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
 
     // This should now pass because we're using a fresh tree account for each test
     expect(treeAccountData.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
@@ -397,9 +442,10 @@ describe("zkcash", () => {
     const transactTx = await program.methods
       .transact(validProof, extData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
@@ -440,15 +486,16 @@ describe("zkcash", () => {
     await program.methods
       .transact(firstProof, firstExtData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
     
     // Fetch the updated root
-    const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccount.publicKey);
+    const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
     
     // Second transaction with the updated root
     const secondExtData = {
@@ -481,9 +528,10 @@ describe("zkcash", () => {
     const secondTransactTx = await program.methods
       .transact(secondValidProof, secondExtData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
@@ -528,9 +576,10 @@ describe("zkcash", () => {
     const tx = await program.methods
       .transact(validProof, extData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
@@ -575,9 +624,10 @@ describe("zkcash", () => {
     const tx = await program.methods
       .transact(validProof, extData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
@@ -622,9 +672,10 @@ describe("zkcash", () => {
     const tx = await program.methods
       .transact(validProof, extData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
@@ -671,9 +722,10 @@ describe("zkcash", () => {
       await program.methods
         .transact(invalidProof, extData)
         .accounts({
-          treeAccount: treeAccount.publicKey,
+          treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           signer: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([authority])
         .rpc();
@@ -733,9 +785,10 @@ describe("zkcash", () => {
       await program.methods
         .transact(invalidProof, extData)
         .accounts({
-          treeAccount: treeAccount.publicKey,
+          treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           signer: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([authority])
         .rpc();
@@ -794,9 +847,10 @@ describe("zkcash", () => {
       await program.methods
         .transact(invalidProof, extData)
         .accounts({
-          treeAccount: treeAccount.publicKey,
+          treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           signer: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([authority])
         .rpc();
@@ -850,9 +904,10 @@ describe("zkcash", () => {
     const tx = await program.methods
       .transact(validProof, extData)
       .accounts({
-        treeAccount: treeAccount.publicKey,
+        treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         signer: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();

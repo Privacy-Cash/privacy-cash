@@ -18,6 +18,7 @@ pub mod zkcash {
         tree_account.authority = ctx.accounts.authority.key();
         tree_account.next_index = 0;
         tree_account.root_index = 0;
+        tree_account.bump = ctx.bumps.tree_account;
 
         MerkleTree::initialize::<Poseidon>(tree_account);
         
@@ -44,7 +45,7 @@ pub mod zkcash {
         );
 
         // check if the public amount is valid
-        let (ext_amount, fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
+        let (_ext_amount, _fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
 
         MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account);
         MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account);
@@ -80,7 +81,11 @@ pub struct ExtData {
 
 #[derive(Accounts)]
 pub struct Transact<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"merkle_tree", tree_account.load()?.authority.as_ref()],
+        bump = tree_account.load()?.bump
+    )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
     
     #[account(mut)]
@@ -96,7 +101,9 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + std::mem::size_of::<MerkleTreeAccount>()
+        space = 8 + std::mem::size_of::<MerkleTreeAccount>(),
+        seeds = [b"merkle_tree", authority.key().as_ref()],
+        bump
     )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
     
@@ -114,6 +121,10 @@ pub struct MerkleTreeAccount {
     pub root: [u8; 32],
     pub root_history: [[u8; 32]; ROOT_HISTORY_SIZE],
     pub root_index: u64,
+    pub bump: u8,
+    // The pub _padding: [u8; 7] is needed because of the #[account(zero_copy)] attribute.
+    // This attribute enables zero-copy deserialization for optimized performance but requires structs to have specific memory alignments.
+    pub _padding: [u8; 7],
 }
 
 #[error_code]
