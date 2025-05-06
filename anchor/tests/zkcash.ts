@@ -16,7 +16,9 @@ describe("zkcash", () => {
 
   // Generate keypairs for the accounts needed in the test
   let treeAccountPDA: PublicKey;
-  let bump: number;
+  let feeRecipientPDA: PublicKey;
+  let treeBump: number;
+  let feeRecipientBump: number;
   let authority: anchor.web3.Keypair;
   let recipient: anchor.web3.Keypair;
   let fundingAccount: anchor.web3.Keypair;
@@ -69,21 +71,30 @@ describe("zkcash", () => {
     
     // Verify the authority has received funds
     const authorityBalance = await provider.connection.getBalance(authority.publicKey);
-    console.log(`Authority balance: ${authorityBalance / LAMPORTS_PER_SOL} SOL`);
+    // console.log(`Authority balance: ${authorityBalance / LAMPORTS_PER_SOL} SOL`);
     expect(authorityBalance).to.be.greaterThan(0);
     
     // Generate new recipient keypair for each test
     recipient = anchor.web3.Keypair.generate();
     
     // Calculate the PDA for the tree account with the new authority
-    const [pda, pdaBump] = await PublicKey.findProgramAddressSync(
+    const [treePda, pdaBump] = await PublicKey.findProgramAddressSync(
       [Buffer.from("merkle_tree"), authority.publicKey.toBuffer()],
       program.programId
     );
-    treeAccountPDA = pda;
-    bump = pdaBump;
+    treeAccountPDA = treePda;
+    treeBump = pdaBump;
+
+    // Calculate the PDA for the fee recipient account with the new authority
+    const [feeRecipientPda, feeRecipientPdaBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("fee_recipient"), authority.publicKey.toBuffer()],
+      program.programId
+    );
+    feeRecipientPDA = feeRecipientPda;
+    feeRecipientBump = feeRecipientPdaBump;
     
-    console.log(`Initializing fresh tree account: ${treeAccountPDA.toBase58()}`);
+    // console.log(`Initializing fresh tree account: ${treeAccountPDA.toBase58()}`);
+    // console.log(`Initializing fresh fee recipient account: ${feeRecipientPDA.toBase58()}`);
     
     // Initialize a fresh tree account for each test
     try {
@@ -91,6 +102,7 @@ describe("zkcash", () => {
         .initialize()
         .accounts({
           treeAccount: treeAccountPDA,
+          feeRecipientAccount: feeRecipientPDA,
           authority: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
@@ -104,8 +116,13 @@ describe("zkcash", () => {
       expect(merkleTreeAccount.rootIndex.toString()).to.equal("0");
       expect(merkleTreeAccount.rootHistory.length).to.equal(ROOT_HISTORY_SIZE);
       expect(merkleTreeAccount.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
+
+      // Verify the fee recipient account was initialized correctly
+      const feeRecipientAccount = await program.account.feeRecipientAccount.fetch(feeRecipientPDA);
+      expect(feeRecipientAccount.authority.equals(authority.publicKey)).to.be.true;
+      expect(feeRecipientAccount.bump).to.equal(feeRecipientBump);
     } catch (error) {
-      console.error("Error initializing tree account:", error);
+      console.error("Error initializing accounts:", error);
       // Get more detailed error information if available
       if ('logs' in error) {
         console.error("Error logs:", error.logs);
@@ -152,13 +169,14 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
     
-    console.log("Transact transaction signature:", tx);
     expect(tx).to.be.a('string');
   });
 
@@ -201,13 +219,14 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([authority])
       .rpc();
     
-    console.log("Transact transaction signature:", tx);
     expect(tx).to.be.a('string');
   });
 
@@ -258,6 +277,8 @@ describe("zkcash", () => {
         .accounts({
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipientPDA,
+          authority: authority.publicKey,
           signer: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
@@ -320,6 +341,8 @@ describe("zkcash", () => {
         .accounts({
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipientPDA,
+          authority: authority.publicKey,
           signer: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
@@ -381,6 +404,8 @@ describe("zkcash", () => {
         .accounts({
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipientPDA,
+          authority: authority.publicKey,
           signer: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
@@ -444,6 +469,8 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -488,6 +515,8 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -530,6 +559,8 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -578,6 +609,8 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -626,6 +659,8 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -674,6 +709,8 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -724,6 +761,8 @@ describe("zkcash", () => {
         .accounts({
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipientPDA,
+          authority: authority.publicKey,
           signer: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
@@ -787,6 +826,8 @@ describe("zkcash", () => {
         .accounts({
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipientPDA,
+          authority: authority.publicKey,
           signer: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
@@ -849,6 +890,8 @@ describe("zkcash", () => {
         .accounts({
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipientPDA,
+          authority: authority.publicKey,
           signer: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
@@ -906,6 +949,8 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        authority: authority.publicKey,
         signer: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })

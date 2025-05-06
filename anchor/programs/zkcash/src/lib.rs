@@ -20,6 +20,10 @@ pub mod zkcash {
         tree_account.root_index = 0;
         tree_account.bump = ctx.bumps.tree_account;
 
+        let fee_recipient = &mut ctx.accounts.fee_recipient_account;
+        fee_recipient.authority = ctx.accounts.authority.key();
+        fee_recipient.bump = ctx.bumps.fee_recipient_account;
+
         MerkleTree::initialize::<Poseidon>(tree_account);
         
         msg!("Sparse Merkle Tree initialized successfully");
@@ -83,13 +87,24 @@ pub struct ExtData {
 pub struct Transact<'info> {
     #[account(
         mut,
-        seeds = [b"merkle_tree", tree_account.load()?.authority.as_ref()],
-        bump = tree_account.load()?.bump
+        seeds = [b"merkle_tree", authority.key().as_ref()],
+        bump = tree_account.load()?.bump,
+        has_one = authority @ ErrorCode::Unauthorized
     )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
     
     #[account(mut)]
     pub recipient: SystemAccount<'info>,
+    
+    #[account(
+        seeds = [b"fee_recipient", authority.key().as_ref()],
+        bump = fee_recipient_account.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub fee_recipient_account: Account<'info, FeeRecipientAccount>,
+    
+    /// The authority account is the account that created the tree and fee recipient PDAs
+    pub authority: SystemAccount<'info>,
     
     pub signer: Signer<'info>,
     
@@ -107,10 +122,25 @@ pub struct Initialize<'info> {
     )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
     
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + std::mem::size_of::<FeeRecipientAccount>(),
+        seeds = [b"fee_recipient", authority.key().as_ref()],
+        bump
+    )]
+    pub fee_recipient_account: Account<'info, FeeRecipientAccount>,
+    
     #[account(mut)]
     pub authority: Signer<'info>,
     
     pub system_program: Program<'info, System>,
+}
+
+#[account]
+pub struct FeeRecipientAccount {
+    pub authority: Pubkey,
+    pub bump: u8,
 }
 
 #[account(zero_copy)]

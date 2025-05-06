@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use ark_ff::biginteger::BigInteger256;
 use crate::ErrorCode;
 
 pub fn check_external_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 32]) -> Result<(u64, u64)> {

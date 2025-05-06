@@ -286,18 +286,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-ed-on-bn254"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "962e24e25cbdcaabe619c281a62bccc885f778b188129d6a02875c2671666219"
-dependencies = [
- "ark-bn254 0.5.0",
- "ark-ec 0.5.0",
- "ark-ff 0.5.0",
- "ark-std 0.5.0",
-]
-
-[[package]]
 name = "ark-ff"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3082,8 +3070,6 @@ name = "zkcash"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "ark-ed-on-bn254",
- "ark-ff 0.5.0",
  "bytemuck",
  "light-hasher",
  "light-poseidon 0.3.0",
