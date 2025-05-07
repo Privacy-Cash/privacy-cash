@@ -37,7 +37,7 @@ describe("zkcash", () => {
     console.log(`Airdropping SOL to funding account ${fundingAccount.publicKey.toBase58()}...`);
     const airdropSignature = await provider.connection.requestAirdrop(
       fundingAccount.publicKey,
-      50 * LAMPORTS_PER_SOL // Airdrop 50 SOL
+      100 * LAMPORTS_PER_SOL // Airdrop 50 SOL
     );
 
     // Confirm the transaction
@@ -1836,5 +1836,161 @@ describe("zkcash", () => {
     expect(feeRecipientDiff).to.be.equals(0);
     expect(recipientDiff).to.be.equals(-extAmount.toNumber());
     expect(randomUserDiff).to.be.equals(0);
+  });
+
+  it("Verifies SOL balance is correct after a deposit and withdrawal all initials", async () => {
+    // Setup test parameters for deposit
+    const depositAmount = new anchor.BN(1_000_000_000); // 1 SOL
+    const depositFee = new anchor.BN(100_000_000);     // 0.1 SOL
+    const depositPublicAmount = new anchor.BN(900_000_000); // 0.9 SOL (depositAmount - depositFee)
+
+    // First we need to fund the random user to have enough SOL for the deposit
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: randomUser.publicKey,
+        lamports: depositAmount.toNumber() * 2, // Double the deposit amount to ensure enough funds
+      })
+    );
+    
+    const transferSig = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSig);
+    
+    // Get initial balance of tree token account before any transactions
+    const initialTreeTokenBalance = await provider.connection.getBalance(treeTokenAccountPDA);
+    const initialFeeRecipientBalance = await provider.connection.getBalance(feeRecipientPDA);
+    const initialRandomUserBalance = await provider.connection.getBalance(randomUser.publicKey);
+
+    // 1. DEPOSIT TRANSACTION
+    // Create the external data for deposit
+    const depositExtData = {
+      recipient: recipient.publicKey,
+      extAmount: depositAmount,  // Positive for deposit
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const depositExtDataHash = getExtDataHash(depositExtData);
+    
+    // Create the proof for deposit
+    const depositProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(10),
+        Array(32).fill(11)
+      ],
+      outputCommitments: [
+        Array(32).fill(12),
+        Array(32).fill(13)
+      ],
+      publicAmount: bnToBytes(depositPublicAmount),
+      extDataHash: Array.from(depositExtDataHash)
+    };
+
+    // Execute the deposit transaction
+    const depositTxSignature = await program.methods
+      .transact(depositProof, depositExtData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .rpc();
+    
+    // Get balances after deposit
+    const treeTokenBalanceAfterDeposit = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceAfterDeposit = await provider.connection.getBalance(feeRecipientPDA);
+    const randomUserBalanceAfterDeposit = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // Verify deposit worked correctly
+    expect(treeTokenBalanceAfterDeposit - initialTreeTokenBalance).to.be.equals(depositPublicAmount.toNumber());
+    expect(initialRandomUserBalance - randomUserBalanceAfterDeposit).to.be.equals(depositAmount.toNumber());
+    
+    // Get the updated tree account to get the current root for withdrawal
+    const treeAccountDataAfterDeposit = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
+    
+    // 2. WITHDRAWAL TRANSACTION
+    // Create the external data for withdrawal
+    const withdrawAmount = new anchor.BN(-900_000_000); // -0.9 SOL (negative for withdrawal)
+    const withdrawFee = new anchor.BN(0);              // 0 fee for simplicity
+    const withdrawPublicAmount = new anchor.BN(900_000_000); // 0.9 SOL (|withdrawAmount| when fee is 0)
+    
+    const withdrawExtData = {
+      recipient: randomUser.publicKey, // Withdraw back to the same user
+      extAmount: withdrawAmount,       // Negative for withdrawal
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: withdrawFee,                // No fee on withdrawal
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const withdrawExtDataHash = getExtDataHash(withdrawExtData);
+    
+    // Create the proof for withdrawal using the updated root
+    const withdrawProof = {
+      proof: Buffer.from("mockProofData"),
+      root: Array.from(treeAccountDataAfterDeposit.root),
+      inputNullifiers: [
+        Array(32).fill(14),
+        Array(32).fill(15)
+      ],
+      outputCommitments: [
+        Array(32).fill(16),
+        Array(32).fill(17)
+      ],
+      publicAmount: bnToBytes(withdrawPublicAmount),
+      extDataHash: Array.from(withdrawExtDataHash)
+    };
+
+    // Execute the withdrawal transaction
+    const withdrawTxSignature = await program.methods
+      .transact(withdrawProof, withdrawExtData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: randomUser.publicKey, // Withdraw to random user
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .rpc();
+    
+    // Get final balances after both transactions
+    const finalTreeTokenBalance = await provider.connection.getBalance(treeTokenAccountPDA);
+    const finalFeeRecipientBalance = await provider.connection.getBalance(feeRecipientPDA);
+    const finalRandomUserBalance = await provider.connection.getBalance(randomUser.publicKey)
+    
+    // console.log("finalRandomUserBalance", finalRandomUserBalance);
+    
+    // Calculate balance differences
+    const treeTokenTotalDiff = finalTreeTokenBalance - initialTreeTokenBalance;
+    const feeRecipientTotalDiff = finalFeeRecipientBalance - initialFeeRecipientBalance; 
+    const randomUserTotalDiff = finalRandomUserBalance - initialRandomUserBalance;
+    
+    // console.log("Verifying final balances...");
+    // console.log(`Initial tree token balance: ${initialTreeTokenBalance}`);
+    // console.log(`Tree token balance after deposit: ${treeTokenBalanceAfterDeposit}`);
+    // console.log(`Final tree token balance: ${finalTreeTokenBalance}`);
+    // console.log(`Tree token total difference: ${treeTokenTotalDiff}`);
+    
+    // Verify final balances
+    // 1. Tree token account should be back to original amount (excluding the fee)
+    expect(treeTokenTotalDiff).to.be.equals(0);
+    
+    // 2. Fee recipient keeps the fees
+    expect(feeRecipientTotalDiff).to.be.equals(depositFee.toNumber() + withdrawFee.toNumber());
+    
+    // 3. Random user gets back the deposit amount (minus fee)
+    expect(randomUserTotalDiff).to.be.equals(-depositFee.toNumber() - withdrawFee.toNumber());
   });
 });

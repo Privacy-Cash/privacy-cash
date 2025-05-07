@@ -71,8 +71,7 @@ pub mod zkcash {
                     ext_amount as u64,
                 )?;
             } else if ext_amount < 0 {
-                // For withdrawals, we need to use the tree_token_account as signer
-                // since PDA can't directly sign transactions
+                // PDA can't directly sign transactions, so we need to transfer SOL via try_borrow_mut_lamports
                 let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
                 let recipient_account_info = ctx.accounts.recipient.to_account_info();
 
