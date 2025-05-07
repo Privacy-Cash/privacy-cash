@@ -14,7 +14,7 @@ pub mod zkcash {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        // TODO: support trees for SPL tokens.
+        // TODO: support SPL tokens.
         let tree_account = &mut ctx.accounts.tree_account.load_init()?;
         tree_account.authority = ctx.accounts.authority.key();
         tree_account.next_index = 0;
@@ -26,6 +26,10 @@ pub mod zkcash {
         fee_recipient.bump = ctx.bumps.fee_recipient_account;
 
         MerkleTree::initialize::<Poseidon>(tree_account);
+        
+        let token_account = &mut ctx.accounts.tree_token_account;
+        token_account.authority = ctx.accounts.authority.key();
+        token_account.bump = ctx.bumps.tree_token_account;
         
         msg!("Sparse Merkle Tree initialized successfully");
         Ok(())
@@ -50,7 +54,44 @@ pub mod zkcash {
         );
 
         // check if the public amount is valid
-        let (_ext_amount, _fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
+        let (ext_amount_abs, fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
+        let ext_amount = ext_data.ext_amount;
+
+        if 0 != ext_amount_abs {
+            if ext_amount > 0 {
+                // If it's a deposit, transfer the SOL to the tree token account.
+                anchor_lang::system_program::transfer(
+                    CpiContext::new(
+                        ctx.accounts.system_program.to_account_info(),
+                        anchor_lang::system_program::Transfer {
+                            from: ctx.accounts.signer.to_account_info(),
+                            to: ctx.accounts.tree_token_account.to_account_info(),
+                        },
+                    ),
+                    ext_amount as u64,
+                )?;
+            } else if ext_amount < 0 {
+                // For withdrawals, we need to use the tree_token_account as signer
+                // since PDA can't directly sign transactions
+                let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
+                let recipient_account_info = ctx.accounts.recipient.to_account_info();
+
+                require!(tree_token_account_info.lamports() >= ext_amount_abs, ErrorCode::InsufficientFundsForWithdrawal);
+
+                **tree_token_account_info.try_borrow_mut_lamports()? -= ext_amount_abs;
+                **recipient_account_info.try_borrow_mut_lamports()? += ext_amount_abs;
+            }
+        }
+        // Handle fee if applicable
+        if fee > 0 {
+            let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
+            let fee_recipient_account_info = ctx.accounts.fee_recipient_account.to_account_info();
+
+            require!(tree_token_account_info.lamports() >= fee, ErrorCode::InsufficientFundsForFee);
+
+            **tree_token_account_info.try_borrow_mut_lamports()? -= fee;
+            **fee_recipient_account_info.try_borrow_mut_lamports()? += fee;
+        }
 
         MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account);
         MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account);
@@ -58,7 +99,7 @@ pub mod zkcash {
         // Additional verification logic would go here
         // For example, verifying zero-knowledge proofs, checking nullifiers, etc.
         
-        msg!("External data hash verification successful");
+        msg!("Transaction completed successfully");
         Ok(())
     }
 }
@@ -81,6 +122,7 @@ pub struct ExtData {
     pub encrypted_output1: Vec<u8>,
     pub encrypted_output2: Vec<u8>,
     pub fee: u64,
+    // Keep this for future SPL token support
     pub token_mint: Pubkey,
 }
 
@@ -94,10 +136,19 @@ pub struct Transact<'info> {
     )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
     
+    #[account(
+        mut,
+        seeds = [b"tree_token", authority.key().as_ref()],
+        bump = tree_token_account.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub tree_token_account: Account<'info, TreeTokenAccount>,
+    
     #[account(mut)]
     pub recipient: SystemAccount<'info>,
     
     #[account(
+        mut,
         seeds = [b"fee_recipient", authority.key().as_ref()],
         bump = fee_recipient_account.bump,
         has_one = authority @ ErrorCode::Unauthorized
@@ -107,6 +158,8 @@ pub struct Transact<'info> {
     /// The authority account is the account that created the tree and fee recipient PDAs
     pub authority: SystemAccount<'info>,
     
+    /// The account that is signing the transaction
+    #[account(mut)]
     pub signer: Signer<'info>,
     
     pub system_program: Program<'info, System>,
@@ -132,6 +185,15 @@ pub struct Initialize<'info> {
     )]
     pub fee_recipient_account: Account<'info, FeeRecipientAccount>,
     
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + std::mem::size_of::<TreeTokenAccount>(),
+        seeds = [b"tree_token", authority.key().as_ref()],
+        bump
+    )]
+    pub tree_token_account: Account<'info, TreeTokenAccount>,
+    
     #[account(mut)]
     pub authority: Signer<'info>,
     
@@ -140,6 +202,12 @@ pub struct Initialize<'info> {
 
 #[account]
 pub struct FeeRecipientAccount {
+    pub authority: Pubkey,
+    pub bump: u8,
+}
+
+#[account]
+pub struct TreeTokenAccount {
     pub authority: Pubkey,
     pub bump: u8,
 }
@@ -167,5 +235,9 @@ pub enum ErrorCode {
     #[msg("Root is not known in the tree")]
     UnknownRoot,
     #[msg("Public amount is invalid")]
-    InvalidPublicAmountData
+    InvalidPublicAmountData,
+    #[msg("Insufficient funds for withdrawal")]
+    InsufficientFundsForWithdrawal,
+    #[msg("Insufficient funds for fee")]
+    InsufficientFundsForFee,
 }

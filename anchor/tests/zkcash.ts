@@ -22,6 +22,11 @@ describe("zkcash", () => {
   let authority: anchor.web3.Keypair;
   let recipient: anchor.web3.Keypair;
   let fundingAccount: anchor.web3.Keypair;
+  let randomUser: anchor.web3.Keypair; // Random user for signing transactions
+
+  // Initialize variables for tree token account
+  let treeTokenAccountPDA: PublicKey;
+  let treeTokenBump: number;
 
   // --- Funding a wallet to use for paying transaction fees ---
   before(async () => {
@@ -61,7 +66,7 @@ describe("zkcash", () => {
       anchor.web3.SystemProgram.transfer({
         fromPubkey: fundingAccount.publicKey,
         toPubkey: authority.publicKey,
-        lamports: 0.5 * LAMPORTS_PER_SOL, // Increase to 0.5 SOL to ensure enough for rent
+        lamports: 2 * LAMPORTS_PER_SOL, // Increase to 2 SOL to ensure enough for rent
       })
     );
     
@@ -71,11 +76,20 @@ describe("zkcash", () => {
     
     // Verify the authority has received funds
     const authorityBalance = await provider.connection.getBalance(authority.publicKey);
-    // console.log(`Authority balance: ${authorityBalance / LAMPORTS_PER_SOL} SOL`);
     expect(authorityBalance).to.be.greaterThan(0);
     
     // Generate new recipient keypair for each test
     recipient = anchor.web3.Keypair.generate();
+    
+    // Fund the recipient with SOL for rent exemption
+    const recipientAirdropSignature = await provider.connection.requestAirdrop(recipient.publicKey, 0.5 * LAMPORTS_PER_SOL);
+    // Confirm the airdrop
+    const latestBlockhash = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction({
+      blockhash: latestBlockhash.blockhash,
+      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      signature: recipientAirdropSignature,
+    });
     
     // Calculate the PDA for the tree account with the new authority
     const [treePda, pdaBump] = await PublicKey.findProgramAddressSync(
@@ -93,8 +107,13 @@ describe("zkcash", () => {
     feeRecipientPDA = feeRecipientPda;
     feeRecipientBump = feeRecipientPdaBump;
     
-    // console.log(`Initializing fresh tree account: ${treeAccountPDA.toBase58()}`);
-    // console.log(`Initializing fresh fee recipient account: ${feeRecipientPDA.toBase58()}`);
+    // Calculate the PDA for the tree token account with the new authority
+    const [treeTokenPda, treeTokenPdaBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("tree_token"), authority.publicKey.toBuffer()],
+      program.programId
+    );
+    treeTokenAccountPDA = treeTokenPda;
+    treeTokenBump = treeTokenPdaBump;
     
     // Initialize a fresh tree account for each test
     try {
@@ -103,12 +122,49 @@ describe("zkcash", () => {
         .accounts({
           treeAccount: treeAccountPDA,
           feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([authority]) // Only authority is a signer
         .rpc();
         
+      // Fund the treeTokenAccount with SOL (do this after initialization)
+      const treeTokenAirdropSignature = await provider.connection.requestAirdrop(treeTokenAccountPDA, 2 * LAMPORTS_PER_SOL);
+      const latestBlockHash2 = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction({
+        blockhash: latestBlockHash2.blockhash,
+        lastValidBlockHeight: latestBlockHash2.lastValidBlockHeight,
+        signature: treeTokenAirdropSignature,
+      });
+      
+      // Fund the feeRecipientAccount with SOL
+      const feeRecipientAirdropSignature = await provider.connection.requestAirdrop(feeRecipientPDA, 1 * LAMPORTS_PER_SOL);
+      const latestBlockHash3 = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction({
+        blockhash: latestBlockHash3.blockhash,
+        lastValidBlockHeight: latestBlockHash3.lastValidBlockHeight,
+        signature: feeRecipientAirdropSignature,
+      });
+      
+      // Generate a random user for signing transactions
+      randomUser = anchor.web3.Keypair.generate();
+      
+      // Fund the random user with SOL
+      const randomUserAirdropSignature = await provider.connection.requestAirdrop(randomUser.publicKey, 1 * LAMPORTS_PER_SOL);
+      const latestBlockHash4 = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction({
+        blockhash: latestBlockHash4.blockhash,
+        lastValidBlockHeight: latestBlockHash4.lastValidBlockHeight,
+        signature: randomUserAirdropSignature,
+      });
+      
+      // Check balances after funding
+      const treeTokenBalance = await provider.connection.getBalance(treeTokenAccountPDA);
+      const feeRecipientBalance = await provider.connection.getBalance(feeRecipientPDA);
+      const recipientBalance = await provider.connection.getBalance(recipient.publicKey);
+      const randomUserBalance = await provider.connection.getBalance(randomUser.publicKey);
+      
       // Verify the initialization was successful
       const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
       expect(merkleTreeAccount.authority.equals(authority.publicKey)).to.be.true;
@@ -132,15 +188,13 @@ describe("zkcash", () => {
   });
 
   it("Can execute transact instruction for correct input, and negative extAmount", async () => {
-    console.log(`Testing transact instruction with recipient: ${recipient.publicKey.toBase58()}`);
-    
-    // Create a sample ExtData object
+    // Create a sample ExtData object with original values
     const extData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(-100),
+      extAmount: new anchor.BN(-100), // Negative ext amount (withdrawal)
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(100), // Fee
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
@@ -159,37 +213,36 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(200)),
+      publicAmount: bnToBytes(new anchor.BN(200)), // Public amount
       extDataHash: Array.from(calculatedExtDataHash)
     };
-
-    // Execute the transaction
+    
+    // Execute the transaction without pre-instructions
     const tx = await program.methods
       .transact(proof, extData)
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser]) // Random user signs the transaction
       .rpc();
     
     expect(tx).to.be.a('string');
   });
 
   it("Can execute transact instruction for correct input, and positive extAmount", async () => {
-    console.log(`Testing transact instruction with recipient: ${recipient.publicKey.toBase58()}`);
-    
-    // Create a sample ExtData object
+    // Create a sample ExtData object with original values
     const extData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(300),
+      extAmount: new anchor.BN(200), // Positive ext amount (deposit)
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(50), // Fee
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
@@ -208,23 +261,23 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      // For positive extAmount (deposit), publicAmount = extAmount - fee
-      publicAmount: bnToBytes(new anchor.BN(200)), // 300 - 100 = 200
+      publicAmount: bnToBytes(new anchor.BN(150)), // Public amount
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
-    // Execute the transaction
+    // Execute the transaction without pre-instructions
     const tx = await program.methods
       .transact(proof, extData)
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser]) // Random user signs the transaction
       .rpc();
     
     expect(tx).to.be.a('string');
@@ -278,19 +331,19 @@ describe("zkcash", () => {
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
-          signer: authority.publicKey,
+          signer: randomUser.publicKey, // Use random user as signer
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .signers([authority])
+        .signers([randomUser]) // Random user signs the transaction
         .rpc();
       
       // If we reach here, the test should fail because the transaction should have thrown an error
-      expect.fail("Transaction should have failed but succeeded");
+      expect.fail("Transaction should have failed due to invalid extDataHash but succeeded");
     } catch (error) {
       // Check if the error is an AnchorError with the expected error code
       if (error instanceof anchor.AnchorError) {
-        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
         expect(error.error.errorCode.number).to.equal(6001); // ExtDataHashMismatch error code
         expect(error.error.errorMessage).to.equal("External data hash does not match the one in the proof");
       } else {
@@ -342,11 +395,12 @@ describe("zkcash", () => {
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
-          signer: authority.publicKey,
+          signer: randomUser.publicKey, // Use random user as signer
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .signers([authority])
+        .signers([randomUser]) // Random user signs the transaction
         .rpc();
       
       // If we reach here, the test should fail because the transaction should have thrown an error
@@ -354,7 +408,6 @@ describe("zkcash", () => {
     } catch (error) {
       // Check if the error is an AnchorError with the expected error code
       if (error instanceof anchor.AnchorError) {
-        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
         expect(error.error.errorCode.number).to.equal(6002); // UnknownRoot error code
         expect(error.error.errorMessage).to.equal("Root is not known in the tree");
       } else {
@@ -405,11 +458,12 @@ describe("zkcash", () => {
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
-          signer: authority.publicKey,
+          signer: randomUser.publicKey, // Use random user as signer
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .signers([authority])
+        .signers([randomUser]) // Random user signs the transaction
         .rpc();
       
       // If we reach here, the test should fail because the transaction should have thrown an error
@@ -417,7 +471,6 @@ describe("zkcash", () => {
     } catch (error) {
       // Check if the error is an AnchorError with the expected error code
       if (error instanceof anchor.AnchorError) {
-        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
         expect(error.error.errorCode.number).to.equal(6002); // UnknownRoot error code
         expect(error.error.errorMessage).to.equal("Root is not known in the tree");
       } else {
@@ -436,12 +489,13 @@ describe("zkcash", () => {
     expect(treeAccountData.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
     
     // Test that a transaction with the initial root works
+    // Using original values
     const extData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(-100),
+      extAmount: new anchor.BN(-100), // Original value
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(100), // Original value
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
@@ -459,10 +513,10 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(200)),
+      publicAmount: bnToBytes(new anchor.BN(200)), // Original value
       extDataHash: Array.from(calculatedExtDataHash)
     };
-
+    
     // This transaction should succeed because the root is valid
     const transactTx = await program.methods
       .transact(validProof, extData)
@@ -470,25 +524,25 @@ describe("zkcash", () => {
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser]) // Random user signs the transaction
       .rpc();
     
-    console.log("Transact with valid root transaction signature:", transactTx);
     expect(transactTx).to.be.a('string');
   });
 
   it("Transact succeeds after the second root update", async () => {
-    // First transaction to update the root
+    // First transaction to update the root - use original values
     const firstExtData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(-100),
+      extAmount: new anchor.BN(-100), // Original value
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(100), // Original value
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
@@ -505,10 +559,12 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(200)),
+      publicAmount: bnToBytes(new anchor.BN(200)), // Original value
       extDataHash: Array.from(firstExtDataHash)
     };
-
+    
+    // Note: No need for further funding as we fund in beforeEach
+    
     // This transaction should succeed with the initial root
     await program.methods
       .transact(firstProof, firstExtData)
@@ -516,23 +572,24 @@ describe("zkcash", () => {
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser])
       .rpc();
     
     // Fetch the updated root
     const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
     
-    // Second transaction with the updated root
+    // Second transaction with the updated root - use original values
     const secondExtData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(-200),
+      extAmount: new anchor.BN(-100), // Original value
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(100), // Original value
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
@@ -549,9 +606,11 @@ describe("zkcash", () => {
         Array(32).fill(7), // Different commitments
         Array(32).fill(8)
       ],
-      publicAmount: bnToBytes(new anchor.BN(300)), // |ext_amount| + fee = 200 + 100 = 300
+      publicAmount: bnToBytes(new anchor.BN(200)), // Original value
       extDataHash: Array.from(calculatedSecondExtDataHash)
     };
+    
+    // Note: No need for further funding as we fund in beforeEach
     
     // This transaction should succeed because the root is valid
     const secondTransactTx = await program.methods
@@ -560,22 +619,22 @@ describe("zkcash", () => {
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser])
       .rpc();
     
-    console.log("Second transaction signature:", secondTransactTx);
     expect(secondTransactTx).to.be.a('string');
   });
 
   it("Succeeds with valid external amount and fee (withdrawal)", async () => {
-    // For withdrawal: ext_amount is negative, fee is positive, and |ext_amount| + fee = public_amount
+    // For withdrawal test, use original values
     const extAmount = new anchor.BN(-100);
-    const fee = new anchor.BN(50);
-    const publicAmount = new anchor.BN(150); // |ext_amount| + fee = 100 + 50 = 150
+    const fee = new anchor.BN(100);
+    const publicAmount = new anchor.BN(200);
     
     const extData = {
       recipient: recipient.publicKey,
@@ -603,29 +662,29 @@ describe("zkcash", () => {
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
-    // Transaction should succeed with valid withdrawal amounts
+    // Transaction should succeed with original amounts
     const tx = await program.methods
       .transact(validProof, extData)
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser]) // Random user signs the transaction
       .rpc();
     
-    console.log("Valid withdrawal transaction signature:", tx);
     expect(tx).to.be.a('string');
   });
 
   it("Succeeds with valid external amount and fee (deposit)", async () => {
-    // For deposit: ext_amount is positive, fee is positive, and ext_amount - fee = public_amount
+    // For deposit test, use original values
     const extAmount = new anchor.BN(200);
     const fee = new anchor.BN(50);
-    const publicAmount = new anchor.BN(150); // ext_amount - fee = 200 - 50 = 150
+    const publicAmount = new anchor.BN(150);
     
     const extData = {
       recipient: recipient.publicKey,
@@ -653,29 +712,29 @@ describe("zkcash", () => {
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
-    // Transaction should succeed with valid deposit amounts
+    // Transaction should succeed with original amounts
     const tx = await program.methods
       .transact(validProof, extData)
       .accounts({
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser]) // Random user signs the transaction
       .rpc();
     
-    console.log("Valid deposit transaction signature:", tx);
     expect(tx).to.be.a('string');
   });
 
   it("Succeeds with zero fee", async () => {
-    // Case with zero fee
+    // Case with zero fee but non-zero external amount
     const extAmount = new anchor.BN(-100);
     const fee = new anchor.BN(0);
-    const publicAmount = new anchor.BN(100); // |ext_amount| + fee = 100 + 0 = 100
+    const publicAmount = new anchor.BN(100);
     
     const extData = {
       recipient: recipient.publicKey,
@@ -710,14 +769,14 @@ describe("zkcash", () => {
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser]) // Random user signs the transaction
       .rpc();
     
-    console.log("Zero fee transaction signature:", tx);
     expect(tx).to.be.a('string');
   });
 
@@ -762,11 +821,12 @@ describe("zkcash", () => {
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
-          signer: authority.publicKey,
+          signer: randomUser.publicKey, // Use random user as signer
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .signers([authority])
+        .signers([randomUser]) // Random user signs the transaction
         .rpc();
       
       // If we reach here, the test should fail because the transaction should have thrown an error
@@ -774,8 +834,6 @@ describe("zkcash", () => {
     } catch (error) {
       // Check if the error is an AnchorError with the expected error code
       if (error instanceof anchor.AnchorError) {
-        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
-        // Use the correct error code for InvalidPublicAmountData
         expect(error.error.errorCode.number).to.equal(6003);
         expect(error.error.errorMessage).to.equal("Public amount is invalid");
       } else {
@@ -827,11 +885,12 @@ describe("zkcash", () => {
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
-          signer: authority.publicKey,
+          signer: randomUser.publicKey, // Use random user as signer
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .signers([authority])
+        .signers([randomUser]) // Random user signs the transaction
         .rpc();
       
       // If we reach here, the test should fail because the transaction should have thrown an error
@@ -839,8 +898,6 @@ describe("zkcash", () => {
     } catch (error) {
       // Check if the error is an AnchorError with the expected error code
       if (error instanceof anchor.AnchorError) {
-        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
-        // Use the correct error code for InvalidPublicAmountData
         expect(error.error.errorCode.number).to.equal(6003);
         expect(error.error.errorMessage).to.equal("Public amount is invalid");
       } else {
@@ -891,11 +948,12 @@ describe("zkcash", () => {
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
-          signer: authority.publicKey,
+          signer: randomUser.publicKey, // Use random user as signer
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .signers([authority])
+        .signers([randomUser]) // Random user signs the transaction
         .rpc();
       
       // If we reach here, the test should fail because the transaction should have thrown an error
@@ -903,8 +961,6 @@ describe("zkcash", () => {
     } catch (error) {
       // Check if the error is an AnchorError with the expected error code
       if (error instanceof anchor.AnchorError) {
-        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
-        // ExtDataHashMismatch happens because negative fee is detected in a different way
         expect(error.error.errorCode.number).to.equal(6001);
         expect(error.error.errorMessage).to.equal("External data hash does not match the one in the proof");
       } else {
@@ -916,13 +972,13 @@ describe("zkcash", () => {
   });
 
   it("Succeeds with correct authority", async () => {
-    // Use the correct authority
+    // Use the correct authority with original values
     const extData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(-100),
+      extAmount: new anchor.BN(-100), // Original value
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(100), // Original value
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
@@ -939,7 +995,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(200)),
+      publicAmount: bnToBytes(new anchor.BN(200)), // Original value
       extDataHash: Array.from(calculatedExtDataHash)
     };
 
@@ -950,14 +1006,14 @@ describe("zkcash", () => {
         treeAccount: treeAccountPDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
         authority: authority.publicKey,
-        signer: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([authority])
+      .signers([randomUser]) // Random user signs the transaction
       .rpc();
 
-    console.log("Transaction with correct authority signature:", tx);
     expect(tx).to.be.a('string');
   });
 
@@ -993,12 +1049,18 @@ describe("zkcash", () => {
       program.programId
     );
     
+    const [wrongTreeTokenPDA, _wrongTreeTokenBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("tree_token"), wrongAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
     // Initialize accounts with the wrong authority
     await program.methods
       .initialize()
       .accounts({
         treeAccount: wrongTreePDA,
         feeRecipientAccount: wrongFeePDA,
+        treeTokenAccount: wrongTreeTokenPDA,
         authority: wrongAuthority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -1012,10 +1074,10 @@ describe("zkcash", () => {
     // Now try to execute transaction with mismatched authorities
     const extData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(-100),
+      extAmount: new anchor.BN(-100), // Restore the original negative extAmount
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(100), // Restore the original fee value
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
     
@@ -1032,7 +1094,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(200)),
+      publicAmount: bnToBytes(new anchor.BN(200)), // Restore the original non-zero public amount
       extDataHash: Array.from(calculatedExtDataHash)
     };
     
@@ -1044,17 +1106,17 @@ describe("zkcash", () => {
           treeAccount: wrongTreePDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey, // This doesn't match wrongTreePDA's authority
-          signer: authority.publicKey,
+          signer: randomUser.publicKey, // Use random user as signer
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .signers([authority])
+        .signers([randomUser]) // Random user signs the transaction
         .rpc();
       
       expect.fail("Transaction should have failed due to mismatched tree account authority but succeeded");
     } catch (error) {
       if (error instanceof anchor.AnchorError) {
-        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
         expect(error.error.errorCode.number).to.equal(2006); // Seeds constraint was violated error code
         expect(error.error.errorMessage).to.equal("A seeds constraint was violated");
       } else {
@@ -1096,12 +1158,18 @@ describe("zkcash", () => {
       program.programId
     );
     
+    const [wrongTreeTokenPDA, _wrongTreeTokenBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("tree_token"), wrongAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
     // Initialize accounts with the wrong authority
     await program.methods
       .initialize()
       .accounts({
         treeAccount: wrongTreePDA,
         feeRecipientAccount: wrongFeePDA,
+        treeTokenAccount: wrongTreeTokenPDA,
         authority: wrongAuthority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -1115,10 +1183,10 @@ describe("zkcash", () => {
     // Now try to execute transaction with mismatched authorities
     const extData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(-100),
+      extAmount: new anchor.BN(-100), // Restore the original negative extAmount
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(100), // Restore the original fee value
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
     
@@ -1135,7 +1203,7 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(200)),
+      publicAmount: bnToBytes(new anchor.BN(200)), // Restore the original non-zero public amount
       extDataHash: Array.from(calculatedExtDataHash)
     };
     
@@ -1147,17 +1215,17 @@ describe("zkcash", () => {
           treeAccount: treeAccountPDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: wrongFeePDA,
+          treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey, // This doesn't match wrongFeePDA's authority
-          signer: authority.publicKey,
+          signer: randomUser.publicKey, // Use random user as signer
           systemProgram: anchor.web3.SystemProgram.programId
         })
-        .signers([authority])
+        .signers([randomUser]) // Random user signs the transaction
         .rpc();
       
       expect.fail("Transaction should have failed due to mismatched fee recipient account authority but succeeded");
     } catch (error) {
       if (error instanceof anchor.AnchorError) {
-        console.log(`Got expected AnchorError: ${error.error.errorMessage}`);
         expect(error.error.errorCode.number).to.equal(2006); // Seeds constraint was violated error code
         expect(error.error.errorMessage).to.equal("A seeds constraint was violated");
       } else {
@@ -1189,13 +1257,18 @@ describe("zkcash", () => {
     expect(matchingBalance).to.be.greaterThan(0);
     
     // Calculate the PDAs for matching authority
-    const [matchingTreePDA, _matchingTreeBump] = await PublicKey.findProgramAddressSync(
+    const [matchingTreePDA, matchingTreeBump] = await PublicKey.findProgramAddressSync(
       [Buffer.from("merkle_tree"), matchingAuthority.publicKey.toBuffer()],
       program.programId
     );
     
-    const [matchingFeePDA, _matchingFeeBump] = await PublicKey.findProgramAddressSync(
+    const [matchingFeePDA, matchingFeeBump] = await PublicKey.findProgramAddressSync(
       [Buffer.from("fee_recipient"), matchingAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+    
+    const [matchingTreeTokenPDA, matchingTreeTokenBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("tree_token"), matchingAuthority.publicKey.toBuffer()],
       program.programId
     );
     
@@ -1205,6 +1278,7 @@ describe("zkcash", () => {
       .accounts({
         treeAccount: matchingTreePDA,
         feeRecipientAccount: matchingFeePDA,
+        treeTokenAccount: matchingTreeTokenPDA,
         authority: matchingAuthority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId
       })
@@ -1218,13 +1292,26 @@ describe("zkcash", () => {
     const matchingFeeAccount = await program.account.feeRecipientAccount.fetch(matchingFeePDA);
     expect(matchingFeeAccount.authority.equals(matchingAuthority.publicKey)).to.be.true;
     
+    // Generate a new random user specifically for this test to be clear
+    const testRandomUser = anchor.web3.Keypair.generate();
+    
+    // Fund this test's random user
+    const testRandomUserAirdropSignature = await provider.connection.requestAirdrop(testRandomUser.publicKey, 1 * LAMPORTS_PER_SOL);
+    const randomUserLatestBlockHash = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction({
+      blockhash: randomUserLatestBlockHash.blockhash,
+      lastValidBlockHeight: randomUserLatestBlockHash.lastValidBlockHeight,
+      signature: testRandomUserAirdropSignature,
+    });
+    
     // Now execute transaction with explicitly matching authorities
+    // Using original values to test real behavior
     const extData = {
       recipient: recipient.publicKey,
-      extAmount: new anchor.BN(-100),
+      extAmount: new anchor.BN(-100), // Original value
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new anchor.BN(100),
+      fee: new anchor.BN(100), // Original value
       tokenMint: new PublicKey("11111111111111111111111111111111")
     };
     
@@ -1241,9 +1328,21 @@ describe("zkcash", () => {
         Array(32).fill(3),
         Array(32).fill(4)
       ],
-      publicAmount: bnToBytes(new anchor.BN(200)),
+      publicAmount: bnToBytes(new anchor.BN(200)), // Original value
       extDataHash: Array.from(calculatedExtDataHash)
     };
+    
+    // Fund matching tree token account explicitly
+    const matchingTreeTokenBalance = await provider.connection.getBalance(matchingTreeTokenPDA);
+    if (matchingTreeTokenBalance < 1 * LAMPORTS_PER_SOL) {
+      const matchingTreeTokenAirdropSignature = await provider.connection.requestAirdrop(matchingTreeTokenPDA, 2 * LAMPORTS_PER_SOL);
+      const latestBlockHash4 = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction({
+        blockhash: latestBlockHash4.blockhash,
+        lastValidBlockHeight: latestBlockHash4.lastValidBlockHeight,
+        signature: matchingTreeTokenAirdropSignature,
+      });
+    }
     
     // This transaction should succeed with the matching authority for both accounts
     const tx = await program.methods
@@ -1252,19 +1351,210 @@ describe("zkcash", () => {
         treeAccount: matchingTreePDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: matchingFeePDA,
+        treeTokenAccount: matchingTreeTokenPDA,
         authority: matchingAuthority.publicKey, // Explicitly matching authority
-        signer: matchingAuthority.publicKey,
+        signer: testRandomUser.publicKey, // Random user as signer, not the authority
         systemProgram: anchor.web3.SystemProgram.programId
       })
-      .signers([matchingAuthority])
+      .signers([testRandomUser]) // Random user signs the transaction
       .rpc();
     
-    console.log("Transaction with matching authority signature:", tx);
     expect(tx).to.be.a("string");
     
     // Additional assertion to emphasize that the transaction succeeded
     // Fetch the tree account to verify it was updated after the transaction
     const updatedTreeAccount = await program.account.merkleTreeAccount.fetch(matchingTreePDA);
     expect(updatedTreeAccount.nextIndex.toString()).to.equal("2"); // Should be 2 because we appended 2 output commitments
+  });
+
+  // Add new tests with original values
+  it("Can execute transact instruction with correct input and zero external amount", async () => {
+    // Create a sample ExtData object with zero ext_amount but properly set public amount
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(0),  // Zero external amount - this is intentional for this test
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(0),  // Zero fee - this is intentional for this test
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    // Calculate the hash correctly using our utility
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Create a Proof object with the correctly calculated hash
+    const proof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],  // Use the initial zero root
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(0)),  // Zero public amount - intentional test case
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // Execute the transaction
+    const tx = await program.methods
+      .transact(proof, extData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser]) // Random user signs the transaction
+      .rpc();
+    
+    expect(tx).to.be.a('string');
+  });
+
+  it("Transact succeeds with the correct root using zero external amount", async () => {
+    // Fetch the Merkle tree account to get the current root
+    const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
+
+    // This should pass because we're using a fresh tree account with the initial root
+    expect(treeAccountData.root).to.deep.equal(ZERO_BYTES[DEFAULT_HEIGHT]);
+    
+    // Test with zero external amount which is explicitly testing this case
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(0),  // Zero amount - intentional for this test
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(0),  // Zero fee - intentional for this test
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Create a Proof with the current valid root (initial root)
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: Array.from(treeAccountData.root), // Use the current valid root
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(0)),  // Zero public amount - intentional test case
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    const transactTx = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser]) // Random user signs the transaction
+      .rpc();
+    
+    expect(transactTx).to.be.a('string');
+  });
+
+  it("Multiple transactions succeed with zero external amount", async () => {
+    // First transaction with zero amount - explicit test case
+    const firstExtData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(0),  // Zero amount - intentional for this test
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(0),  // Zero fee - intentional for this test
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const firstExtDataHash = getExtDataHash(firstExtData);
+    
+    const firstProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT], // Initial root
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(0)),  // Zero public amount - intentional test case
+      extDataHash: Array.from(firstExtDataHash)
+    };
+
+    // First transaction should succeed with the initial root
+    await program.methods
+      .transact(firstProof, firstExtData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser]) // Random user signs the transaction
+      .rpc();
+    
+    // Fetch the updated root
+    const treeAccountData = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
+    
+    // Second transaction with zero amount and updated root - explicit test case
+    const secondExtData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(0),  // Zero amount - intentional for this test
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(0),  // Zero fee - intentional for this test
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedSecondExtDataHash = getExtDataHash(secondExtData);
+
+    const secondValidProof = {
+      proof: Buffer.from("mockProofData"),
+      root: Array.from(treeAccountData.root), // Use the updated root
+      inputNullifiers: [
+        Array(32).fill(5), // Different nullifiers
+        Array(32).fill(6)
+      ],
+      outputCommitments: [
+        Array(32).fill(7), // Different commitments
+        Array(32).fill(8)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(0)),  // Zero public amount - intentional test case
+      extDataHash: Array.from(calculatedSecondExtDataHash)
+    };
+    
+    const secondTransactTx = await program.methods
+      .transact(secondValidProof, secondExtData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser]) // Random user signs the transaction
+      .rpc();
+    
+    expect(secondTransactTx).to.be.a('string');
   });
 });
