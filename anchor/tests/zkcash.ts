@@ -1557,4 +1557,284 @@ describe("zkcash", () => {
     
     expect(secondTransactTx).to.be.a('string');
   });
+
+  it("Verifies SOL transfers are correct for deposit (positive ext_amount)", async () => {
+    // Setup test parameters
+    const extAmount = new anchor.BN(1000000); // 0.001 SOL (positive for deposit)
+    const fee = new anchor.BN(200000);       // 0.0002 SOL fee
+    const publicAmount = new anchor.BN(800000); // 0.0008 SOL (extAmount - fee)
+    
+    // First we need to fund the recipient to have enough SOL for the deposit
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: recipient.publicKey,
+        lamports: extAmount.toNumber() * 5, // Plenty for the test, increased amount
+      })
+    );
+    
+    const transferSig = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSig);
+    
+    // Get balances before transaction
+    const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceBefore = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceBefore = await provider.connection.getBalance(recipient.publicKey);
+    const randomUserBalanceBefore = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // console.log(`Before transaction:`);
+    // console.log(`Tree token account balance: ${treeTokenAccountBalanceBefore}`);
+    // console.log(`Fee recipient balance: ${feeRecipientBalanceBefore}`);
+    // console.log(`Recipient balance: ${recipientBalanceBefore}`);
+    // console.log(`Random user balance: ${randomUserBalanceBefore}`);
+    
+    // Create the external data
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Create the proof
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // Execute the deposit transaction and store the transaction signature
+    const txSignature = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .rpc();
+    
+    // Get balances after transaction
+    const treeTokenAccountBalanceAfter = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceAfter = await provider.connection.getBalance(recipient.publicKey);
+    const randomUserBalanceAfter = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // console.log(`After transaction:`);
+    // console.log(`Tree token account balance: ${treeTokenAccountBalanceAfter}`);
+    // console.log(`Fee recipient balance: ${feeRecipientBalanceAfter}`);
+    // console.log(`Recipient balance: ${recipientBalanceAfter}`);
+    // console.log(`Random user balance: ${randomUserBalanceAfter}`);
+    
+    // Calculate differences
+    const treeTokenAccountDiff = treeTokenAccountBalanceAfter - treeTokenAccountBalanceBefore;
+    const feeRecipientDiff = feeRecipientBalanceAfter - feeRecipientBalanceBefore;
+    const recipientDiff = recipientBalanceBefore - recipientBalanceAfter;
+    const randomUserDiff = randomUserBalanceBefore - randomUserBalanceAfter;
+    
+    // Log values for debugging
+    // console.log(`Tree token account diff: ${treeTokenAccountDiff}`);
+    // console.log(`Fee recipient diff: ${feeRecipientDiff}`);
+    // console.log(`Recipient diff: ${recipientDiff}`);
+    // console.log(`Random user diff: ${randomUserDiff}`);
+    
+    // For deposits in zkcash:
+    // 1. Tree token account should increase by publicAmount = extAmount - fee
+    // 2. Fee recipient should increase by fee
+    // 3. Recipient gets nothing
+    // 4. Random user pays for extAmount (which includes the fee)
+    
+    expect(treeTokenAccountDiff).to.be.equals(publicAmount.toNumber());
+    expect(feeRecipientDiff).to.be.equals(fee.toNumber());
+    expect(recipientDiff).to.be.equals(0);
+    expect(randomUserDiff).to.be.equals(extAmount.toNumber());
+  });
+
+  it("Verifies SOL transfers are correct for withdrawal (negative ext_amount)", async () => {
+    // Setup test parameters
+    const extAmount = new anchor.BN(-1000000); // -0.001 SOL (negative for withdrawal)
+    const fee = new anchor.BN(200000);        // 0.0002 SOL fee
+    const publicAmount = new anchor.BN(1200000); // 0.0012 SOL (|extAmount| + fee)
+    
+    // Get balances before transaction
+    const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceBefore = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceBefore = await provider.connection.getBalance(recipient.publicKey);
+    const randomUserBalanceBefore = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // Create the external data
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Create the proof
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // Execute the withdrawal transaction and store the transaction signature
+    const txSignature = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .rpc();
+    
+    // Get balances after transaction
+    const treeTokenAccountBalanceAfter = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceAfter = await provider.connection.getBalance(recipient.publicKey);
+    const randomUserBalanceAfter = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // Calculate differences
+    const treeTokenAccountDiff = treeTokenAccountBalanceAfter - treeTokenAccountBalanceBefore;
+    const feeRecipientDiff = feeRecipientBalanceAfter - feeRecipientBalanceBefore;
+    const recipientDiff = recipientBalanceAfter - recipientBalanceBefore;
+    const randomUserDiff = randomUserBalanceAfter - randomUserBalanceBefore;
+    
+    // For withdrawals:
+    // 1. Tree token account should decrease by |extAmount| + fee
+    // 2. Fee recipient should increase by fee
+    // 3. Recipient should increase by |extAmount|
+    // 4. Random user (signer) should decrease by transaction fee
+    
+    // Log values for debugging
+    // console.log(`Tree token account diff: ${treeTokenAccountDiff}`);
+    // console.log(`Fee recipient diff: ${feeRecipientDiff}`);
+    // console.log(`Recipient diff: ${recipientDiff}`);
+    // console.log(`Random user diff (should be tx fee): ${randomUserDiff}`);
+
+    expect(treeTokenAccountDiff).to.be.equals(extAmount.toNumber() - fee.toNumber());
+    expect(feeRecipientDiff).to.be.equals(fee.toNumber());
+    expect(recipientDiff).to.be.equals(-extAmount.toNumber());
+    expect(randomUserDiff).to.be.equals(0);
+  });
+
+  it("Verifies SOL transfers are correct with zero fee", async () => {
+    // Setup test parameters - withdrawal with zero fee
+    const extAmount = new anchor.BN(-1000000); // -0.001 SOL (negative for withdrawal)
+    const fee = new anchor.BN(0);             // Zero fee
+    const publicAmount = new anchor.BN(1000000); // 0.001 SOL (|extAmount| when fee is 0)
+    
+    // Get balances before transaction
+    const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceBefore = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceBefore = await provider.connection.getBalance(recipient.publicKey);
+    const randomUserBalanceBefore = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // Create the external data
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: fee,
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Create the proof
+    const validProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array(32).fill(1),
+        Array(32).fill(2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(publicAmount),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    // Execute the withdrawal transaction with zero fee and store the transaction signature
+    const txSignature = await program.methods
+      .transact(validProof, extData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipientPDA,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .rpc();
+      
+    // Get balances after transaction
+    const treeTokenAccountBalanceAfter = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceAfter = await provider.connection.getBalance(recipient.publicKey);
+    const randomUserBalanceAfter = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // Calculate differences
+    const treeTokenAccountDiff = treeTokenAccountBalanceAfter - treeTokenAccountBalanceBefore;
+    const feeRecipientDiff = feeRecipientBalanceAfter - feeRecipientBalanceBefore;
+    const recipientDiff = recipientBalanceAfter - recipientBalanceBefore;
+    const randomUserDiff = randomUserBalanceAfter - randomUserBalanceBefore;
+    
+    // For withdrawals with zero fee:
+    // 1. Tree token account should decrease by |extAmount|
+    // 2. Fee recipient should not change
+    // 3. Recipient should increase by |extAmount|
+    // 4. Random user (signer) should decrease by transaction fee
+    
+    // // Log values for debugging
+    // console.log(`Tree token account diff: ${treeTokenAccountDiff}`);
+    // console.log(`Fee recipient diff: ${feeRecipientDiff}`);
+    // console.log(`Recipient diff: ${recipientDiff}`);
+    // console.log(`Random user diff (should be tx fee): ${randomUserDiff}`);
+
+    expect(-extAmount.toNumber()).to.be.equals(publicAmount.toNumber());
+    expect(treeTokenAccountDiff).to.be.equals(extAmount.toNumber());
+    expect(feeRecipientDiff).to.be.equals(0);
+    expect(recipientDiff).to.be.equals(-extAmount.toNumber());
+    expect(randomUserDiff).to.be.equals(0);
+  });
 });
