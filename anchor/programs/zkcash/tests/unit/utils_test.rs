@@ -564,10 +564,10 @@ fn test_is_less_than_bn254_field_size_be() {
 fn proof_verification_should_succeed() {
     let proof = Proof {
         root: PUBLIC_INPUTS[0],
-        input_nullifiers: [PUBLIC_INPUTS[1], PUBLIC_INPUTS[2]],
-        output_commitments: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
-        public_amount: PUBLIC_INPUTS[5],
-        ext_data_hash: PUBLIC_INPUTS[6],
+        public_amount: PUBLIC_INPUTS[1],
+        ext_data_hash: PUBLIC_INPUTS[2],
+        input_nullifiers: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
+        output_commitments: [PUBLIC_INPUTS[5], PUBLIC_INPUTS[6]],
         proof_a: PROOF_A,
         proof_b: PROOF_B,
         proof_c: PROOF_C,

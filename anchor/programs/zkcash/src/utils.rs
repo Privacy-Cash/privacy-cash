@@ -137,12 +137,12 @@ pub fn verify_proof(proof: Proof, verifying_key: Groth16Verifyingkey) -> bool {
     let mut public_inputs_vec: [[u8; 32]; 7] = [[0u8; 32]; 7];
 
     public_inputs_vec[0] = proof.root;
-    public_inputs_vec[1] = proof.input_nullifiers[0];
-    public_inputs_vec[2] = proof.input_nullifiers[1];
-    public_inputs_vec[3] = proof.output_commitments[0];
-    public_inputs_vec[4] = proof.output_commitments[1];
-    public_inputs_vec[5] = proof.public_amount;
-    public_inputs_vec[6] = proof.ext_data_hash;
+    public_inputs_vec[1] = proof.public_amount;
+    public_inputs_vec[2] = proof.ext_data_hash;
+    public_inputs_vec[3] = proof.input_nullifiers[0];
+    public_inputs_vec[4] = proof.input_nullifiers[1];
+    public_inputs_vec[5] = proof.output_commitments[0];
+    public_inputs_vec[6] = proof.output_commitments[1];
 
      // First deserialize PROOF_A into a G1 point
      let g1_point = G1::deserialize_with_mode(

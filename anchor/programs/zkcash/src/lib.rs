@@ -12,6 +12,8 @@ use merkle_tree::{ROOT_HISTORY_SIZE, DEFAULT_HEIGHT, MerkleTree};
 
 #[program]
 pub mod zkcash {
+    use crate::utils::{verify_proof, VERIFYING_KEY};
+
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
@@ -67,6 +69,9 @@ pub mod zkcash {
         let (ext_amount_abs, fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
         let ext_amount = ext_data.ext_amount;
 
+        // verify the proof
+        // require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
+
         if 0 != ext_amount_abs {
             if ext_amount > 0 {
                 // If it's a deposit, transfer the SOL to the tree token account.
@@ -117,10 +122,10 @@ pub struct Proof {
     pub proof_b: [u8; 128],
     pub proof_c: [u8; 64],
     pub root: [u8; 32],
-    pub input_nullifiers: [[u8; 32]; 2],
-    pub output_commitments: [[u8; 32]; 2],
     pub public_amount: [u8; 32],
     pub ext_data_hash: [u8; 32],
+    pub input_nullifiers: [[u8; 32]; 2],
+    pub output_commitments: [[u8; 32]; 2],
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
