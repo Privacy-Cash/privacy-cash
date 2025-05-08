@@ -63,8 +63,6 @@ pub mod zkcash {
             ErrorCode::ExtDataHashMismatch
         );
 
-        // TODO: check ZK proof is valid
-
         // check if the public amount is valid
         let (ext_amount_abs, fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
         let ext_amount = ext_data.ext_amount;
@@ -115,9 +113,11 @@ pub mod zkcash {
 // all public inputs needs to be in big endian format
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct Proof {
-    pub proof: Vec<u8>,
+    pub proof_a: [u8; 64],
+    pub proof_b: [u8; 128],
+    pub proof_c: [u8; 64],
     pub root: [u8; 32],
-    pub input_nullifiers: Vec<[u8; 32]>,
+    pub input_nullifiers: [[u8; 32]; 2],
     pub output_commitments: [[u8; 32]; 2],
     pub public_amount: [u8; 32],
     pub ext_data_hash: [u8; 32],
@@ -281,5 +281,5 @@ pub enum ErrorCode {
     #[msg("Insufficient funds for withdrawal")]
     InsufficientFundsForWithdrawal,
     #[msg("Insufficient funds for fee")]
-    InsufficientFundsForFee
+    InsufficientFundsForFee,
 }

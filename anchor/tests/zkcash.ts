@@ -224,7 +224,9 @@ describe("zkcash", () => {
     
     // Create a Proof object with the correctly calculated hash
     const proof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -277,7 +279,9 @@ describe("zkcash", () => {
     
     // Create a Proof object with the correctly calculated hash
     const proof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -340,7 +344,9 @@ describe("zkcash", () => {
     
     // Create a Proof object with the incorrect hash
     const proof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -409,7 +415,9 @@ describe("zkcash", () => {
     
     // Create a Proof object with the invalid root but correct hash
     const proof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: invalidRoot,
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -477,7 +485,9 @@ describe("zkcash", () => {
     
     // Create a Proof object with the invalid root but correct hash
     const proof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: zeroRoot,
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -549,7 +559,9 @@ describe("zkcash", () => {
     
     // Create a Proof with the current valid root (initial root)
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: Array.from(treeAccountData.root), // Use the current valid root
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -600,7 +612,9 @@ describe("zkcash", () => {
     const firstExtDataHash = getExtDataHash(firstExtData);
     
     const firstProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT], // Initial root
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -652,7 +666,9 @@ describe("zkcash", () => {
     const calculatedSecondExtDataHash = getExtDataHash(secondExtData);
 
     const secondValidProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: Array.from(treeAccountData.root), // Use the updated root
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -709,7 +725,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -764,7 +782,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -819,7 +839,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -875,7 +897,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     const invalidProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -944,7 +968,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     const invalidProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1012,7 +1038,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     const invalidProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1076,7 +1104,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
 
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1143,7 +1173,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1273,7 +1305,9 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1344,7 +1378,9 @@ describe("zkcash", () => {
     
     // Create a Proof object with the correctly calculated hash
     const proof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],  // Use the initial zero root
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1402,7 +1438,9 @@ describe("zkcash", () => {
     
     // Create a Proof with the current valid root (initial root)
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: Array.from(treeAccountData.root), // Use the current valid root
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1452,7 +1490,9 @@ describe("zkcash", () => {
     const firstExtDataHash = getExtDataHash(firstExtData);
     
     const firstProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT], // Initial root
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1502,7 +1542,9 @@ describe("zkcash", () => {
     const calculatedSecondExtDataHash = getExtDataHash(secondExtData);
 
     const secondValidProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: Array.from(treeAccountData.root), // Use the updated root
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1582,7 +1624,9 @@ describe("zkcash", () => {
     
     // Create the proof
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1679,7 +1723,9 @@ describe("zkcash", () => {
     
     // Create the proof
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1767,7 +1813,9 @@ describe("zkcash", () => {
     
     // Create the proof
     const validProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1867,7 +1915,9 @@ describe("zkcash", () => {
     
     // Create the proof for deposit
     const depositProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -1938,7 +1988,9 @@ describe("zkcash", () => {
     
     // Create the proof for withdrawal using the updated root
     const withdrawProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: Array.from(treeAccountDataAfterDeposit.root),
       inputNullifiers: [
         Array.from(generateRandomNullifier()),
@@ -2028,7 +2080,9 @@ describe("zkcash", () => {
     
     // Create a Proof object for the first transaction
     const firstProof = {
-      proof: Buffer.from("mockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(fixedNullifier0),
@@ -2064,7 +2118,9 @@ describe("zkcash", () => {
       
     // Create a second proof with different commitment values but same nullifiers
     const secondProof = {
-      proof: Buffer.from("differentMockProofData"),
+      proofA: Array(64).fill(1), // 64-byte array for proofA
+      proofB: Array(128).fill(2), // 128-byte array for proofB  
+      proofC: Array(64).fill(3), // 64-byte array for proofC
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(fixedNullifier0), // Same nullifiers as first transaction
@@ -2124,7 +2180,9 @@ describe("zkcash", () => {
     
     // Create a Proof object for the first transaction
     const firstProof = {
-      proof: Buffer.from("mockProofData"),
+      proof_a: Array(64).fill(1), // 64-byte array for proof_a
+      proof_b: Array(128).fill(2), // 128-byte array for proof_b  
+      proof_c: Array(64).fill(3), // 64-byte array for proof_c
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(fixedNullifier1),
@@ -2160,7 +2218,9 @@ describe("zkcash", () => {
       
     // Create a second proof with different commitment values but same nullifiers
     const secondProof = {
-      proof: Buffer.from("differentMockProofData"),
+      proof_a: Array(64).fill(1), // 64-byte array for proof_a
+      proof_b: Array(128).fill(2), // 128-byte array for proof_b  
+      proof_c: Array(64).fill(3), // 64-byte array for proof_c
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
         Array.from(fixedNullifier1), // Same nullifiers as first transaction
