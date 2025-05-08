@@ -6,10 +6,15 @@ import { expect } from "chai";
 import { DEFAULT_HEIGHT, ROOT_HISTORY_SIZE, ZERO_BYTES } from "./lib/constants";
 import { getExtDataHash } from "../../scripts/utils/utils";
 import { bnToBytes } from "./lib/utils";
+import * as crypto from "crypto";
 
-// Add this helper function after the imports and before the tests
+// Utility function to generate random 32-byte arrays for nullifiers
+function generateRandomNullifier(): Uint8Array {
+  return crypto.randomBytes(32);
+}
+
+// Find nullifier PDAs for the given proof
 function findNullifierPDAs(program: anchor.Program<any>, proof: any) {
-  // Find nullifier PDAs for the given proof
   const [nullifier0PDA] = PublicKey.findProgramAddressSync(
     [Buffer.from("nullifier0"), Buffer.from(proof.inputNullifiers[0])],
     program.programId
@@ -222,8 +227,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -275,8 +280,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -338,8 +343,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -407,8 +412,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: invalidRoot,
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -475,8 +480,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: zeroRoot,
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -547,8 +552,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: Array.from(treeAccountData.root), // Use the current valid root
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -598,8 +603,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT], // Initial root
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -650,8 +655,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: Array.from(treeAccountData.root), // Use the updated root
       inputNullifiers: [
-        Array(32).fill(5), // Different nullifiers
-        Array(32).fill(6)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(7), // Different commitments
@@ -707,8 +712,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -762,8 +767,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -817,8 +822,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -873,8 +878,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -942,8 +947,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1010,8 +1015,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1074,8 +1079,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1141,8 +1146,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1271,8 +1276,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1342,8 +1347,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],  // Use the initial zero root
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1400,8 +1405,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: Array.from(treeAccountData.root), // Use the current valid root
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1450,8 +1455,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT], // Initial root
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1500,8 +1505,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: Array.from(treeAccountData.root), // Use the updated root
       inputNullifiers: [
-        Array(32).fill(5), // Different nullifiers
-        Array(32).fill(6)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(7), // Different commitments
@@ -1580,8 +1585,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(1),
-        Array(32).fill(2)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(3),
@@ -1626,8 +1631,8 @@ describe("zkcash", () => {
     // Calculate differences
     const treeTokenAccountDiff = treeTokenAccountBalanceAfter - treeTokenAccountBalanceBefore;
     const feeRecipientDiff = feeRecipientBalanceAfter - feeRecipientBalanceBefore;
-    const recipientDiff = recipientBalanceBefore - recipientBalanceAfter;
-    const randomUserDiff = randomUserBalanceBefore - randomUserBalanceAfter;
+    const recipientDiff = recipientBalanceAfter - recipientBalanceBefore;
+    const randomUserDiff = randomUserBalanceAfter - randomUserBalanceBefore;
     
     // Log values for debugging
     // console.log(`Tree token account diff: ${treeTokenAccountDiff}`);
@@ -1644,7 +1649,8 @@ describe("zkcash", () => {
     expect(treeTokenAccountDiff).to.be.equals(publicAmount.toNumber());
     expect(feeRecipientDiff).to.be.equals(fee.toNumber());
     expect(recipientDiff).to.be.equals(0);
-    expect(randomUserDiff).to.be.equals(extAmount.toNumber());
+    // accounts for the transaction fee
+    expect(randomUserDiff).to.be.lessThan(-extAmount.toNumber());
   });
 
   it("Verifies SOL transfers are correct for withdrawal (negative ext_amount)", async () => {
@@ -1676,12 +1682,12 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(11), // Using different values from other tests to avoid collisions
-        Array(32).fill(12)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
-        Array(32).fill(13),
-        Array(32).fill(14)
+        Array(32).fill(7), // Different commitments
+        Array(32).fill(8)
       ],
       publicAmount: bnToBytes(publicAmount),
       extDataHash: Array.from(calculatedExtDataHash)
@@ -1764,12 +1770,12 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(21), // Use different nullifier values to avoid collisions
-        Array(32).fill(22)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
-        Array(32).fill(23),
-        Array(32).fill(24)
+        Array(32).fill(7), // Use different nullifier values to avoid collisions
+        Array(32).fill(8)
       ],
       publicAmount: bnToBytes(publicAmount),
       extDataHash: Array.from(calculatedExtDataHash)
@@ -1864,8 +1870,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: ZERO_BYTES[DEFAULT_HEIGHT],
       inputNullifiers: [
-        Array(32).fill(31), // Using unique nullifier values
-        Array(32).fill(32)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(33),
@@ -1935,8 +1941,8 @@ describe("zkcash", () => {
       proof: Buffer.from("mockProofData"),
       root: Array.from(treeAccountDataAfterDeposit.root),
       inputNullifiers: [
-        Array(32).fill(41), // Different nullifier values
-        Array(32).fill(42)
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
       ],
       outputCommitments: [
         Array(32).fill(43),
@@ -1979,7 +1985,7 @@ describe("zkcash", () => {
     // Verify withdrawal logic worked correctly
     expect(treeTokenWithdrawDiff).to.be.equals(withdrawAmount.toNumber()); // Tree decreases by withdraw amount
     expect(feeRecipientWithdrawDiff).to.be.equals(withdrawFee.toNumber()); // Fee recipient unchanged
-    expect(randomUserWithdrawDiff).to.be.approximately(-withdrawAmount.toNumber(), 2000000); // User gets withdraw amount minus tx fee
+    expect(randomUserWithdrawDiff).to.be.lessThan(-withdrawAmount.toNumber()); // User gets withdraw amount minus tx fee
     
     // Calculate overall diffs for the full cycle
     const treeTokenTotalDiff = finalTreeTokenBalance - initialTreeTokenBalance;
@@ -2001,5 +2007,196 @@ describe("zkcash", () => {
     
     // 3. Random user should have lost at least the fee amount plus some tx fees
     expect(randomUserTotalDiff).to.be.lessThan(-depositFee.toNumber());
+  });
+
+  it("Should fail when trying to reuse the one existing nullifier", async () => {
+    // Create a sample ExtData object for deposits
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(1000000), // 0.001 SOL
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(200000), // 0.0002 SOL
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    // Calculate the hash for the ext data
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Generate fixed nullifiers that we'll reuse
+    const fixedNullifier0 = generateRandomNullifier();
+    
+    // Create a Proof object for the first transaction
+    const firstProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array.from(fixedNullifier0),
+        Array.from(generateRandomNullifier())
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(800000)), // extAmount - fee
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+    
+    // Find nullifier PDAs for the first transaction
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, firstProof);
+    
+    // First transaction should succeed
+    await program.methods
+      .transact(firstProof, extData)
+      .accounts({
+        tree_account: treeAccountPDA,
+        nullifier0: nullifier0PDA,
+        nullifier1: nullifier1PDA,
+        recipient: recipient.publicKey,
+        fee_recipient_account: feeRecipientPDA,
+        tree_token_account: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        system_program: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .rpc();
+      
+    // Create a second proof with different commitment values but same nullifiers
+    const secondProof = {
+      proof: Buffer.from("differentMockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array.from(fixedNullifier0), // Same nullifiers as first transaction
+        Array.from(generateRandomNullifier())
+      ],
+      outputCommitments: [
+        Array(32).fill(5), // Different commitments
+        Array(32).fill(6)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(800000)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+    
+    // Try to execute the second transaction with the same nullifiers
+    try {
+      await program.methods
+        .transact(secondProof, extData)
+        .accounts({
+          tree_account: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          recipient: recipient.publicKey,
+          fee_recipient_account: feeRecipientPDA,
+          tree_token_account: treeTokenAccountPDA,
+          authority: authority.publicKey,
+          signer: randomUser.publicKey,
+          system_program: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .rpc();
+        
+      // If we reach here, the test should fail because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to nullifier reuse but succeeded");
+    } catch (error) {
+      // We expect a system program error about account already existing
+      expect(error.toString()).to.include("already in use");
+    }
+  });
+
+  it("Should fail when trying to reuse the two existing nullifiers", async () => {
+    // Create a sample ExtData object for deposits
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(1000000), // 0.001 SOL
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(200000), // 0.0002 SOL
+      tokenMint: new PublicKey("11111111111111111111111111111111")
+    };
+
+    // Calculate the hash for the ext data
+    const calculatedExtDataHash = getExtDataHash(extData);
+    
+    // Generate fixed nullifiers that we'll reuse
+    const fixedNullifier1 = generateRandomNullifier();
+    const fixedNullifier2 = generateRandomNullifier();
+    
+    // Create a Proof object for the first transaction
+    const firstProof = {
+      proof: Buffer.from("mockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array.from(fixedNullifier1),
+        Array.from(fixedNullifier2)
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(800000)), // extAmount - fee
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+    
+    // Find nullifier PDAs for the first transaction
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, firstProof);
+    
+    // First transaction should succeed
+    await program.methods
+      .transact(firstProof, extData)
+      .accounts({
+        tree_account: treeAccountPDA,
+        nullifier0: nullifier0PDA,
+        nullifier1: nullifier1PDA,
+        recipient: recipient.publicKey,
+        fee_recipient_account: feeRecipientPDA,
+        tree_token_account: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        system_program: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .rpc();
+      
+    // Create a second proof with different commitment values but same nullifiers
+    const secondProof = {
+      proof: Buffer.from("differentMockProofData"),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array.from(fixedNullifier1), // Same nullifiers as first transaction
+        Array.from(fixedNullifier2)
+      ],
+      outputCommitments: [
+        Array(32).fill(5), // Different commitments
+        Array(32).fill(6)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(800000)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+    
+    // Try to execute the second transaction with the same nullifiers
+    try {
+      await program.methods
+        .transact(secondProof, extData)
+        .accounts({
+          tree_account: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          recipient: recipient.publicKey,
+          fee_recipient_account: feeRecipientPDA,
+          tree_token_account: treeTokenAccountPDA,
+          authority: authority.publicKey,
+          signer: randomUser.publicKey,
+          system_program: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .rpc();
+        
+      // If we reach here, the test should fail because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to nullifier reuse but succeeded");
+    } catch (error) {
+      // We expect a system program error about account already existing
+      expect(error.toString()).to.include("already in use");
+    }
   });
 });

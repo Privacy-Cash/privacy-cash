@@ -62,6 +62,8 @@ pub mod zkcash {
             ErrorCode::ExtDataHashMismatch
         );
 
+        // TODO: check ZK proof is valid
+
         // check if the public amount is valid
         let (ext_amount_abs, fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
         let ext_amount = ext_data.ext_amount;
@@ -104,9 +106,6 @@ pub mod zkcash {
         MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account);
         MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account);
         
-        // Additional verification logic would go here
-        // For example, verifying zero-knowledge proofs, checking nullifiers, etc.
-        
         msg!("Transaction completed successfully");
         Ok(())
     }
@@ -145,9 +144,12 @@ pub struct Transact<'info> {
     )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
     
-    /// Nullifier account to mark the first input as spent
+    /// Nullifier account to mark the first input as spent.
+    /// Using `init` without `init_if_needed` ensures that the transaction
+    /// will automatically fail with a system program error if this nullifier
+    /// has already been used (i.e., if the account already exists).
     #[account(
-        init_if_needed,
+        init,
         payer = signer,
         space = 8 + std::mem::size_of::<NullifierAccount>(),
         seeds = [b"nullifier0", proof.input_nullifiers[0].as_ref()],
@@ -155,9 +157,12 @@ pub struct Transact<'info> {
     )]
     pub nullifier0: Account<'info, NullifierAccount>,
     
-    /// Nullifier account to mark the second input as spent
+    /// Nullifier account to mark the second input as spent.
+    /// Using `init` without `init_if_needed` ensures that the transaction
+    /// will automatically fail with a system program error if this nullifier
+    /// has already been used (i.e., if the account already exists).
     #[account(
-        init_if_needed,
+        init,
         payer = signer,
         space = 8 + std::mem::size_of::<NullifierAccount>(),
         seeds = [b"nullifier1", proof.input_nullifiers[1].as_ref()],
@@ -243,7 +248,8 @@ pub struct TreeTokenAccount {
 
 #[account]
 pub struct NullifierAccount {
-    pub is_used: bool,
+    /// This account's existence indicates that the nullifier has been used.
+    /// No fields needed other than bump for PDA verification.
     pub bump: u8,
 }
 
@@ -274,5 +280,5 @@ pub enum ErrorCode {
     #[msg("Insufficient funds for withdrawal")]
     InsufficientFundsForWithdrawal,
     #[msg("Insufficient funds for fee")]
-    InsufficientFundsForFee,
+    InsufficientFundsForFee
 }
