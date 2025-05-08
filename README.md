@@ -77,37 +77,3 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ```bash
    anchor test
    ```
-
-### Rust Program (Only for testing ZK/merkle tree lib... Deprecated)
-
-1. Navigate to the program directory:
-   ```bash
-   cd program
-   ```
-
-2. Build the program:
-   ```bash
-   cargo build-sbf
-   ```
-
-3. Deploy the program to Solana devnet:
-   ```bash
-   solana program deploy target/deploy/solana_privacy_protocol.so
-   ```
-
-4. Note the program ID for use in the client:
-   ```bash
-   solana program show --programs
-   ```
-
-### Running Tests
-
-1. Navigate to the program directory:
-   ```bash
-   cd program
-   ```
-
-2. Run tests:
-   ```bash
-   cargo test
-   ```

@@ -6,7 +6,8 @@ declare_id!("F12PAMjHff2QHDwBTghE4BFzaaqNscKwno978La2vfQ5");
 
 pub mod merkle_tree;
 pub mod utils;
-
+pub mod groth16;
+pub mod errors;
 use merkle_tree::{ROOT_HISTORY_SIZE, DEFAULT_HEIGHT, MerkleTree};
 
 #[program]

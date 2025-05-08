@@ -1,11 +1,11 @@
 use thiserror::Error;
 
-#[derive(Error, Debug, Eq, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum Groth16Error {
-    #[error("Invalid G1 length")]
+    #[error("Invalid G1 point length")]
     InvalidG1Length,
     
-    #[error("Invalid G2 length")]
+    #[error("Invalid G2 point length")]
     InvalidG2Length,
     
     #[error("Invalid public inputs length")]
@@ -14,10 +14,10 @@ pub enum Groth16Error {
     #[error("Public input greater than field size")]
     PublicInputGreaterThanFieldSize,
     
-    #[error("Failed preparing inputs: G1 multiplication failed")]
+    #[error("Preparing inputs G1 multiplication failed")]
     PreparingInputsG1MulFailed,
     
-    #[error("Failed preparing inputs: G1 addition failed")]
+    #[error("Preparing inputs G1 addition failed")]
     PreparingInputsG1AdditionFailed,
     
     #[error("Proof verification failed")]

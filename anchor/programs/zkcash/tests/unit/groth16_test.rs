@@ -1,4 +1,4 @@
-use zkcash::lib::groth16::{Groth16Verifier, Groth16Verifyingkey, is_less_than_bn254_field_size_be};
+use zkcash::groth16::{Groth16Verifier, Groth16Verifyingkey, is_less_than_bn254_field_size_be};
 use zkcash::errors::Groth16Error;
 use ark_bn254;
 use ark_ff::PrimeField;
@@ -346,4 +346,4 @@ fn public_input_greater_than_field_size_should_not_suceed() {
         verifier.verify(),
         Err(Groth16Error::PublicInputGreaterThanFieldSize)
     );
-}
+} 
