@@ -38,6 +38,15 @@ pub mod zkcash {
     pub fn transact(ctx: Context<Transact>, proof: Proof, ext_data: ExtData) -> Result<()> {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
 
+        // check the authority is the same as the one in the accounts
+        let authority_key = ctx.accounts.authority.key();
+        require!(
+            authority_key == tree_account.authority.key() &&
+            authority_key == ctx.accounts.fee_recipient_account.authority.key() &&
+            authority_key == ctx.accounts.tree_token_account.authority.key(),
+            ErrorCode::Unauthorized
+        );
+
         // check if proof.root is in the tree_account's proof history
         require!(
             MerkleTree::is_known_root(&tree_account, proof.root),
@@ -81,7 +90,7 @@ pub mod zkcash {
                 **recipient_account_info.try_borrow_mut_lamports()? += ext_amount_abs;
             }
         }
-        // Handle fee if applicable
+        
         if fee > 0 {
             let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
             let fee_recipient_account_info = ctx.accounts.fee_recipient_account.to_account_info();
@@ -126,6 +135,7 @@ pub struct ExtData {
 }
 
 #[derive(Accounts)]
+#[instruction(proof: Proof, ext_data: ExtData)]
 pub struct Transact<'info> {
     #[account(
         mut,
@@ -134,6 +144,26 @@ pub struct Transact<'info> {
         has_one = authority @ ErrorCode::Unauthorized
     )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
+    
+    /// Nullifier account to mark the first input as spent
+    #[account(
+        init_if_needed,
+        payer = signer,
+        space = 8 + std::mem::size_of::<NullifierAccount>(),
+        seeds = [b"nullifier0", proof.input_nullifiers[0].as_ref()],
+        bump
+    )]
+    pub nullifier0: Account<'info, NullifierAccount>,
+    
+    /// Nullifier account to mark the second input as spent
+    #[account(
+        init_if_needed,
+        payer = signer,
+        space = 8 + std::mem::size_of::<NullifierAccount>(),
+        seeds = [b"nullifier1", proof.input_nullifiers[1].as_ref()],
+        bump
+    )]
+    pub nullifier1: Account<'info, NullifierAccount>,
     
     #[account(
         mut,
@@ -208,6 +238,12 @@ pub struct FeeRecipientAccount {
 #[account]
 pub struct TreeTokenAccount {
     pub authority: Pubkey,
+    pub bump: u8,
+}
+
+#[account]
+pub struct NullifierAccount {
+    pub is_used: bool,
     pub bump: u8,
 }
 
