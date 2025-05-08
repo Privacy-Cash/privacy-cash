@@ -282,4 +282,6 @@ pub enum ErrorCode {
     InsufficientFundsForWithdrawal,
     #[msg("Insufficient funds for fee")]
     InsufficientFundsForFee,
+    #[msg("Proof is invalid")]
+    InvalidProof,
 }

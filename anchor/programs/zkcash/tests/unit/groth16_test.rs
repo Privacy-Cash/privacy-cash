@@ -3,6 +3,7 @@ use zkcash::errors::Groth16Error;
 use ark_bn254;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
+use zkcash::utils::change_endianness;
 use std::ops::Neg;
 use num_bigint::BigUint;
 type G1 = ark_bn254::g1::G1Affine;
@@ -123,16 +124,6 @@ pub const PUBLIC_INPUTS: [[u8; 32]; 7] = [
         9,  94,  88, 124, 115, 142, 113, 122
     ]
 ];
-
-fn change_endianness(bytes: &[u8]) -> Vec<u8> {
-    let mut vec = Vec::new();
-    for b in bytes.chunks(32) {
-        for byte in b.iter().rev() {
-            vec.push(*byte);
-        }
-    }
-    vec
-}
 
 #[test]
 fn test_is_less_than_bn254_field_size_be() {
