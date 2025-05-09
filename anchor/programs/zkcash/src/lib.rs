@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use light_hasher::Poseidon;
 use anchor_lang::solana_program::hash::{hash};
+use ark_ff::PrimeField;
+use ark_bn254::Fr;
 
 declare_id!("F12PAMjHff2QHDwBTghE4BFzaaqNscKwno978La2vfQ5");
 
@@ -59,9 +61,10 @@ pub mod zkcash {
         // check if the ext_data hashes to the same ext_data in the proof
         let mut serialized_ext_data = Vec::new();
         ext_data.serialize(&mut serialized_ext_data)?;
-        
+        let calculated_ext_data_hash = hash(&serialized_ext_data).to_bytes();
+
         require!(
-            hash(&serialized_ext_data).to_bytes() == proof.ext_data_hash,
+            Fr::from_le_bytes_mod_order(&calculated_ext_data_hash) == Fr::from_be_bytes_mod_order(&proof.ext_data_hash),
             ErrorCode::ExtDataHashMismatch
         );
 
@@ -70,7 +73,7 @@ pub mod zkcash {
         let ext_amount = ext_data.ext_amount;
 
         // verify the proof
-        // require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
+        require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
         if 0 != ext_amount_abs {
             if ext_amount > 0 {

@@ -1,3 +1,5 @@
+import * as anchor from "@coral-xyz/anchor";
+
 // zero bytes for the sparse merkle tree.
 // from: https://docs.rs/crate/light-hasher/latest/source/src/zero_bytes/poseidon.rs
 export const ZERO_BYTES = [
@@ -209,3 +211,4 @@ export const ZERO_BYTES = [
 
 export const ROOT_HISTORY_SIZE = 100;
 export const DEFAULT_HEIGHT = 20;
+export const FIELD_SIZE = new anchor.BN('21888242871839275222246405745257275088548364400416034343698204186575808495617')
