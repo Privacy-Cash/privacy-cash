@@ -70,6 +70,10 @@ echo "[3/3] Contributing to the ceremony..."
 echo "Ceremony Contribution" | npx snarkjs zkey contribute "$ARTIFACTS_DIR/transaction$1_0.zkey" "$ARTIFACTS_DIR/transaction$1.zkey"
 echo "✅ Contribution complete"
 
+# Convert zkey to json
+npx snarkjs zkey export verificationkey "$ARTIFACTS_DIR/transaction$1.zkey" "$ARTIFACTS_DIR/verifyingkey$1.json"
+echo "✅ Zkey export complete"
+
 # Print circuit info
 echo "📊 Circuit information:"
 npx snarkjs info -r "$ARTIFACTS_DIR/transaction$1.r1cs"
@@ -80,4 +84,4 @@ echo "- R1CS: $ARTIFACTS_DIR/transaction$1.r1cs"
 echo "- WASM: $ARTIFACTS_DIR/transaction$1.wasm"
 echo "- SYM: $ARTIFACTS_DIR/transaction$1.sym"
 echo "- ZKEY: $ARTIFACTS_DIR/transaction$1.zkey"
-
+echo "- VERIFICATION KEY: $ARTIFACTS_DIR/transaction$1.json"
