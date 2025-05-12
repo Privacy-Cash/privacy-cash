@@ -1,3 +1,5 @@
+pragma circom 2.0.0;
+
 include "../scripts/node_modules/circomlib/circuits/poseidon.circom";
 
 // Helper template that computes hashes of the next tree layer

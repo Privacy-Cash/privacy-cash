@@ -6,7 +6,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.0",
-    "circomlib": "github:tornadocash/circomlib#d20d53411d1bef61f38c99a8b36d5d0cc4836aa1",
+    "circomlib": "^2.0.5",
     "circomlibjs": "^0.1.7",
     "ffjavascript": "^0.3.1"
   },
