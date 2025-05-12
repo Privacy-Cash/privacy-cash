@@ -15,7 +15,7 @@ import * as path from 'path';
 import { utils } from 'ffjavascript';
 import { MerkleTree } from '../anchor/tests/lib/merkle_tree';
 import { Utxo } from './models/utxo';
-import { getExtDataHash, mockEncrypt, toFixedHex } from './utils/utils';
+import { getExtDataHash, mockEncrypt } from './utils/utils';
 import { FIELD_SIZE } from './utils/constants';
 import { Keypair } from './models/keypair';
 import { PublicKey } from '@solana/web3.js';
@@ -279,9 +279,8 @@ async function generateSampleProofForWithdraw(): Promise<{
   const inCommitments = [];
   for (const input of inputs) {
     const commitment = await input.getCommitment();
-    const hexedCommitment = toFixedHex(commitment);
-    tree.insert(hexedCommitment);
-    inCommitments.push(hexedCommitment);
+    tree.insert(commitment);
+    inCommitments.push(commitment);
   }
 
   const inputMerklePathIndices = []
@@ -480,7 +479,7 @@ async function main() {
     console.log('Using fixed inputs for deterministic proofs:', JSON.stringify(options, null, 2));
     
     await generateSampleProofForFirstDeposit();
-    // await generateSampleProofForWithdraw();
+    await generateSampleProofForWithdraw();
   } catch (error) {
     console.error('Failed to generate proof:', error);
     if (error instanceof Error) {

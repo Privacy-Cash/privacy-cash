@@ -20,19 +20,6 @@ export function mockEncrypt(value: Utxo): string {
   return JSON.stringify(value);
 }
 
-export function toFixedHex(number: any, length = 32) {
-  let result =
-    '0x' +
-    (number instanceof Buffer
-      ? number.toString('hex')
-      : new BN(number).toString(16).replace('0x', '')
-    ).padStart(length * 2, '0')
-  if (result.indexOf('-') > -1) {
-    result = '-' + result.replace('-', '')
-  }
-  return result
-}
-
 /**
  * Calculates the hash of ext data using Borsh serialization
  * @param extData External data object containing recipient, amount, and encrypted outputs
