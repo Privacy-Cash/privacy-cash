@@ -17,7 +17,7 @@ nullifier = hash(commitment, merklePath, sign(privKey, commitment, merklePath))
 */
 
 // Universal JoinSplit transaction with nIns inputs and 2 outputs
-template Transaction(levels, nIns, nOuts, zeroLeaf) {
+template Transaction(levels, nIns, nOuts) {
     signal input root;
     // extAmount = external amount used for deposits and withdrawals
     // correct extAmount range is enforced on the smart contract
