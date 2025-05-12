@@ -53,10 +53,8 @@ echo "==============================================="
 
 # Compile the circuit
 echo "[1/3] Compiling circuit transaction$1.circom..."
-# Modified circom command based on Circom 2.x syntax and Light Protocol example:
-# This assumes 'npm install' was run in the 'scripts' directory, so 'node_modules' is relative to it.
-# If 'node_modules' is in the project root (one level above 'scripts'), use "../node_modules/circomlib/circuits".
-circom --r1cs --wasm --sym "$CIRCUIT_DIR/transaction$1.circom" -o "$ARTIFACTS_DIR" -l "node_modules/circomlib/circuits"
+# Fix the circom command with correct paths
+circom --r1cs --wasm --sym "$CIRCUIT_DIR/transaction$1.circom" -o "$ARTIFACTS_DIR" -l "../scripts/node_modules/circomlib/circuits"
 
 echo "✅ Circuit compilation complete"
 
