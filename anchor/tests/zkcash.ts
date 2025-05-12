@@ -300,14 +300,14 @@ describe("zkcash", () => {
 
     // Create inputs for the first deposit
     const inputs = [
-      new Utxo({ }),
-      new Utxo({ })
+      new Utxo({ lightWasm }),
+      new Utxo({ lightWasm })
     ];
 
     const outputAmount = '150';
     const outputs = [
-      new Utxo({ amount: outputAmount }), // Combined amount minus fee
-      new Utxo({ amount: '0' }) // Empty UTXO
+      new Utxo({ lightWasm, amount: outputAmount }), // Combined amount minus fee
+      new Utxo({ lightWasm, amount: '0' }) // Empty UTXO
     ];
 
     // Create mock Merkle path data (normally built from the tree)

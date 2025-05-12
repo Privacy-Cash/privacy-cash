@@ -10,11 +10,6 @@ import { Utxo } from '../models/utxo';
 import * as borsh from 'borsh';
 import { sha256 } from '@ethersproject/sha2';
 import { PublicKey } from '@solana/web3.js';
-
-const poseidon = require("circomlib/src/poseidon.js");
-export const poseidonHash = (items: any[]) => new BN(poseidon(items).toString())
-export const poseidonHash2ToString = (a: any, b: any) => poseidonHash([a, b]).toString();
-
 /**
  * Mock encryption function - in real implementation this would be proper encryption
  * For testing, we just return a fixed prefix to ensure consistent extDataHash

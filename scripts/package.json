@@ -17,7 +17,8 @@
     "bs58": "^6.0.0",
     "circom": "^0.5.45",
     "circom_runtime": "^0.1.13",
-    "circomlib": "github:tornadocash/circomlib#d20d53411d1bef61f38c99a8b36d5d0cc4836aa1",
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.7",
     "ffjavascript": "^0.2.36",
@@ -31,8 +32,8 @@
   },
   "devDependencies": {
     "@ethersproject/sha2": "^5.8.0",
+    "@lightprotocol/hasher.rs": "^0.2.1",
     "@types/bn.js": "^5.1.5",
-    "@types/circomlibjs": "^0.1.6",
     "bigint-buffer": "^1.1.5",
     "bn.js": "^5.2.2",
     "borsh": "^2.0.0"

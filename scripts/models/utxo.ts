@@ -7,9 +7,8 @@
 
 import BN from 'bn.js';
 import { Keypair } from './keypair';
-
-const poseidon = require("circomlib/src/poseidon.js");
-const poseidonHash = (items: any[]) => new BN(poseidon(items).toString());
+import { LightWasm } from '@lightprotocol/hasher.rs';
+import { ethers } from 'ethers';
 
 /**
  * Simplified Utxo class inspired by Tornado Cash Nova
@@ -20,8 +19,10 @@ export class Utxo {
   blinding: BN;
   keypair: Keypair;
   index: number;
+  private lightWasm: LightWasm;
 
   constructor({ 
+    lightWasm,
     amount = new BN(0), 
     /**
      * Tornado nova doesn't use solana eddsa with curve 25519 but their own "keypair"
@@ -31,10 +32,11 @@ export class Utxo {
      * 
      * Generate a new keypair for each UTXO
      */
-    keypair = Keypair.generateNew(), 
+    keypair, 
     blinding = new BN('1000000000'), // Use fixed value for consistency instead of randomBN()
     index = 0 
   }: { 
+    lightWasm: LightWasm,
     amount?: BN | number | string, 
     keypair?: Keypair, 
     blinding?: BN | number | string, 
@@ -42,18 +44,19 @@ export class Utxo {
   }) {
     this.amount = new BN(amount.toString());
     this.blinding = new BN(blinding.toString());
-    this.keypair = keypair;
+    this.lightWasm = lightWasm;
+    this.keypair = keypair || new Keypair(ethers.Wallet.createRandom().privateKey, lightWasm);
     this.index = index;
   }
 
   async getCommitment(): Promise<string> {
-    return poseidonHash([this.amount, this.keypair.pubkey, this.blinding]).toString();
+    return this.lightWasm.poseidonHashString([this.amount.toString(), this.keypair.pubkey.toString(), this.blinding.toString()]);
   }
 
   async getNullifier(): Promise<string> {
     const commitmentValue = await this.getCommitment();
     const signature = this.keypair.sign(commitmentValue, new BN(this.index).toString());
     
-    return poseidonHash([commitmentValue, new BN(this.index).toString(), signature]).toString();
+    return this.lightWasm.poseidonHashString([commitmentValue, new BN(this.index).toString(), signature]);
   }
 } 

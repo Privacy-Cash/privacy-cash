@@ -18,10 +18,6 @@ export function bnToBytes(bn: anchor.BN): number[] {
   ).reverse() as number[];
 }
 
-const poseidon = require("circomlib/src/poseidon.js");
-export const poseidonHash = (items: any[]) => new BN(poseidon(items).toString())
-export const poseidonHash2ToString = (a: any, b: any) => poseidonHash([a, b]).toString();
-
 /**
  * Mock encryption function - in real implementation this would be proper encryption
  * For testing, we just return a fixed prefix to ensure consistent extDataHash
