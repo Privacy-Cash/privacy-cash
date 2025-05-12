@@ -56,6 +56,9 @@ echo "[1/3] Compiling circuit transaction$1.circom..."
 # Fix the circom command with correct paths
 circom --r1cs --wasm --sym "$CIRCUIT_DIR/transaction$1.circom" -o "$ARTIFACTS_DIR" -l "../scripts/node_modules/circomlib/circuits"
 
+# Add after the circom command in buildCircuit_prod_solana.sh
+cp "$ARTIFACTS_DIR/transaction$1_js/transaction$1.wasm" "$ARTIFACTS_DIR/"
+
 echo "✅ Circuit compilation complete"
 
 # Setup the circuit
