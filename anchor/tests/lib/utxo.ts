@@ -7,21 +7,20 @@
 
 import BN from 'bn.js';
 import { Keypair } from './keypair';
-
-const poseidon = require("circomlib/src/poseidon.js");
-const poseidonHash = (items: any[]) => new BN(poseidon(items).toString());
+import { LightWasm } from '@lightprotocol/hasher.rs';
 
 /**
  * Simplified Utxo class inspired by Tornado Cash Nova
  * Based on: https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/utxo.js
  */
 export class Utxo {
+  lightWasm: LightWasm;
   amount: BN;
   blinding: BN;
   keypair: Keypair;
   index: number;
-
-  constructor({ 
+  constructor({
+    lightWasm,
     amount = new BN(0), 
     /**
      * Tornado nova doesn't use solana eddsa with curve 25519 but their own "keypair"
@@ -31,29 +30,32 @@ export class Utxo {
      * 
      * Generate a new keypair for each UTXO
      */
-    keypair = Keypair.generateNew(), 
+    keypair, 
     blinding = new BN('1000000000'), // Use fixed value for consistency instead of randomBN()
-    index = 0 
+    index = 0
   }: { 
+    lightWasm: LightWasm,
     amount?: BN | number | string, 
     keypair?: Keypair, 
     blinding?: BN | number | string, 
-    index?: number 
+    index?: number,
   }) {
+    this.lightWasm = lightWasm;
     this.amount = new BN(amount.toString());
     this.blinding = new BN(blinding.toString());
-    this.keypair = keypair;
+    // Initialize keypair after lightWasm is available
+    this.keypair = keypair || Keypair.generateNew(this.lightWasm);
     this.index = index;
   }
 
   async getCommitment(): Promise<string> {
-    return poseidonHash([this.amount, this.keypair.pubkey, this.blinding]).toString();
+    return this.lightWasm.poseidonHashString([this.amount.toString(), this.keypair.pubkey.toString(), this.blinding.toString()]);
   }
 
   async getNullifier(): Promise<string> {
     const commitmentValue = await this.getCommitment();
     const signature = this.keypair.sign(commitmentValue, new BN(this.index).toString());
     
-    return poseidonHash([commitmentValue, new BN(this.index).toString(), signature]).toString();
+    return this.lightWasm.poseidonHashString([commitmentValue, new BN(this.index).toString(), signature]);
   }
 }

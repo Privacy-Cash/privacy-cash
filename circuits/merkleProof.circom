@@ -1,3 +1,5 @@
+pragma circom 2.0.0;
+
 include "../scripts/node_modules/circomlib/circuits/bitify.circom";
 include "../scripts/node_modules/circomlib/circuits/poseidon.circom";
 include "../scripts/node_modules/circomlib/circuits/switcher.circom";

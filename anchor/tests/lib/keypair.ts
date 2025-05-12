@@ -7,7 +7,7 @@
 
 import BN from 'bn.js';
 import { ethers } from 'ethers';
-import { poseidonHash } from './utils';
+import { LightWasm } from '@lightprotocol/hasher.rs';
 
 // Field size constant
 const FIELD_SIZE = new BN(
@@ -20,12 +20,14 @@ const FIELD_SIZE = new BN(
 export class Keypair {
   public privkey: BN;
   public pubkey: BN;
+  private lightWasm: LightWasm;
 
-  constructor(privkeyHex: string) {
+  constructor(privkeyHex: string, lightWasm: LightWasm) {
     const rawDecimal = BigInt(privkeyHex);
     this.privkey = new BN((rawDecimal % BigInt(FIELD_SIZE.toString())).toString());
-    // TODO: lazily compute pubkey
-    this.pubkey = poseidonHash([this.privkey])
+    this.lightWasm = lightWasm;
+    // Compute pubkey
+    this.pubkey = new BN(this.lightWasm.poseidonHashString([this.privkey.toString()]));
   }
 
    /**
@@ -36,15 +38,15 @@ export class Keypair {
    * @returns {BigNumber} a hex string with signature
    */
   sign(commitment: string, merklePath: string): string {
-    return poseidonHash([this.privkey, commitment, merklePath]).toString();
+    return this.lightWasm.poseidonHashString([this.privkey.toString(), commitment, merklePath]);
   }
 
-  static generateNew(): Keypair {
+  static generateNew(lightWasm: LightWasm): Keypair {
     // Tornado Cash Nova uses ethers.js to generate a random private key
     // We can't generate Solana keypairs because it won't fit in the field size
     // It's OK to use ethereum secret keys, because the secret key is only used for the proof generation.
     // Namely, it's used to guarantee the uniqueness of the nullifier.
     const wallet = ethers.Wallet.createRandom();
-    return new Keypair(wallet.privateKey);
+    return new Keypair(wallet.privateKey, lightWasm);
   }
 } 

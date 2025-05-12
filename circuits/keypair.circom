@@ -1,3 +1,5 @@
+pragma circom 2.0.0;
+
 include "../scripts/node_modules/circomlib/circuits/poseidon.circom";
 
 // Since we don't use signatures, the keypair can be based on a simple hash

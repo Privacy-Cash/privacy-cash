@@ -13,12 +13,15 @@ import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { utils } from 'ffjavascript';
-import MerkleTree, { Element } from 'fixed-merkle-tree';
+import { MerkleTree } from '../anchor/tests/lib/merkle_tree';
 import { Utxo } from './models/utxo';
-import { getExtDataHash, mockEncrypt,poseidonHash2ToString, toFixedHex } from './utils/utils';
+import { getExtDataHash, mockEncrypt } from './utils/utils';
 import { FIELD_SIZE } from './utils/constants';
 import { Keypair } from './models/keypair';
 import { PublicKey } from '@solana/web3.js';
+import { WasmFactory } from '@lightprotocol/hasher.rs';
+
+type Element = string;
 
 /**
  * Generates a sample ZK proof using the main proving method
@@ -40,23 +43,24 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   const fee = '100000000'; // Default 0.1 SOL fee
   const recipient = new PublicKey("BxuZn19npE43qkrQycBSb12vgruyD3vLygxwZss7eXLU");
 
+  const lightWasm = await WasmFactory.getInstance();
+
   // Create the merkle tree with the pre-initialized poseidon hash
-  const tree = new MerkleTree(20, [], {
-    hashFunction: poseidonHash2ToString,
-    zeroElement: '0x0000000000000000000000000000000000000000000000000000000000000000'
+  const tree = new MerkleTree(20, lightWasm, [], {
+    zeroElement: 0
   });
   
   // Log the root in decimal
-  console.log(`Merkle tree root (decimal): ${tree.root.toString()}`);
-  console.log(`Merkle tree root (hex): 0x${BigInt(tree.root.toString()).toString(16)}`);
+  console.log(`Merkle tree root (decimal): ${tree.root()}`);
+  console.log(`Merkle tree root (hex): 0x${BigInt(tree.root()).toString(16)}`);
   
   console.log(`Using amounts: ${amount1}, ${amount2}`);
   console.log(`Using blinding factors: ${blinding1.toString(10).substring(0, 10)}..., ${blinding2.toString(10).substring(0, 10)}...`);
 
   // Create inputs for the first deposit
   const inputs = [
-    new Utxo({ }),
-    new Utxo({ })
+    new Utxo({ lightWasm }),
+    new Utxo({ lightWasm })
   ];
 
   const pubkeys = await Promise.all(inputs.map(async (x) => await x.keypair.pubkey));
@@ -65,8 +69,8 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   // Create outputs (UTXOs that are being created)
   const outputAmount = '2900000000'; // Subtract fee
   const outputs = [
-    new Utxo({ amount: outputAmount }), // Combined amount minus fee
-    new Utxo({ amount: '0' }) // Empty UTXO
+    new Utxo({ lightWasm, amount: outputAmount }), // Combined amount minus fee
+    new Utxo({ lightWasm, amount: '0' }) // Empty UTXO
   ];
 
   // Calculate extAmount (amount being deposited or withdrawn)
@@ -93,7 +97,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   });
 
   // Use the properly calculated Merkle tree root
-  const root = tree.root.toString();
+  const root = tree.root();
   
   // Resolve all async operations before creating the input object
   // Await nullifiers and commitments to get actual values instead of Promise objects
@@ -242,18 +246,17 @@ async function generateSampleProofForWithdraw(): Promise<{
   const blinding2 = new BN('500000000');  // Use fixed value for consistency
   const fee = '100000000'; // Default 0.1 SOL fee
   const recipient = new PublicKey("BxuZn19npE43qkrQycBSb12vgruyD3vLygxwZss7eXLU"); // Default recipient address
-  // from https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/contracts/MerkleTreeWithHistory.sol#L125C32-L125C98
-  const zeroValue = '0x0000000000000000000000000000000000000000000000000000000000000000'
-  
+  const lightWasm = await WasmFactory.getInstance();
+
   // Create the merkle tree with the pre-initialized poseidon hash
-  const tree = new MerkleTree(20, [], {
-    hashFunction: poseidonHash2ToString,
-    zeroElement: zeroValue
+  const tree = new MerkleTree(20, lightWasm, [], {
+    zeroElement: 0
   });
+  
 
   // Log the root in decimal
-  console.log(`Merkle tree root (decimal): ${tree.root.toString()}`);
-  console.log(`Merkle tree root (hex): 0x${BigInt(tree.root.toString()).toString(16)}`);
+  console.log(`Merkle tree root (decimal): ${tree.root()}`);
+  console.log(`Merkle tree root (hex): 0x${BigInt(tree.root()).toString(16)}`);
   
   console.log(`Using amounts: ${amount1}, ${amount2}`);
   console.log(`Using blinding factors: ${blinding1.toString(10).substring(0, 10)}..., ${blinding2.toString(10).substring(0, 10)}...`);
@@ -261,22 +264,23 @@ async function generateSampleProofForWithdraw(): Promise<{
   // Create inputs for the first deposit
   const inputs = [
     new Utxo({ 
+      lightWasm,
       amount: new BN(2900000000),
       blinding: new BN(1000000000),
       index: 0,
-      keypair: new Keypair("0x0cb0668299bbfc5a53ab4ca18468fd8d2d45b37f5752c5a2291fc66f4f91687a")
+      keypair: new Keypair("0x0cb0668299bbfc5a53ab4ca18468fd8d2d45b37f5752c5a2291fc66f4f91687a", lightWasm)
     }),
     // second input is empty
     new Utxo({
+      lightWasm
     })
   ];
 
   const inCommitments = [];
   for (const input of inputs) {
     const commitment = await input.getCommitment();
-    const hexedCommitment = toFixedHex(commitment);
-    tree.insert(hexedCommitment);
-    inCommitments.push(hexedCommitment);
+    tree.insert(commitment);
+    inCommitments.push(commitment);
   }
 
   const inputMerklePathIndices = []
@@ -303,8 +307,8 @@ async function generateSampleProofForWithdraw(): Promise<{
   // Create outputs (UTXOs that are being created)
   const outputAmount = '1900000000';
   const outputs = [
-    new Utxo({ amount: outputAmount }), // Combined amount minus fee
-    new Utxo({ amount: '0' }) // Empty UTXO
+    new Utxo({ lightWasm, amount: outputAmount }), // Combined amount minus fee
+    new Utxo({ lightWasm, amount: '0' }) // Empty UTXO
   ];
 
   // Calculate extAmount (amount being deposited or withdrawn)
@@ -320,7 +324,7 @@ async function generateSampleProofForWithdraw(): Promise<{
     extAmount: ${extAmount.toString(10)}, publicAmount: ${publicAmount}`);
 
   // Use the properly calculated Merkle tree root
-  const root = tree.root.toString();
+  const root = tree.root();
   
   // Resolve all async operations before creating the input object
   // Await nullifiers and commitments to get actual values instead of Promise objects
@@ -341,7 +345,7 @@ async function generateSampleProofForWithdraw(): Promise<{
   // Generate extDataHash from the extData structure
   // See: https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L74
   const extDataHash = await getExtDataHash(extData);
-  console.log(`Using extDataHash: ${extDataHash}`);
+  console.log(`Using extDataHash: ${extDataHash}, with extData: ${JSON.stringify(extData)}`);
   
   // Following the exact input structure from Tornado Cash Nova
   // https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L76-L97
@@ -390,8 +394,8 @@ async function generateSampleProofForWithdraw(): Promise<{
     console.log('- inPrivateKey[0]:', input.inPrivateKey[0]);
     console.log('- sumIns:', inputs.reduce((sum, x) => sum.add(x.amount), new BN(0)).toString(10));
     console.log('- sumOuts:', outputs.reduce((sum, x) => sum.add(x.amount), new BN(0)).toString(10));
-    // console.log('- inPathIndices:', input.inPathIndices);
-    // console.log('- outputCommitment:', input.outputCommitment);
+    console.log('- inPathIndices:', input.inPathIndices);
+    console.log('- outputCommitment:', input.outputCommitment);
     
     // Use the updated prove function that returns an object with proof components
     const {proof, publicSignals} = await prove(input, keyBasePath);

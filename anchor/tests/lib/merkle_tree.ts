@@ -1,6 +1,6 @@
 import { LightWasm } from "@lightprotocol/hasher.rs";
 
-export const DEFAULT_ZERO = "0";
+export const DEFAULT_ZERO = 0;
 
 /**
  * @callback hashFunction
@@ -34,7 +34,7 @@ export class MerkleTree {
   ) {
     this.levels = levels;
     this.capacity = 2 ** levels;
-    this.zeroElement = zeroElement;
+    this.zeroElement = zeroElement.toString();
     this._lightWasm = lightWasm;
     if (elements.length > this.capacity) {
       throw new Error("Tree is full");

@@ -6,8 +6,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.0",
-    "circomlib": "github:tornadocash/circomlib#d20d53411d1bef61f38c99a8b36d5d0cc4836aa1",
-    "circomlibjs": "^0.1.7",
+    "circomlib": "^2.0.5",
     "ffjavascript": "^0.3.1"
   },
   "devDependencies": {
@@ -15,17 +14,14 @@
     "@lightprotocol/hasher.rs": "^0.2.1",
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^4.3.0",
-    "@types/circomlibjs": "^0.1.6",
     "@types/mocha": "^9.0.0",
     "bn.js": "^5.2.2",
     "borsh": "^2.0.0",
     "chai": "^4.3.4",
     "ethers": "^6.13.7",
-    "fixed-merkle-tree": "^0.7.3",
     "mocha": "^9.0.3",
-    "poseidon-lite": "^0.3.0",
     "prettier": "^2.6.2",
-    "snarkjs": "git+https://github.com/tornadocash/snarkjs.git#f37f146948f3b28086493e71512006b030588fc2",
+    "snarkjs": "^0.7.5",
     "tmp-promise": "^3.0.2",
     "ts-mocha": "^10.0.0",
     "typescript": "^5.7.3"
