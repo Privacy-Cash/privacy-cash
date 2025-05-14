@@ -68,36 +68,39 @@ pub mod zkcash {
             ErrorCode::ExtDataHashMismatch
         );
 
-        // check if the public amount is valid
-        let (ext_amount_abs, fee) = utils::check_external_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount)?;
+        require!(
+            utils::check_public_amount(ext_data.ext_amount, ext_data.fee, proof.public_amount),
+            ErrorCode::InvalidPublicAmountData
+        );
+        
         let ext_amount = ext_data.ext_amount;
+        let fee = ext_data.fee;
 
         // verify the proof
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
-        if 0 != ext_amount_abs {
-            if ext_amount > 0 {
-                // If it's a deposit, transfer the SOL to the tree token account.
-                anchor_lang::system_program::transfer(
-                    CpiContext::new(
-                        ctx.accounts.system_program.to_account_info(),
-                        anchor_lang::system_program::Transfer {
-                            from: ctx.accounts.signer.to_account_info(),
-                            to: ctx.accounts.tree_token_account.to_account_info(),
-                        },
-                    ),
-                    ext_amount as u64,
-                )?;
-            } else if ext_amount < 0 {
-                // PDA can't directly sign transactions, so we need to transfer SOL via try_borrow_mut_lamports
-                let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
-                let recipient_account_info = ctx.accounts.recipient.to_account_info();
+        if ext_amount > 0 {
+            // If it's a deposit, transfer the SOL to the tree token account.
+            anchor_lang::system_program::transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.to_account_info(),
+                    anchor_lang::system_program::Transfer {
+                        from: ctx.accounts.signer.to_account_info(),
+                        to: ctx.accounts.tree_token_account.to_account_info(),
+                    },
+                ),
+                ext_amount as u64,
+            )?;
+        } else if ext_amount < 0 {
+            // PDA can't directly sign transactions, so we need to transfer SOL via try_borrow_mut_lamports
+            let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
+            let recipient_account_info = ctx.accounts.recipient.to_account_info();
 
-                require!(tree_token_account_info.lamports() >= ext_amount_abs, ErrorCode::InsufficientFundsForWithdrawal);
+            let ext_amount_abs = -ext_amount as u64;
+            require!(tree_token_account_info.lamports() >= ext_amount_abs, ErrorCode::InsufficientFundsForWithdrawal);
 
-                **tree_token_account_info.try_borrow_mut_lamports()? -= ext_amount_abs;
-                **recipient_account_info.try_borrow_mut_lamports()? += ext_amount_abs;
-            }
+            **tree_token_account_info.try_borrow_mut_lamports()? -= ext_amount_abs;
+            **recipient_account_info.try_borrow_mut_lamports()? += ext_amount_abs;
         }
         
         if fee > 0 {
@@ -292,4 +295,10 @@ pub enum ErrorCode {
     InsufficientFundsForFee,
     #[msg("Proof is invalid")]
     InvalidProof,
+    #[msg("Invalid fee: fee must be less than MAX_ALLOWED_VAL (2^248).")]
+    InvalidFee,
+    #[msg("Invalid ext amount: absolute ext_amount must be less than MAX_ALLOWED_VAL (2^248).")]
+    InvalidExtAmount,
+    #[msg("Public amount calculation resulted in an overflow/underflow.")]
+    PublicAmountCalculationError,
 }

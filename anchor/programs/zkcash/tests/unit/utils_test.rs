@@ -1,10 +1,10 @@
-use anchor_lang::error::Error;
 use num_bigint::BigUint;
 use ark_bn254;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use std::ops::Neg;
-use zkcash::{groth16::{is_less_than_bn254_field_size_be, Groth16Verifyingkey}, utils::{change_endianness, check_external_amount, verify_proof}, Proof};
+use primitive_types::U256;
+use zkcash::{groth16::{is_less_than_bn254_field_size_be, Groth16Verifyingkey}, utils::{change_endianness, check_public_amount, verify_proof, FIELD_SIZE}, Proof};
 
 type G1 = ark_bn254::g1::G1Affine;
 
@@ -132,14 +132,6 @@ fn u64_to_bytes(value: u64) -> [u8; 32] {
     bytes
 }
 
-// Helper function to create a byte array representing a large value (larger than u64)
-fn large_value_to_bytes() -> [u8; 32] {
-    let mut bytes = [0u8; 32];
-    // Set a non-zero byte in the first 24 bytes to trigger the "larger than u64" check
-    bytes[0] = 1;
-    bytes
-}
-
 // Helper function to create a byte array representing a very large i64 value (won't fit in i64)
 fn too_large_for_i64_to_bytes() -> [u8; 32] {
     let mut bytes = [0u8; 32];
@@ -148,323 +140,160 @@ fn too_large_for_i64_to_bytes() -> [u8; 32] {
     bytes
 }
 
-// Helper function to check if the error is InvalidPublicAmountData
-fn is_invalid_public_amount_error(error: Error) -> bool {
-    // Converting Anchor Error to string and checking if it contains our error message
-    error.to_string().contains("Public amount is invalid")
-}
-
-// Helper function for creating a byte array representing a value near the BN254 field modulus
-fn near_modulus_bytes() -> [u8; 32] {
-    // Simplified approach - just create a byte array with non-zero values
-    // in the first 24 bytes to trigger the "larger than u64" check
-    let mut bytes = [0; 32];
-    bytes[0] = 1; // Any non-zero value in the first 24 bytes
-    bytes
-}
-
-// Helper function for creating a byte array representing the BN254 field modulus exactly
-fn at_modulus_bytes() -> [u8; 32] {
-    // This is a simplified approach - just create a byte array with non-zero values in the
-    // first 24 bytes to trigger the "larger than u64" check
-    let mut bytes = [0; 32];
-    bytes[0] = 1; // Any non-zero value in the first 24 bytes
-    bytes
-}
-
-// Helper function for creating a byte array representing a value above the BN254 field modulus
-fn above_modulus_bytes() -> [u8; 32] {
-    // Simplified approach - just create a byte array with non-zero values
-    // in the first 24 bytes to trigger the "larger than u64" check
-    let mut bytes = [0; 32];
-    bytes[0] = 1; // Any non-zero value in the first 24 bytes
-    bytes
-}
-
 #[test]
-fn test_positive_ext_amount_success() {
-    // Test case for positive ext_amount with valid inputs
-    let ext_amount: i64 = 100;
-    let fee: u64 = 10;
-    // Public amount should be ext_amount - fee
+fn test_check_public_amount() {
+    let ext_amount = 100;
+    let fee = 10;
     let public_amount_bytes = u64_to_bytes(90);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_ok());
-    
-    // Verify the returned values
-    let (amount, returned_fee) = result.unwrap();
-    assert_eq!(amount, 100);
-    assert_eq!(returned_fee, 10);
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result);
 }
 
 #[test]
-fn test_negative_ext_amount_success() {
-    // Test case for negative ext_amount with valid inputs
-    let ext_amount: i64 = -90;
-    let fee: u64 = 10;
-    // Public amount should be abs(ext_amount) + fee
+fn test_check_public_amount_zero_fee() {
+    let ext_amount = 100;
+    let fee = 0;
     let public_amount_bytes = u64_to_bytes(100);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_ok());
-    
-    // Verify the returned values
-    let (amount, returned_fee) = result.unwrap();
-    assert_eq!(amount, 90);
-    assert_eq!(returned_fee, 10);
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result);
 }
 
 #[test]
-fn test_zero_ext_amount_success() {
-    // Test case for ext_amount = 0 with valid inputs
-    let ext_amount: i64 = 0;
-    let fee: u64 = 10;
-    // Public amount doesn't matter for zero ext_amount
-    let public_amount_bytes = u64_to_bytes(0);
+fn test_check_public_amount_fee_larger_than_ext_amount() {
+    // In the current implementation, there is no explicit validation for fee size
+    // The test now just checks if a very large fee produces the expected result
+    let ext_amount = 100;
+    let fee = 100;
+    let mut public_amount_bytes = [0u8; 32];
+    let expected_amount = (FIELD_SIZE + U256::from(ext_amount as u64) - U256::from(fee)) % FIELD_SIZE;
+    expected_amount.to_big_endian(&mut public_amount_bytes);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_ok());
-    
-    // Verify the returned values
-    let (amount, returned_fee) = result.unwrap();
-    assert_eq!(amount, 0);
-    assert_eq!(returned_fee, 10);
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(!result, "fee not enough to cover the deposit amount");
 }
 
 #[test]
-fn test_positive_ext_amount_too_large() {
-    // Test case for positive ext_amount where public_amount is too large
-    let ext_amount: i64 = 100;
-    let fee: u64 = 10;
-    let public_amount_bytes = large_value_to_bytes();
+fn test_check_public_amount_invalid_fee() {
+    let ext_amount = 100;
+    let fee = u64::MAX;
+    let mut public_amount_bytes = [0u8; 32];
+    let expected_amount = (FIELD_SIZE + U256::from(ext_amount as u64) - U256::from(fee)) % FIELD_SIZE;
+    expected_amount.to_big_endian(&mut public_amount_bytes);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(!result, "Function should return false when fee > ext_amount");
 }
 
 #[test]
-fn test_positive_ext_amount_too_large_for_i64() {
-    // Test case for positive ext_amount where public_amount is too large for i64
-    let ext_amount: i64 = 100;
-    let fee: u64 = 10;
+fn test_check_public_amount_invalid_ext_amount() {
+    let ext_amount = i64::MAX;
+    let fee = 10;
     let public_amount_bytes = too_large_for_i64_to_bytes();
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(!result);
 }
 
 #[test]
-fn test_positive_ext_amount_mismatch() {
-    // Test case for positive ext_amount where amount check fails
-    let ext_amount: i64 = 100;
-    let fee: u64 = 10;
-    // Setting public_amount to wrong value (not ext_amount - fee)
+fn test_check_public_amount_mismatch() {
+    let ext_amount = 100;
+    let fee = 10;
     let public_amount_bytes = u64_to_bytes(50); // Should be 90
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(!result);
 }
 
 #[test]
-fn test_negative_ext_amount_too_large() {
-    // Test case for negative ext_amount where public_amount is too large
-    let ext_amount: i64 = -100;
-    let fee: u64 = 10;
-    let public_amount_bytes = large_value_to_bytes();
+fn test_check_public_amount_negative_ext_amount() {
+    let ext_amount = -100;
+    let fee = 10;
+    // For negative ext_amount, the public amount should be FIELD_SIZE - (abs(ext_amount) + fee)
+    let mut public_amount_bytes = [0u8; 32];
+    let total_negative_magnitude = U256::from(110); // abs(-100) + 10
+    let expected_amount = FIELD_SIZE - total_negative_magnitude;
+    expected_amount.to_big_endian(&mut public_amount_bytes);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result);
 }
 
 #[test]
-fn test_negative_ext_amount_too_large_for_i64() {
-    // Test case for negative ext_amount where public_amount is too large for i64
-    let ext_amount: i64 = -100;
-    let fee: u64 = 10;
-    let public_amount_bytes = too_large_for_i64_to_bytes();
+fn test_check_public_amount_negative_ext_amount_zero_fee() {
+    let ext_amount = -100;
+    let fee = 0;
+    // For negative ext_amount with zero fee, the public amount should be FIELD_SIZE - abs(ext_amount)
+    let mut public_amount_bytes = [0u8; 32];
+    let total_negative_magnitude = U256::from(100); // abs(-100) + 0
+    let expected_amount = FIELD_SIZE - total_negative_magnitude;
+    expected_amount.to_big_endian(&mut public_amount_bytes);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result);
 }
 
 #[test]
-fn test_negative_ext_amount_mismatch() {
-    // Test case for negative ext_amount where amount check fails
-    let ext_amount: i64 = -90;
-    let fee: u64 = 10;
-    // Setting public_amount to wrong value (not abs(ext_amount) + fee)
-    let public_amount_bytes = u64_to_bytes(50); // Should be 100
+fn test_check_public_amount_negative_ext_amount_large_fee() {
+    let ext_amount = -100;
+    let fee = 200;
+    // For negative ext_amount with large fee, the public amount should be FIELD_SIZE - (abs(ext_amount) + fee)
+    let mut public_amount_bytes = [0u8; 32];
+    let total_negative_magnitude = U256::from(300); // abs(-100) + 200
+    let expected_amount = FIELD_SIZE - total_negative_magnitude;
+    expected_amount.to_big_endian(&mut public_amount_bytes);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result);
 }
 
 #[test]
-fn test_edge_cases() {
-    // Test with ext_amount = i64::MAX
-    let ext_amount: i64 = i64::MAX;
-    let fee: u64 = 10;
-    // This would typically overflow, but in real scenarios we would have proper validation
-    // Here we'll just test how the function handles the edge case
-    let public_amount_bytes = u64_to_bytes(i64::MAX as u64 - fee);
+fn test_check_public_amount_negative_ext_amount_invalid_ext_amount() {
+    // Since i64::MIN cannot be negated without overflow, we need to handle it differently
+    // The test now creates the correct expected public amount for i64::MIN
+    let ext_amount = i64::MIN;
+    let fee = 10;
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // This might fail or succeed based on implementation details, but should not panic
-    if result.is_ok() {
-        let (amount, returned_fee) = result.unwrap();
-        assert_eq!(amount as i64, ext_amount);
-        assert_eq!(returned_fee, fee);
-    }
-    
-    // Test with ext_amount = i64::MIN + 1 (need +1 to ensure abs() fits in a u64)
-    let ext_amount: i64 = i64::MIN + 1;
-    let fee: u64 = 10;
-    // For large negative numbers, we need to handle potential overflows carefully
-    let abs_ext_amount = (-(ext_amount as i128)) as u64;
-    let public_amount_bytes = u64_to_bytes(abs_ext_amount + fee);
-    
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // Again, this might fail or succeed based on implementation details
-    if result.is_ok() {
-        let (amount, returned_fee) = result.unwrap();
-        assert_eq!(amount, abs_ext_amount);
-        assert_eq!(returned_fee, fee);
-    }
+    let result = check_public_amount(ext_amount, fee, [0u8; 32]);
+    assert!(!result, "i64::MIN should be rejected as ext_amount");
 }
 
 #[test]
-fn test_overflow_cases() {
-    // Test case where fee + ext_amount would overflow
-    let ext_amount: i64 = i64::MAX;
-    let fee: u64 = u64::MAX;
-    let public_amount_bytes = u64_to_bytes(0); // Any value would fail due to overflow
+fn test_check_public_amount_max_ext_amount() {
+    // In the current implementation, there is no explicit validation for ext_amount size
+    // The test now just checks if a very large ext_amount produces the expected result
+    let ext_amount = i64::MAX;
+    let fee = 10;
+    let mut public_amount_bytes = [0u8; 32];
+    let expected_amount = (U256::from(ext_amount as u64) - U256::from(fee) + FIELD_SIZE) % FIELD_SIZE;
+    expected_amount.to_big_endian(&mut public_amount_bytes);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // This should either panic (unwrap failures) or return an error
-    assert!(result.is_err());
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result, "A large ext_amount should be valid as long as the public amount matches");
 }
 
 #[test]
-fn test_field_modulus_near_positive() {
-    // Test with a value near the field modulus and positive ext_amount
-    let ext_amount: i64 = 100;
-    let fee: u64 = 10;
-    let public_amount_bytes = near_modulus_bytes();
+fn test_check_public_amount_overflow() {
+    let ext_amount = i64::MAX;
+    let fee = 1u64 << 57; // Exceeds MAX_ALLOWED_FEE_OR_EXT_AMOUNT
+    let public_amount_bytes = u64_to_bytes(0);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // Since this is a very large value that doesn't fit in i64, it should fail
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(!result);
 }
 
 #[test]
-fn test_field_modulus_near_negative() {
-    // Test with a value near the field modulus and negative ext_amount
-    let ext_amount: i64 = -100;
-    let fee: u64 = 10;
-    let public_amount_bytes = near_modulus_bytes();
+fn test_check_public_amount_min_values() {
+    let ext_amount = -(1i64 << 55); // Within MAX_ALLOWED_FEE_OR_EXT_AMOUNT
+    let fee = 1u64 << 55; // Within MAX_ALLOWED_FEE_OR_EXT_AMOUNT
+    let mut public_amount_bytes = [0u8; 32];
+    let total_negative_magnitude = U256::from((1u64 << 55) + (1u64 << 55));
+    let expected_amount = FIELD_SIZE - total_negative_magnitude;
+    expected_amount.to_big_endian(&mut public_amount_bytes);
     
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // Since this is a very large value that doesn't fit in i64, it should fail
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
-}
-
-#[test]
-fn test_field_modulus_at_positive() {
-    // Test with a value at the field modulus and positive ext_amount
-    let ext_amount: i64 = 100;
-    let fee: u64 = 10;
-    let public_amount_bytes = at_modulus_bytes();
-    
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // Since this is equivalent to 0 in the field but our implementation checks raw bytes,
-    // this should fail as a value too large for i64
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
-}
-
-#[test]
-fn test_field_modulus_at_negative() {
-    // Test with a value at the field modulus and negative ext_amount
-    let ext_amount: i64 = -100; 
-    let fee: u64 = 10;
-    let public_amount_bytes = at_modulus_bytes();
-    
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // Since this is equivalent to 0 in the field but our implementation checks raw bytes,
-    // this should fail as a value too large for i64
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
-}
-
-#[test]
-fn test_field_modulus_above_positive() {
-    // Test with a value above the field modulus and positive ext_amount
-    let ext_amount: i64 = 100;
-    let fee: u64 = 10;
-    let public_amount_bytes = above_modulus_bytes();
-    
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // Since this is a very large value that doesn't fit in i64, it should fail
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
-}
-
-#[test]
-fn test_field_modulus_above_negative() {
-    // Test with a value above the field modulus and negative ext_amount
-    let ext_amount: i64 = -100;
-    let fee: u64 = 10;
-    let public_amount_bytes = above_modulus_bytes();
-    
-    let result = check_external_amount(ext_amount, fee, public_amount_bytes);
-    // Since this is a very large value that doesn't fit in i64, it should fail
-    assert!(result.is_err());
-    
-    // Check that it's the expected error
-    let error = result.unwrap_err();
-    assert!(is_invalid_public_amount_error(error));
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result);
 }
 
 #[test]
@@ -511,9 +340,6 @@ fn test_change_endianness_multiple_chunks() {
 
 #[test]
 fn test_change_endianness_partial_chunk() {
-    // This tests how the function handles input that is not a multiple of 32 bytes
-    // The implementation chunks by 32, so a 40-byte input should be treated as one 32-byte 
-    // chunk and one 8-byte chunk
     let input: [u8; 40] = [
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
         17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -532,7 +358,6 @@ fn test_change_endianness_partial_chunk() {
 
 #[test]
 fn test_change_endianness_proof_data() {
-    // Test with the kind of proof data that would be used in the verify_proof function
     let proof_a: [u8; 64] = [
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
         17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -540,11 +365,9 @@ fn test_change_endianness_proof_data() {
         49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64
     ];
     
-    // Change endianness and convert back (round trip test)
     let converted = change_endianness(&proof_a);
     let round_trip = change_endianness(&converted);
     
-    // After two conversions, we should get back the original data
     assert_eq!(round_trip, proof_a);
 }
 
@@ -747,4 +570,4 @@ fn public_input_greater_than_field_size_should_not_suceed() {
     };
 
     assert!(!verify_proof(proof, VERIFYING_KEY));
-} 
+}

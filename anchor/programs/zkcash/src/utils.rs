@@ -1,11 +1,19 @@
-use anchor_lang::prelude::*;
-use crate::{ErrorCode, Proof};
+use crate::Proof;
 use crate::groth16::{Groth16Verifier, Groth16Verifyingkey};
 use ark_bn254;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use std::ops::Neg;
+use primitive_types::U256;
+use anchor_lang::prelude::*;
 
 type G1 = ark_bn254::g1::G1Affine;
+
+pub const FIELD_SIZE: U256 = U256([
+    0x43E1F593F0000001u64, 
+    0x2833E84879B97091u64, 
+    0xB85045B68181585Du64, 
+    0x30644E72E131A029u64,
+]);
 
 pub const VERIFYING_KEY: Groth16Verifyingkey =  Groth16Verifyingkey {
 	nr_pubinputs: 8,
@@ -72,65 +80,50 @@ pub const VERIFYING_KEY: Groth16Verifyingkey =  Groth16Verifyingkey {
 	]
 };
 
-// ext_amount is the amount the user wants to deposit or withdraw, it includes the fee.
-// public_amount is the absolute amount changed in the pool, and is always positive.
-// thus, if ext_amount is positive, public_amount = ext_amount - fee
-// if ext_amount is negative, public_amount = -ext_amount - fee
-pub fn check_external_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 32]) -> Result<(u64, u64)> {
-    // Check that the first 24 bytes are all 0 (for a u64 value)
-    for i in 0..24 {
-        if public_amount_bytes[i] != 0 {
-            msg!("Public amount is larger than u64.");
-            return Err(ErrorCode::InvalidPublicAmountData.into());
-        }
+/**
+ * Calculates the expected public amount from ext_amount and fee, then verifies if it matches
+ * the provided public_amount_bytes.
+ *
+ * @param ext_amount The external amount (can be positive or negative), as i64.
+ * @param fee The fee (non-negative), as u64.
+ * @param public_amount_bytes The public amount to verify against, as a 32-byte array (big-endian).
+ * @return Returns `true` if the calculated public amount matches public_amount_bytes AND 
+ *         the input ext_amount and fee are valid according to predefined limits. 
+ *         Returns `false` otherwise (either due to mismatch or invalid inputs for calculation).
+ */
+pub fn check_public_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 32]) -> bool {
+    if ext_amount == i64::MIN {
+        msg!("can't use i64::MIN as ext_amount"); 
+        return false;
     }
-    
-    // Extract the u64 value from the last 8 bytes (big-endian format)
-    let mut public_amount_bytes_u64 = [0u8; 8];
-    public_amount_bytes_u64.copy_from_slice(&public_amount_bytes[24..32]);
-    
-    // Convert from big-endian bytes to u64
-    let public_amount = u64::from_be_bytes(public_amount_bytes_u64);
-    
-    // Check if the value fits in i64
-    if public_amount > i64::MAX as u64 {
-        msg!("Public amount is larger than i64.");
-        return Err(ErrorCode::InvalidPublicAmountData.into());
-    }
-    
-    if ext_amount > 0 {
-        // Convert ext_amount to u64 safely
-        let ext_amount_u64: u64 = ext_amount.try_into().unwrap();
-        
-        //check amount
-        if public_amount.checked_add(fee).unwrap() != ext_amount_u64 {
-            msg!(
-                "Deposit invalid external amount (fee) {} != {}",
-                public_amount + fee,
-                ext_amount
-            );
-            return Err(ErrorCode::InvalidPublicAmountData.into());
-        }
-        Ok((ext_amount_u64, fee))
-    } else if ext_amount < 0 {
-        // Convert negative ext_amount to positive u64
-        let ext_amount_abs: u64 = u64::try_from(-ext_amount).unwrap();
-        
-        if public_amount != ext_amount_abs.checked_add(fee).unwrap() {
-            msg!(
-                "Withdrawal invalid external amount: {} != {}",
-                public_amount,
-                fee + ext_amount_abs
-            );
-            return Err(ErrorCode::InvalidPublicAmountData.into());
-        }
-        Ok((ext_amount_abs, fee))
-    } else if ext_amount == 0 {
-        Ok((0, fee))
+
+    let fee_u256 = U256::from(fee);
+    let ext_amount_u256 = if ext_amount >= 0 {
+        U256::from(ext_amount as u64)
     } else {
-        msg!("Invalid state checking external amount.");
-        Err(ErrorCode::InvalidPublicAmountData.into())
+        U256::from((-ext_amount) as u64)
+    };
+
+    // return false if the deposit amount is barely enough to cover the fee
+    if ext_amount >= 0 && ext_amount_u256 <= fee_u256 {
+        return false;
     }
+
+    let result_public_amount = if ext_amount >= 0 {
+        (ext_amount_u256 - fee_u256) % FIELD_SIZE
+    } else {
+        (FIELD_SIZE - ext_amount_u256 - fee_u256) % FIELD_SIZE
+    };
+
+    let provided_amount = U256::from_big_endian(&public_amount_bytes);
+
+    msg!("FIELD_SIZE: {}", FIELD_SIZE);
+    msg!("Calculated public amount: {}", result_public_amount);
+    msg!("Provided fee: {}", fee_u256);
+    msg!("Provided ext_amount: {}", ext_amount);
+    msg!("Provided public amount: {}", provided_amount);
+
+    result_public_amount == provided_amount
 }
 
 pub fn verify_proof(proof: Proof, verifying_key: Groth16Verifyingkey) -> bool {
