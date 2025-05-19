@@ -113,8 +113,19 @@ pub mod zkcash {
             **fee_recipient_account_info.try_borrow_mut_lamports()? += fee;
         }
 
+        let next_index_to_insert = tree_account.next_index;
         MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account);
         MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account);
+
+        ctx.accounts.commitment0.commitment = proof.output_commitments[0];
+        ctx.accounts.commitment0.encrypted_output = ext_data.encrypted_output1.clone();
+        ctx.accounts.commitment0.index = next_index_to_insert;
+        ctx.accounts.commitment0.bump = ctx.bumps.commitment0;
+        
+        ctx.accounts.commitment1.commitment = proof.output_commitments[1];
+        ctx.accounts.commitment1.encrypted_output = ext_data.encrypted_output2.clone();
+        ctx.accounts.commitment1.index = next_index_to_insert + 1;
+        ctx.accounts.commitment1.bump = ctx.bumps.commitment1;
         
         msg!("Transaction completed successfully");
         Ok(())
@@ -181,6 +192,24 @@ pub struct Transact<'info> {
         bump
     )]
     pub nullifier1: Account<'info, NullifierAccount>,
+    
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + std::mem::size_of::<CommitmentAccount>() + ext_data.encrypted_output1.len(),
+        seeds = [b"commitment0", proof.output_commitments[0].as_ref()],
+        bump
+    )]
+    pub commitment0: Account<'info, CommitmentAccount>,
+    
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + std::mem::size_of::<CommitmentAccount>() + ext_data.encrypted_output2.len(),
+        seeds = [b"commitment1", proof.output_commitments[1].as_ref()],
+        bump
+    )]
+    pub commitment1: Account<'info, CommitmentAccount>,
     
     #[account(
         mut,
@@ -262,6 +291,14 @@ pub struct TreeTokenAccount {
 pub struct NullifierAccount {
     /// This account's existence indicates that the nullifier has been used.
     /// No fields needed other than bump for PDA verification.
+    pub bump: u8,
+}
+
+#[account]
+pub struct CommitmentAccount {
+    pub commitment: [u8; 32],
+    pub encrypted_output: Vec<u8>,
+    pub index: u64,
     pub bump: u8,
 }
 
