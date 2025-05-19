@@ -9,3 +9,11 @@ anchor/**/*.rs.bk
 anchor/node_modules
 anchor/test-ledger
 anchor/.yarn
+indexer/node_modules
+indexer/dist
+indexer/.env
+indexer/.env.local
+indexer/.env.*.local
+indexer/.vscode
+indexer/.yarn
+indexer/.DS_Store

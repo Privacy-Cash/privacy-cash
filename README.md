@@ -78,3 +78,19 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ```bash
    anchor test
    ```
+
+### Indexer
+1. Navigate to the indexer directory:
+   ```bash
+   cd indexer
+   ```
+
+2. Install the dependencies:
+   ```bash
+   npm run
+   ```
+
+3. Start the indexer:
+   ```bash
+   tsc && npm start
+   ```
