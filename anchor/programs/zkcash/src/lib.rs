@@ -4,7 +4,7 @@ use anchor_lang::solana_program::hash::{hash};
 use ark_ff::PrimeField;
 use ark_bn254::Fr;
 
-declare_id!("F12PAMjHff2QHDwBTghE4BFzaaqNscKwno978La2vfQ5");
+declare_id!("BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh");
 
 pub mod merkle_tree;
 pub mod utils;

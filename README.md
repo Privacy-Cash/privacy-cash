@@ -79,6 +79,12 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    anchor test
    ```
 
+5. Deploy the program to devnet (assuming BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh is the program ID):
+   ```bash
+   solana-verify build
+   solana program deploy -u https://api.devnet.solana.com target/verifiable/zkcash.so --program-id BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh --keypair deploy-keypair.json
+   ```
+
 ### Indexer
 1. Navigate to the indexer directory:
    ```bash
