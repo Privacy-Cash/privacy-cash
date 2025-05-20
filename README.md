@@ -85,6 +85,11 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    solana program deploy -u https://api.devnet.solana.com target/verifiable/zkcash.so --program-id BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh --keypair deploy-keypair.json
    ```
 
+6. Initialize the program on devnet
+   ```base
+   npm run start initialize_program_devnet.ts
+   ```
+
 ### Indexer
 1. Navigate to the indexer directory:
    ```bash
