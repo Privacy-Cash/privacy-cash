@@ -3,6 +3,7 @@ import Router from '@koa/router';
 import bodyParser from 'koa-bodyparser';
 import { loadHistoricalPDAs, getAllCommitmentIds, getMerkleProof, getMerkleRoot } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
+import { commitmentTreeService } from './services/commitment-tree-service';
 
 // Define types for request bodies
 interface WebhookRequest {

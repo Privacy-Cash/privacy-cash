@@ -137,6 +137,10 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
     if (commitments.length > 0) {
       const addedCount = commitmentTreeService.addCommitments(commitments);
       console.log(`Added ${addedCount} commitments to the Merkle tree`);
+      const pendingCount = commitmentTreeService.getPendingCount();
+      if (pendingCount > 0) {
+        console.log(`${pendingCount} commitments are pending (waiting for gaps to be filled)`);
+      }
       console.log(`Current Merkle tree root: ${commitmentTreeService.getRoot()}`);
     }
     
@@ -172,7 +176,13 @@ export function processNewPDA(accountPubkey: string, accountData: Buffer): void 
         console.log(`Added new commitment ID: ${id} (index: ${parsedAccount.index})`);
         
         // Add the commitment to the Merkle tree
-        commitmentTreeService.addCommitment(id, parsedAccount.index);
+        const added = commitmentTreeService.addCommitment(id, parsedAccount.index);
+        if (added) {
+          const pendingCount = commitmentTreeService.getPendingCount();
+          if (pendingCount > 0) {
+            console.log(`${pendingCount} commitments are pending (waiting for gaps to be filled)`);
+          }
+        }
       }
     }
   } catch (error) {

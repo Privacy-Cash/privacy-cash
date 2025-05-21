@@ -101,7 +101,12 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    npm run
    ```
 
-3. Start the indexer:
+3. Running tests:
+   ```bash
+   npm test
+   ```
+
+4. Start the indexer:
    ```bash
    tsc && npm start
    ```
