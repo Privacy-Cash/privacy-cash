@@ -38,16 +38,24 @@ This service indexes commitment PDAs created by the ZKCash Solana program and pr
 
 1. Go to the [Helius Dashboard](https://dev.helius.xyz/dashboard) and create a new webhook.
 2. Use the following webhook settings:
-   - Webhook URL: `https://your-server.com/webhook`
+   - Webhook URL: `https://your-server.com/zkcash/webhook/transaction`
    - Account Addresses: Your program ID (`BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh`)
-   - Event Types: `accountData` 
+   - Transaction Type: `Raw` 
    - Network: `devnet` (or the network where your program is deployed)
+
+The webhook will:
+1. Listen for transactions involving your program
+2. Extract PDAs created from your 'transact' instruction
+3. Parse the commitment from these PDAs
+4. Add the commitment to the Merkle tree
 
 ## API Endpoints
 
 - `GET /health` - Health check endpoint
 - `GET /commitments` - Returns a list of all commitment IDs
-- `POST /webhook` - Webhook endpoint for Helius
+- `GET /merkle/root` - Returns the current Merkle tree root
+- `GET /merkle/proof/:commitment` - Returns the Merkle proof for a specific commitment
+- `POST /zkcash/webhook/transaction` - Webhook endpoint for Helius transactions
 
 ## Development
 
@@ -65,4 +73,4 @@ This indexer expects commitment accounts with the following Anchor-generated str
 - 8 bytes index
 - 1 byte bump
 
-Adjust the parsing in `src/services/pda-service.ts` if your account structure differs. 
+Adjust the parsing in `src/services/pda-service.ts` and `src/controllers/webhook.ts` if your account structure differs. 

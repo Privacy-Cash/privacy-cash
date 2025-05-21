@@ -4,6 +4,7 @@ import bodyParser from 'koa-bodyparser';
 import { loadHistoricalPDAs, getAllCommitmentIds, getMerkleProof, getMerkleRoot } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
 import { commitmentTreeService } from './services/commitment-tree-service';
+import { handleWebhook } from './controllers/webhook';
 
 // Define types for request bodies
 interface WebhookRequest {
@@ -60,35 +61,8 @@ router.get('/merkle/proof/:commitment', (ctx) => {
   }
 });
 
-// Webhook endpoint for new PDA updates
-router.post('/webhook', (ctx) => {
-  // TODO: Add authentication for webhooks
-  const { pubkey, accountData } = ctx.request.body as WebhookRequest;
-  
-  if (!pubkey || !accountData) {
-    ctx.status = 400;
-    ctx.body = {
-      error: 'Missing required fields: pubkey and accountData'
-    };
-    return;
-  }
-  
-  try {
-    // Process the new PDA
-    // In a production environment, you'd want to verify the data and add authentication
-    // processNewPDA(pubkey, Buffer.from(accountData, 'base64'));
-    
-    ctx.body = {
-      status: 'success',
-      message: 'Webhook received'
-    };
-  } catch (error) {
-    ctx.status = 500;
-    ctx.body = {
-      error: 'Failed to process webhook'
-    };
-  }
-});
+// Webhook endpoint for transaction updates
+router.post('/zkcash/webhook/transaction', handleWebhook);
 
 // Configure routes
 app.use(router.routes());
