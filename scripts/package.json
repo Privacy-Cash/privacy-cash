@@ -20,7 +20,6 @@
     "circomlib": "^2.0.5",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.7",
-    "ffjavascript": "^0.2.36",
     "hardhat": "^2.23.0",
     "snarkjs": "^0.7.5",
     "tmp-promise": "^3.0.2",
@@ -32,8 +31,10 @@
     "@ethersproject/sha2": "^5.8.0",
     "@lightprotocol/hasher.rs": "^0.2.1",
     "@types/bn.js": "^5.1.5",
+    "@types/snarkjs": "^0.7.9",
     "bigint-buffer": "^1.1.5",
     "bn.js": "^5.2.2",
-    "borsh": "^2.0.0"
+    "borsh": "^2.0.0",
+    "ffjavascript": "^0.3.1"
   }
 }

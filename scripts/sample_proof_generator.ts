@@ -124,28 +124,29 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   // https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L76-L97
   const input = {
     // Common transaction data
-    root: root,
-    inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
-    outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
-    publicAmount: publicAmount,
-    extDataHash: extDataHash,
+    root: root.toString(),
+    inputNullifier: inputNullifiers.map(n => n.toString()), 
+    outputCommitment: outputCommitments.map(c => c.toString()),
+    publicAmount: publicAmount.toString(),
+    extDataHash: extDataHash.toString(),
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
     inAmount: inputs.map(x => x.amount.toString(10)),
-    inPrivateKey: inputs.map(x => x.keypair.privkey),
+    inPrivateKey: inputs.map(x => typeof x.keypair.privkey === 'string' ? x.keypair.privkey : x.keypair.privkey.toString()),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
-    inPathIndices: inputMerklePathIndices,
-    inPathElements: inputMerklePathElements,
+    inPathIndices: inputMerklePathIndices.map(idx => idx.toString()),
+    inPathElements: inputMerklePathElements.map(path => path.map(el => el.toString())),
     
     // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
     outAmount: outputs.map(x => x.amount.toString(10)),
     outBlinding: outputs.map(x => x.blinding.toString(10)),
-    outPubkey: outputs.map(x => x.keypair.pubkey),
+    outPubkey: outputs.map(x => typeof x.keypair.pubkey === 'string' ? x.keypair.pubkey : x.keypair.pubkey.toString()),
   };
 
-  // Log the input object structure for debugging
-  console.log('Generating proof for inputs:', JSON.stringify(input, (key, value) => 
-    BN.isBN(value) ? `<BN: ${value.toString(16)}>` : value, 2));
+  // Log the input object structure for debugging after string conversion
+  console.log('Input object after string conversion:');
+  const stringifiedInput = JSON.stringify(input, null, 2);
+  console.log(stringifiedInput);
 
   // Path to the proving key files (wasm and zkey)
   // Try with both circuits to see which one works
@@ -351,28 +352,29 @@ async function generateSampleProofForWithdraw(): Promise<{
   // https://github.com/tornadocash/tornado-nova/blob/f9264eeffe48bf5e04e19d8086ee6ec58cdf0d9e/src/index.js#L76-L97
   const input = {
     // Common transaction data
-    root: root,
-    inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
-    outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
-    publicAmount: publicAmount,
-    extDataHash: extDataHash,
+    root: root.toString(),
+    inputNullifier: inputNullifiers.map(n => n.toString()), 
+    outputCommitment: outputCommitments.map(c => c.toString()),
+    publicAmount: publicAmount.toString(),
+    extDataHash: extDataHash.toString(),
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
     inAmount: inputs.map(x => x.amount.toString(10)),
-    inPrivateKey: inputs.map(x => x.keypair.privkey),
+    inPrivateKey: inputs.map(x => typeof x.keypair.privkey === 'string' ? x.keypair.privkey : x.keypair.privkey.toString()),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
-    inPathIndices: inputMerklePathIndices,
-    inPathElements: inputMerklePathElements,
+    inPathIndices: inputMerklePathIndices.map(idx => idx.toString()),
+    inPathElements: inputMerklePathElements.map(path => path.map(el => el.toString())),
     
     // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
     outAmount: outputs.map(x => x.amount.toString(10)),
     outBlinding: outputs.map(x => x.blinding.toString(10)),
-    outPubkey: outputs.map(x => x.keypair.pubkey),
+    outPubkey: outputs.map(x => typeof x.keypair.pubkey === 'string' ? x.keypair.pubkey : x.keypair.pubkey.toString()),
   };
 
-  // Log the input object structure for debugging
-  console.log('Generating proof for inputs:', JSON.stringify(input, (key, value) => 
-    BN.isBN(value) ? `<BN: ${value.toString(16)}>` : value, 2));
+  // Log the input object structure for debugging after string conversion
+  console.log('Input object after string conversion:');
+  const stringifiedInput = JSON.stringify(input, null, 2);
+  console.log(stringifiedInput);
 
   // Path to the proving key files (wasm and zkey)
   // Try with both circuits to see which one works
