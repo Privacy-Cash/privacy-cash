@@ -28,16 +28,20 @@ export async function handleWebhook(ctx: Context): Promise<void> {
     console.log('Headers:', JSON.stringify(ctx.request.headers, null, 2));
     console.log('Body:', JSON.stringify(ctx.request.body, null, 2));
     console.log('--------- WEBHOOK REQUEST END ---------');
+
+    const webhookApiKey = ctx.request.headers.authorization
+    if (!webhookApiKey || webhookApiKey !== process.env.HELIUS_WEBHOOK_AUTH_HEADER_API_KEY!) {
+      ctx.status = 403
+      ctx.body = {
+        message: "invalid signature. access forbidden"
+      }
+  
+      console.log("deposit request invalid", {headers: ctx.request.header, header: webhookApiKey})
+  
+      return
+    }
     
     const payload = ctx.request.body as HeliusRawTransactionWebhook;
-    
-    // Check if this is a valid webhook payload
-    if (!payload || !payload.signature) {
-      console.log('Invalid webhook payload: missing signature');
-      ctx.status = 400;
-      ctx.body = { success: false, error: 'Invalid webhook payload' };
-      return;
-    }
     
     console.log(`Received transaction webhook: ${payload.signature}`);
     
@@ -162,7 +166,7 @@ export async function handleWebhook(ctx: Context): Promise<void> {
     ctx.body = { success: true };
   } catch (error) {
     console.error('Error handling webhook:', error);
-    ctx.status = 500;
+    ctx.status = 200;
     ctx.body = { success: false, error: 'Internal server error' };
   }
 } 
