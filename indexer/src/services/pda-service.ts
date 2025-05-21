@@ -1,8 +1,24 @@
 import { AccountInfo, PublicKey } from '@solana/web3.js';
 import { PROGRAM_ID, connection } from '../config';
+import * as crypto from 'crypto';
+import bs58 from 'bs58';
 
 // In-memory storage for PDAs (in production, use a database)
 let pdaIdList: string[] = [];
+
+// Get the account discriminator for a given account type
+function getAccountDiscriminator(accountName: string): Buffer {
+  // In Anchor, the discriminator is the first 8 bytes of the SHA256 hash of the account name
+  return Buffer.from(
+    crypto.createHash('sha256')
+      .update(`account:${accountName}`)
+      .digest()
+      .slice(0, 8)
+  );
+}
+
+// The discriminator for CommitmentAccount
+const COMMITMENT_DISCRIMINATOR = getAccountDiscriminator('CommitmentAccount');
 
 // Commitment account layout (based on your Anchor program)
 interface CommitmentAccount {
@@ -17,6 +33,18 @@ interface CommitmentAccount {
  */
 function parseCommitmentAccount(accountInfo: AccountInfo<Buffer>): CommitmentAccount | null {
   try {
+    // Check if account data is large enough
+    if (accountInfo.data.length < 8) {
+      return null;
+    }
+
+    // Check if this is a CommitmentAccount by comparing the discriminator
+    const discriminator = accountInfo.data.slice(0, 8);
+    if (!discriminator.equals(COMMITMENT_DISCRIMINATOR)) {
+      console.log(`Account ${accountInfo.owner} is not a valid commitment account`);
+      return null;
+    }
+
     // Skip discriminator (8 bytes)
     const dataView = new DataView(accountInfo.data.buffer, accountInfo.data.byteOffset + 8);
 
@@ -62,9 +90,13 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
     // Query all accounts owned by your program
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [
-        // Filter for commitment accounts
-        // You may need to adjust this based on your account discriminator or data structure
-        // { dataSize: 41 }, // Example: Minimum size for a commitment account (adjust as needed)
+        // Filter for commitment accounts using the account discriminator
+        {
+          memcmp: {
+            offset: 0, // Discriminator is at the beginning of the account data
+            bytes: bs58.encode(COMMITMENT_DISCRIMINATOR)
+          }
+        }
       ],
     });
     
@@ -74,14 +106,15 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
     const ids: string[] = [];
     
     for (const { pubkey, account } of accounts) {
-      // Check if this is a commitment account by looking at account data structure
-      // This may require filtering by account discriminator if you have multiple account types
+      console.log(`Processing account ${pubkey} with data size ${account.data.length} bytes`);
       const parsedAccount = parseCommitmentAccount(account);
       
       if (parsedAccount) {
         const id = getCommitmentId(parsedAccount);
         ids.push(id);
         console.log(`Added commitment ID: ${id} (index: ${parsedAccount.index})`);
+      } else {
+        console.log(`Account ${pubkey} is not a valid commitment account`);
       }
     }
     
