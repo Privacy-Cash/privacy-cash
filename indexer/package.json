@@ -13,18 +13,23 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@koa/router": "^13.1.0",
+    "@lightprotocol/hasher.rs": "^0.2.1",
     "@solana/web3.js": "^1.98.2",
     "@types/bs58": "^4.0.4",
-    "@types/koa": "^2.13.12",
+    "@types/koa": "^2.15.0",
+    "@types/koa__router": "^12.0.4",
     "@types/koa-bodyparser": "^4.3.12",
     "@types/koa-router": "^7.4.8",
-    "@types/node": "^20.11.0",
     "bs58": "^6.0.0",
     "dotenv": "^16.5.0",
-    "koa": "^2.15.0",
+    "koa": "^2.16.1",
     "koa-bodyparser": "^4.4.1",
     "koa-router": "^12.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21"
   }
 }

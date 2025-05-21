@@ -2,6 +2,7 @@ import { AccountInfo, PublicKey } from '@solana/web3.js';
 import { PROGRAM_ID, connection } from '../config';
 import * as crypto from 'crypto';
 import bs58 from 'bs58';
+import { commitmentTreeService } from './commitment-tree-service';
 
 // In-memory storage for PDAs (in production, use a database)
 let pdaIdList: string[] = [];
@@ -87,6 +88,9 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
   console.log('Loading historical PDA data...');
   
   try {
+    // Initialize the commitment tree service first
+    await commitmentTreeService.initialize();
+    
     // Query all accounts owned by your program
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [
@@ -104,6 +108,7 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
     
     // Process each account to extract IDs
     const ids: string[] = [];
+    const commitments: Array<{hash: string, index: bigint}> = [];
     
     for (const { pubkey, account } of accounts) {
       console.log(`Processing account ${pubkey} with data size ${account.data.length} bytes`);
@@ -113,6 +118,12 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
         const id = getCommitmentId(parsedAccount);
         ids.push(id);
         console.log(`Added commitment ID: ${id} (index: ${parsedAccount.index})`);
+        
+        // Add to the commitments array for bulk insertion into the tree
+        commitments.push({
+          hash: id,
+          index: parsedAccount.index
+        });
       } else {
         console.log(`Account ${pubkey} is not a valid commitment account`);
       }
@@ -121,6 +132,13 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
     // Store the IDs in memory
     pdaIdList = ids;
     console.log(`Loaded ${pdaIdList.length} commitment IDs`);
+    
+    // Add all commitments to the tree at once
+    if (commitments.length > 0) {
+      const addedCount = commitmentTreeService.addCommitments(commitments);
+      console.log(`Added ${addedCount} commitments to the Merkle tree`);
+      console.log(`Current Merkle tree root: ${commitmentTreeService.getRoot()}`);
+    }
     
     return ids;
   } catch (error) {
@@ -152,6 +170,9 @@ export function processNewPDA(accountPubkey: string, accountData: Buffer): void 
       if (!pdaIdList.includes(id)) {
         pdaIdList.push(id);
         console.log(`Added new commitment ID: ${id} (index: ${parsedAccount.index})`);
+        
+        // Add the commitment to the Merkle tree
+        commitmentTreeService.addCommitment(id, parsedAccount.index);
       }
     }
   } catch (error) {
@@ -164,4 +185,40 @@ export function processNewPDA(accountPubkey: string, accountData: Buffer): void 
  */
 export function getAllCommitmentIds(): string[] {
   return pdaIdList;
+}
+
+/**
+ * Get a Merkle proof for a commitment
+ * @param commitmentId The commitment ID (hash)
+ * @returns The Merkle proof or null if not found
+ */
+export function getMerkleProof(commitmentId: string): {pathElements: string[], pathIndices: number[]} | null {
+  try {
+    // Get all commitments from the tree
+    const commitments = commitmentTreeService.getAllCommitments();
+    
+    // Find the index of the commitment
+    const index = commitments.indexOf(commitmentId);
+    if (index === -1) {
+      return null;
+    }
+    
+    // Get the proof from the tree
+    return commitmentTreeService.getMerkleProof(index);
+  } catch (error) {
+    console.error('Error getting Merkle proof:', error);
+    return null;
+  }
+}
+
+/**
+ * Get the current Merkle tree root
+ */
+export function getMerkleRoot(): string {
+  try {
+    return commitmentTreeService.getRoot();
+  } catch (error) {
+    console.error('Error getting Merkle root:', error);
+    return '';
+  }
 } 
