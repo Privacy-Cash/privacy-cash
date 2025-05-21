@@ -8,12 +8,11 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 // Default values
 const DEFAULT_PROGRAM_ID = 'BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh';
-const DEFAULT_PORT = 9001;
 const DEFAULT_RPC_ENDPOINT = 'https://api.devnet.solana.com';
 
 // Get environment variables or use defaults
 export const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID || DEFAULT_PROGRAM_ID);
-export const PORT = parseInt(process.env.PORT || DEFAULT_PORT.toString(), 10);
+export const PORT = 8888;
 export const RPC_ENDPOINT = process.env.RPC_ENDPOINT || DEFAULT_RPC_ENDPOINT;
 
 // Create a connection to the Solana network

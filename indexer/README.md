@@ -22,9 +22,6 @@ This service indexes commitment PDAs created by the ZKCash Solana program and pr
 
    # Program ID
    PROGRAM_ID=BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh
-
-   # Server Configuration
-   PORT=9001
    ```
 
 3. Build the project:
