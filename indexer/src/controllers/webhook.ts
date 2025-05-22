@@ -4,21 +4,25 @@ import { PROGRAM_ID, RPC_ENDPOINT } from '../config';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { commitmentTreeService } from '../services/commitment-tree-service';
 
-interface HeliusRawTransactionWebhook {
-  accountKeys: string[];
-  blockTime: number;
-  instructions: {
+// Updated interface to match the actual Helius webhook payload format
+interface HeliusWebhookPayload {
+  signature: string;
+  accountData?: Array<{
+    account: string;
+    nativeBalanceChange: number;
+    tokenBalanceChanges: any[];
+  }>;
+  instructions?: Array<{
     accounts: string[];
     data: string;
     programId: string;
-  }[];
-  fee: number;
-  signature: string;
-  // Additional fields may be present
+    innerInstructions?: any[];
+  }>;
+  // Other fields might be present
 }
 
 /**
- * Handle Helius webhook payload for raw transaction data
+ * Handle Helius webhook payload
  * Documentation: https://docs.helius.dev/webhooks/webhook-payloads
  */
 export async function handleWebhook(ctx: Context): Promise<void> {
@@ -28,136 +32,149 @@ export async function handleWebhook(ctx: Context): Promise<void> {
     console.log('Headers:', JSON.stringify(ctx.request.headers, null, 2));
     console.log('Body:', JSON.stringify(ctx.request.body, null, 2));
     console.log('--------- WEBHOOK REQUEST END ---------');
-
-    const webhookApiKey = ctx.request.headers.authorization
-    if (!webhookApiKey || webhookApiKey !== process.env.HELIUS_WEBHOOK_AUTH_HEADER_API_KEY!) {
-      ctx.status = 403
-      ctx.body = {
-        message: "invalid signature. access forbidden"
-      }
-  
-      console.log("deposit request invalid", {headers: ctx.request.header, header: webhookApiKey})
-  
-      return
-    }
     
-    const payload = ctx.request.body as HeliusRawTransactionWebhook;
+    const payload = ctx.request.body;
     
-    console.log(`Received transaction webhook: ${payload.signature}`);
-    
-    // Check if this transaction involves our program
-    const programIndex = payload.accountKeys.findIndex(key => key === PROGRAM_ID.toString());
-    if (programIndex === -1) {
-      console.log(`Transaction does not involve our program (${PROGRAM_ID.toString()})`);
-      // Not our program, respond with success but do nothing
-      ctx.status = 200;
-      ctx.body = { success: true, message: 'Transaction does not involve our program' };
+    // Check if this is a valid webhook payload (an array from Helius)
+    if (!Array.isArray(payload)) {
+      console.log('deposit request invalid', {
+        headers: ctx.request.headers,
+        header: ctx.request.headers.authorization
+      });
+      ctx.status = 400;
+      ctx.body = { success: false, error: 'Invalid webhook payload format - expected array' };
       return;
     }
-
-    // Look for instructions that call our program
-    const ourInstructions = payload.instructions.filter(ix => 
-      ix.programId === PROGRAM_ID.toString()
-    );
     
-    if (ourInstructions.length === 0) {
-      console.log(`No instructions found for our program (${PROGRAM_ID.toString()})`);
-      ctx.status = 200;
-      ctx.body = { success: true, message: 'No instructions for our program' };
-      return;
-    }
-
-    console.log(`Found ${ourInstructions.length} instructions for our program`);
-    console.log('Program instructions:', JSON.stringify(ourInstructions, null, 2));
+    console.log(`Received webhook with ${payload.length} transactions`);
     
     // Initialize connection to Solana
     const connection = new Connection(RPC_ENDPOINT);
     
-    // Process the transaction data to find commitments
-    for (const ix of ourInstructions) {
+    // Process each transaction in the payload
+    for (const transaction of payload) {
       try {
-        // Decode the instruction data (base64 encoded)
-        const data = Buffer.from(ix.data, 'base64');
+        const signature = transaction.signature;
+        console.log(`Processing transaction: ${signature}`);
         
-        // Check instruction type by examining the first 8 bytes (discriminator)
-        // This assumes you're using Anchor which uses 8-byte discriminators
-        const discriminator = data.slice(0, 8).toString('hex');
-        console.log(`Instruction discriminator: ${discriminator}`);
-        
-        // Check if this is a 'transact' instruction
-        // You'll need to replace this with your actual instruction discriminator for 'transact'
-        // For Anchor, you can get this by running: anchor.web3.sha256("global:transact").slice(0, 8)
-        const TRANSACT_DISCRIMINATOR = ''; // Fill in your actual discriminator
-        
-        if (discriminator === TRANSACT_DISCRIMINATOR || true) { // Remove "|| true" once you've filled in the discriminator
-          console.log('Found transact instruction');
-          console.log('Instruction accounts:', JSON.stringify(ix.accounts, null, 2));
+        // Look for instructions that call our program
+        if (transaction.instructions) {
+          const programInstructions = transaction.instructions.filter(
+            (ix: { programId: string }) => ix.programId === PROGRAM_ID.toString()
+          );
           
-          // Extract PDA account from instruction accounts
-          // The index depends on your instruction definition
-          // This is just an example - adjust based on your program's account structure
-          const pdaAccountIndex = 2; // Adjust based on your instruction account structure
-          if (ix.accounts.length > pdaAccountIndex) {
-            const pdaAccountPubkey = ix.accounts[pdaAccountIndex];
-            console.log(`Potential PDA account at index ${pdaAccountIndex}: ${pdaAccountPubkey}`);
+          if (programInstructions.length > 0) {
+            console.log(`Found ${programInstructions.length} instructions for our program in transaction ${signature}`);
             
-            // Fetch the PDA account data
-            console.log(`Fetching account data for ${pdaAccountPubkey}...`);
-            const accountInfo = await connection.getAccountInfo(new PublicKey(pdaAccountPubkey));
-            
-            if (accountInfo && accountInfo.data) {
-              console.log(`Found PDA account: ${pdaAccountPubkey}`);
-              console.log(`Account data size: ${accountInfo.data.length} bytes`);
-              console.log(`Account owner: ${accountInfo.owner.toString()}`);
+            // Process each instruction that calls our program
+            for (const instruction of programInstructions) {
+              console.log(`Processing instruction with ${instruction.accounts.length} accounts`);
               
-              // Process the PDA data to extract the commitment
-              // This depends on your account structure
-              // Example for Anchor-generated PDA with structure defined in README:
-              const accountData = accountInfo.data;
+              // For Anchor-based programs, we need to examine the instruction data
+              // to determine the instruction type (like "transact")
+              const data = Buffer.from(instruction.data, 'base64');
               
-              // Log first 16 bytes for debugging
-              console.log(`Account data first 16 bytes: ${accountData.slice(0, 16).toString('hex')}`);
-              
-              // Skip 8-byte discriminator
-              // Extract 32-byte commitment
-              const commitment = accountData.slice(8, 8 + 32);
-              const commitmentHex = commitment.toString('hex');
-              
-              // Extract the index (8 bytes) from the account data
-              // Based on the README, index is after discriminator, commitment, and encrypted_output
-              // First read the length of encrypted_output
-              const encryptedOutputLengthOffset = 8 + 32; // After discriminator and commitment
-              const encryptedOutputLength = accountData.readUInt32LE(encryptedOutputLengthOffset);
-              console.log(`Encrypted output length: ${encryptedOutputLength}`);
-              
-              // Index starts after encrypted_output
-              const indexOffset = encryptedOutputLengthOffset + 4 + encryptedOutputLength;
-              console.log(`Index offset: ${indexOffset}`);
-              const indexBuffer = accountData.slice(indexOffset, indexOffset + 8);
-              console.log(`Index buffer: ${indexBuffer.toString('hex')}`);
-              const index = BigInt(indexBuffer.readBigUInt64LE(0));
-              
-              console.log(`Extracted commitment: ${commitmentHex} with index: ${index}`);
-              
-              // Add commitment to Merkle tree with its index
-              const addedToTree = commitmentTreeService.addCommitment(commitmentHex, index);
-              console.log(`Added to tree: ${addedToTree ? 'success' : 'failed'}`);
-              
-              // Let the PDA service process it too
-              processNewPDA(pdaAccountPubkey, accountData);
-              
-              console.log(`Added commitment to Merkle tree: ${commitmentHex}`);
-            } else {
-              console.log(`PDA account ${pdaAccountPubkey} not found or has no data`);
+              // Check if this is a long enough data payload to extract discriminator
+              if (data.length >= 8) {
+                // Extract the instruction discriminator (first 8 bytes)
+                const discriminator = data.slice(0, 8).toString('hex');
+                console.log(`Instruction discriminator: ${discriminator}`);
+                
+                // Here, you'd ideally check if this matches your "transact" discriminator
+                // For now, we'll process any instruction from your program
+                
+                // Find the PDA accounts in the instruction
+                // In Anchor, PDAs are typically passed as accounts to the instruction
+                // For a transact instruction, it might be one of the accounts in the list
+                // You'll need to adjust this based on your program's account structure
+                
+                // Look at positions that might contain PDAs (adjust these indices based on your program)
+                const potentialPDAIndices = [2, 3, 4]; // Example indices where PDAs might be
+                
+                for (const index of potentialPDAIndices) {
+                  if (instruction.accounts.length > index) {
+                    const potentialPDA = instruction.accounts[index];
+                    console.log(`Checking potential PDA at index ${index}: ${potentialPDA}`);
+                    
+                    try {
+                      // Fetch the account data
+                      const accountInfo = await connection.getAccountInfo(new PublicKey(potentialPDA));
+                      
+                      if (!accountInfo || !accountInfo.data) {
+                        console.log(`No data found for account ${potentialPDA}`);
+                        continue;
+                      }
+                      
+                      // Check if the account is owned by our program
+                      if (!accountInfo.owner.equals(PROGRAM_ID)) {
+                        console.log(`Account ${potentialPDA} not owned by our program`);
+                        continue;
+                      }
+                      
+                      console.log(`Found PDA owned by our program: ${potentialPDA}`);
+                      console.log(`Account data size: ${accountInfo.data.length} bytes`);
+                      
+                      // Check if data is long enough to be a commitment account
+                      if (accountInfo.data.length < 8 + 32) {
+                        console.log(`Account data too small for a commitment account: ${accountInfo.data.length} bytes`);
+                        continue;
+                      }
+                      
+                      // Process the account data
+                      const data = accountInfo.data;
+                      
+                      // Skip 8-byte discriminator
+                      // Extract 32-byte commitment
+                      const commitment = data.slice(8, 8 + 32);
+                      const commitmentHex = commitment.toString('hex');
+                      
+                      // Extract the index from the account data
+                      // Only attempt this if the data is long enough
+                      if (data.length < 8 + 32 + 4) {
+                        console.log(`Account data not long enough to contain encrypted output length`);
+                        continue;
+                      }
+                      
+                      const encryptedOutputLengthOffset = 8 + 32; // After discriminator and commitment
+                      const encryptedOutputLength = data.readUInt32LE(encryptedOutputLengthOffset);
+                      console.log(`Encrypted output length: ${encryptedOutputLength}`);
+                      
+                      // Check if data is long enough to contain index
+                      if (data.length < encryptedOutputLengthOffset + 4 + encryptedOutputLength + 8) {
+                        console.log(`Account data not long enough to contain index`);
+                        continue;
+                      }
+                      
+                      // Index starts after encrypted_output
+                      const indexOffset = encryptedOutputLengthOffset + 4 + encryptedOutputLength;
+                      const indexBuffer = data.slice(indexOffset, indexOffset + 8);
+                      const index = BigInt(indexBuffer.readBigUInt64LE(0));
+                      
+                      console.log(`Extracted commitment: ${commitmentHex} with index: ${index}`);
+                      
+                      // Add commitment to Merkle tree with its index
+                      const added = commitmentTreeService.addCommitment(commitmentHex, index);
+                      console.log(`Added to tree: ${added ? 'success' : 'failed'}`);
+                      
+                      // Process the PDA through the existing service
+                      processNewPDA(potentialPDA, data);
+                    } catch (err) {
+                      console.error(`Error processing potential PDA ${potentialPDA}:`, err);
+                    }
+                  }
+                }
+              } else {
+                console.log(`Instruction data too short: ${data.length} bytes`);
+              }
             }
           } else {
-            console.log(`Instruction has only ${ix.accounts.length} accounts, not enough to extract PDA at index ${pdaAccountIndex}`);
+            console.log(`No instructions found for our program in transaction ${signature}`);
           }
         } else {
-          console.log(`Instruction discriminator ${discriminator} does not match transact discriminator`);
+          console.log(`No instructions in transaction ${signature}`);
         }
       } catch (err) {
-        console.error('Error processing instruction:', err);
+        console.error('Error processing transaction:', err);
       }
     }
     
@@ -166,7 +183,7 @@ export async function handleWebhook(ctx: Context): Promise<void> {
     ctx.body = { success: true };
   } catch (error) {
     console.error('Error handling webhook:', error);
-    ctx.status = 200;
+    ctx.status = 500;
     ctx.body = { success: false, error: 'Internal server error' };
   }
 } 

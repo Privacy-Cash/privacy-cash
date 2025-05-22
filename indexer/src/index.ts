@@ -16,6 +16,22 @@ interface WebhookRequest {
 const app = new Koa();
 const router = new Router();
 
+// Add global error handling
+app.use(async (ctx, next) => {
+  try {
+    await next();
+  } catch (err) {
+    console.error('Unhandled error in request:', err);
+    ctx.status = 500;
+    ctx.body = { 
+      success: false, 
+      error: 'Internal server error',
+      path: ctx.path,
+      method: ctx.method
+    };
+  }
+});
+
 // Configure middleware
 app.use(bodyParser());
 
@@ -64,6 +80,34 @@ router.get('/merkle/proof/:commitment', (ctx) => {
 // Webhook endpoint for transaction updates
 router.post('/zkcash/webhook/transaction', handleWebhook);
 
+// Simple test endpoint that always returns 200
+router.all('/test200', (ctx) => {
+  ctx.status = 200;
+  ctx.body = {
+    message: 'This endpoint always returns 200 OK',
+    method: ctx.method,
+    path: ctx.path,
+    headers: ctx.headers,
+    body: ctx.request.body
+  };
+});
+
+// Special test endpoint for Helius
+router.post('/helius-test', (ctx) => {
+  console.log('Helius test endpoint hit!');
+  console.log('Headers:', JSON.stringify(ctx.request.headers, null, 2));
+  console.log('Body:', JSON.stringify(ctx.request.body, null, 2));
+  console.log('Method:', ctx.method);
+  
+  // Always return success
+  ctx.status = 200;
+  ctx.body = {
+    success: true,
+    message: 'Helius test received',
+    receivedBody: ctx.request.body
+  };
+});
+
 // Configure routes
 app.use(router.routes());
 app.use(router.allowedMethods());
@@ -92,7 +136,7 @@ app.use(router.allowedMethods());
       console.log(`Loaded ${ids.length} commitment IDs`);
     }, 15 * 60 * 1000); // 15 minutes
     
-    console.log('Ready to receive webhooks at /webhook');
+    console.log('Ready to receive webhooks at /zkcash/webhook/transaction');
   } catch (error) {
     console.error('Failed to initialize:', error);
     process.exit(1);
