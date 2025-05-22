@@ -1,6 +1,26 @@
 import { Context } from 'koa';
-import { reloadCommitmentsAndUxtoInternal } from '../services/pda-service';
-import { PROGRAM_ID } from '../config';
+import { loadHistoricalPDAs } from '../services/pda-service';
+import { PROGRAM_ID, RPC_ENDPOINT } from '../config';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { commitmentTreeService } from '../services/commitment-tree-service';
+import { userUxtosService } from '../services/user-uxtos-service';
+
+// Updated interface to match the actual Helius webhook payload format
+interface HeliusWebhookPayload {
+  signature: string;
+  accountData?: Array<{
+    account: string;
+    nativeBalanceChange: number;
+    tokenBalanceChanges: any[];
+  }>;
+  instructions?: Array<{
+    accounts: string[];
+    data: string;
+    programId: string;
+    innerInstructions?: any[];
+  }>;
+  // Other fields might be present
+}
 
 // Flag to track if a reload is already in progress
 let reloadInProgress = false;
@@ -83,9 +103,31 @@ export function reloadCommitmentsAndUxto(): void {
   reloadInProgress = true;
   console.log('Starting PDA reload...');
   
-  reloadCommitmentsAndUxtoInternal()
+  loadHistoricalPDAs()
     .then(() => {
       console.log('PDA reload completed successfully');
+      
+      // Log the current state of encrypted outputs
+      const count = userUxtosService.getEncryptedOutputCount();
+      console.log(`---------- ENCRYPTED OUTPUTS STATE ----------`);
+      console.log(`Total encrypted outputs: ${count}`);
+      
+      if (count > 0) {
+        // Show last 10 outputs
+        const outputs = userUxtosService.getAllEncryptedOutputs();
+        const lastOutputs = outputs.slice(Math.max(0, outputs.length - 10));
+        console.log(`Last ${lastOutputs.length} encrypted outputs:`);
+        lastOutputs.forEach((output, i) => {
+          const index = outputs.length - lastOutputs.length + i;
+          console.log(`  [${index}] ${output.substring(0, 16)}...`);
+        });
+        
+        if (count > 10) {
+          console.log(`... and ${count - 10} more at the beginning`);
+        }
+      }
+      console.log(`-------------------------------------------`);
+      
       reloadInProgress = false;
       
       // If another reload was requested while this one was running, trigger it now

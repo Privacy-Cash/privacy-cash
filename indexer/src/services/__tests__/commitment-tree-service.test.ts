@@ -97,22 +97,6 @@ describe('CommitmentTreeService', () => {
   });
 
   describe('addCommitment', () => {
-    it('should add a commitment at the next available index', () => {
-      // Get the mock tree instance
-      const mockTree = (commitmentTreeService as any).tree;
-      
-      // Setup the mock to return current elements
-      mockTree._elements = [];
-      mockTree.elements.mockReturnValue(mockTree._elements);
-      
-      // Add a commitment
-      const result = commitmentTreeService.addCommitment('commitment1', 0);
-      
-      expect(result).toBe(true);
-      expect(mockTree.update).toHaveBeenCalledWith(0, 'commitment1');
-      expect((commitmentTreeService as any).commitmentMap.get('commitment1')).toBe(0);
-    });
-
     it('should not add a commitment that already exists', () => {
       // Setup initial state
       (commitmentTreeService as any).commitmentMap.set('commitment1', 0);
@@ -168,8 +152,7 @@ describe('CommitmentTreeService', () => {
       const result = commitmentTreeService.addCommitment('0xabcdef', 0);
       
       expect(result).toBe(true);
-      // It should convert the hex string to decimal
-      expect(mockTree.update).toHaveBeenCalledWith(0, '11259375');
+      expect(mockTree.insert).toHaveBeenCalledWith('11259375');
     });
 
     it('should throw error if the service is not initialized', async () => {

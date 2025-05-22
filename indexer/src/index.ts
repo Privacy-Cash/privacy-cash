@@ -1,8 +1,9 @@
 import Koa from 'koa';
 import Router from '@koa/router';
 import bodyParser from 'koa-bodyparser';
-import { getAllCommitmentIds, getMerkleProof, getMerkleRoot } from './services/pda-service';
+import { loadHistoricalPDAs, getAllCommitmentIds, getMerkleProof, getMerkleRoot, hasEncryptedOutput, getAllEncryptedOutputs } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
+import { commitmentTreeService } from './services/commitment-tree-service';
 import { handleWebhook, reloadCommitmentsAndUxto } from './controllers/webhook';
 
 // Define types for request bodies
@@ -74,6 +75,25 @@ router.get('/merkle/proof/:commitment', (ctx) => {
       error: 'Commitment not found in the Merkle tree'
     };
   }
+});
+
+// Check if an encrypted output exists
+router.get('/uxtos/check/:encryptedOutput', (ctx) => {
+  const encryptedOutput = ctx.params.encryptedOutput;
+  const exists = hasEncryptedOutput(encryptedOutput);
+  
+  ctx.body = {
+    exists
+  };
+});
+
+// Get all encrypted outputs
+router.get('/uxtos', (ctx) => {
+  const encryptedOutputs = getAllEncryptedOutputs();
+  ctx.body = {
+    count: encryptedOutputs.length,
+    encrypted_outputs: encryptedOutputs
+  };
 });
 
 // Webhook endpoint for transaction updates

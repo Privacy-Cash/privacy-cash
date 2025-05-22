@@ -3,6 +3,7 @@ import { PROGRAM_ID, connection } from '../config';
 import * as crypto from 'crypto';
 import bs58 from 'bs58';
 import { commitmentTreeService } from './commitment-tree-service';
+import { userUxtosService } from './user-uxtos-service';
 
 // In-memory storage for PDAs (in production, use a database)
 let pdaIdList: string[] = [];
@@ -84,12 +85,15 @@ function getCommitmentId(account: CommitmentAccount): string {
 /**
  * Load all historical PDAs from the Solana blockchain
  */
-export async function reloadCommitmentsAndUxtoInternal(): Promise<string[]> {
+export async function loadHistoricalPDAs(): Promise<string[]> {
   console.log('Loading historical PDA data...');
   
   try {
     // Initialize the commitment tree service first
     await commitmentTreeService.initialize();
+    
+    // Initialize the user UXTOs service
+    userUxtosService.initialize();
     
     // Query all accounts owned by your program
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
@@ -124,6 +128,9 @@ export async function reloadCommitmentsAndUxtoInternal(): Promise<string[]> {
           hash: id,
           index: parsedAccount.index
         });
+        
+        // Add the encrypted output to the user UXTOs service
+        userUxtosService.addEncryptedOutput(parsedAccount.encrypted_output);
       } else {
         console.log(`Account ${pubkey} is not a valid commitment account`);
       }
@@ -139,6 +146,8 @@ export async function reloadCommitmentsAndUxtoInternal(): Promise<string[]> {
       console.log(`Added ${addedCount} commitments to the Merkle tree`);
       console.log(`Current Merkle tree root: ${commitmentTreeService.getRoot()}`);
     }
+    
+    console.log(`Total encrypted outputs in hashset: ${userUxtosService.getEncryptedOutputCount()}`);
     
     return ids;
   } catch (error) {
@@ -178,6 +187,9 @@ export function processNewPDA(accountPubkey: string, accountData: Buffer): void 
         } else {
           console.log(`Failed to add commitment at index ${parsedAccount.index}`);
         }
+        
+        // Add the encrypted output to the user UXTOs service
+        userUxtosService.addEncryptedOutput(parsedAccount.encrypted_output);
       }
     }
   } catch (error) {
@@ -225,5 +237,32 @@ export function getMerkleRoot(): string {
   } catch (error) {
     console.error('Error getting Merkle root:', error);
     return '';
+  }
+}
+
+/**
+ * Check if an encrypted output exists
+ * @param encryptedOutput The encrypted output to check
+ * @returns true if the encrypted output exists, false otherwise
+ */
+export function hasEncryptedOutput(encryptedOutput: Uint8Array | string): boolean {
+  try {
+    return userUxtosService.hasEncryptedOutput(encryptedOutput);
+  } catch (error) {
+    console.error('Error checking encrypted output:', error);
+    return false;
+  }
+}
+
+/**
+ * Get all encrypted outputs
+ * @returns Array of encrypted outputs
+ */
+export function getAllEncryptedOutputs(): string[] {
+  try {
+    return userUxtosService.getAllEncryptedOutputs();
+  } catch (error) {
+    console.error('Error getting all encrypted outputs:', error);
+    return [];
   }
 } 
