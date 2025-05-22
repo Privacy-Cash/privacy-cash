@@ -88,79 +88,75 @@ export async function handleWebhook(ctx: Context): Promise<void> {
                 // For a transact instruction, it might be one of the accounts in the list
                 // You'll need to adjust this based on your program's account structure
                 
-                // Look at positions that might contain PDAs (adjust these indices based on your program)
-                const potentialPDAIndices = [2, 3, 4]; // Example indices where PDAs might be
-                
-                for (const index of potentialPDAIndices) {
-                  if (instruction.accounts.length > index) {
-                    const potentialPDA = instruction.accounts[index];
-                    console.log(`Checking potential PDA at index ${index}: ${potentialPDA}`);
+                // Check all accounts in the instruction, not just specific indices
+                for (let index = 0; index < instruction.accounts.length; index++) {
+                  const potentialPDA = instruction.accounts[index];
+                  console.log(`Checking account at index ${index}: ${potentialPDA}`);
+                  
+                  try {
+                    // Fetch the account data
+                    const accountInfo = await connection.getAccountInfo(new PublicKey(potentialPDA));
                     
-                    try {
-                      // Fetch the account data
-                      const accountInfo = await connection.getAccountInfo(new PublicKey(potentialPDA));
-                      
-                      if (!accountInfo || !accountInfo.data) {
-                        console.log(`No data found for account ${potentialPDA}`);
-                        continue;
-                      }
-                      
-                      // Check if the account is owned by our program
-                      if (!accountInfo.owner.equals(PROGRAM_ID)) {
-                        console.log(`Account ${potentialPDA} not owned by our program`);
-                        continue;
-                      }
-                      
-                      console.log(`Found PDA owned by our program: ${potentialPDA}`);
-                      console.log(`Account data size: ${accountInfo.data.length} bytes`);
-                      
-                      // Check if data is long enough to be a commitment account
-                      if (accountInfo.data.length < 8 + 32) {
-                        console.log(`Account data too small for a commitment account: ${accountInfo.data.length} bytes`);
-                        continue;
-                      }
-                      
-                      // Process the account data
-                      const data = accountInfo.data;
-                      
-                      // Skip 8-byte discriminator
-                      // Extract 32-byte commitment
-                      const commitment = data.slice(8, 8 + 32);
-                      const commitmentHex = commitment.toString('hex');
-                      
-                      // Extract the index from the account data
-                      // Only attempt this if the data is long enough
-                      if (data.length < 8 + 32 + 4) {
-                        console.log(`Account data not long enough to contain encrypted output length`);
-                        continue;
-                      }
-                      
-                      const encryptedOutputLengthOffset = 8 + 32; // After discriminator and commitment
-                      const encryptedOutputLength = data.readUInt32LE(encryptedOutputLengthOffset);
-                      console.log(`Encrypted output length: ${encryptedOutputLength}`);
-                      
-                      // Check if data is long enough to contain index
-                      if (data.length < encryptedOutputLengthOffset + 4 + encryptedOutputLength + 8) {
-                        console.log(`Account data not long enough to contain index`);
-                        continue;
-                      }
-                      
-                      // Index starts after encrypted_output
-                      const indexOffset = encryptedOutputLengthOffset + 4 + encryptedOutputLength;
-                      const indexBuffer = data.slice(indexOffset, indexOffset + 8);
-                      const index = BigInt(indexBuffer.readBigUInt64LE(0));
-                      
-                      console.log(`Extracted commitment: ${commitmentHex} with index: ${index}`);
-                      
-                      // Add commitment to Merkle tree with its index
-                      const added = commitmentTreeService.addCommitment(commitmentHex, index);
-                      console.log(`Added to tree: ${added ? 'success' : 'failed'}`);
-                      
-                      // Process the PDA through the existing service
-                      processNewPDA(potentialPDA, data);
-                    } catch (err) {
-                      console.error(`Error processing potential PDA ${potentialPDA}:`, err);
+                    if (!accountInfo || !accountInfo.data) {
+                      console.log(`No data found for account ${potentialPDA}`);
+                      continue;
                     }
+                    
+                    // Check if the account is owned by our program
+                    if (!accountInfo.owner.equals(PROGRAM_ID)) {
+                      console.log(`Account ${potentialPDA} not owned by our program`);
+                      continue;
+                    }
+                    
+                    console.log(`Found account owned by our program: ${potentialPDA}`);
+                    console.log(`Account data size: ${accountInfo.data.length} bytes`);
+                    
+                    // Check if data is long enough to be a commitment account
+                    if (accountInfo.data.length < 8 + 32) {
+                      console.log(`Account data too small for a commitment account: ${accountInfo.data.length} bytes`);
+                      continue;
+                    }
+                    
+                    // Process the account data
+                    const data = accountInfo.data;
+                    
+                    // Skip 8-byte discriminator
+                    // Extract 32-byte commitment
+                    const commitment = data.slice(8, 8 + 32);
+                    const commitmentHex = commitment.toString('hex');
+                    
+                    // Extract the index from the account data
+                    // Only attempt this if the data is long enough
+                    if (data.length < 8 + 32 + 4) {
+                      console.log(`Account data not long enough to contain encrypted output length`);
+                      continue;
+                    }
+                    
+                    const encryptedOutputLengthOffset = 8 + 32; // After discriminator and commitment
+                    const encryptedOutputLength = data.readUInt32LE(encryptedOutputLengthOffset);
+                    console.log(`Encrypted output length: ${encryptedOutputLength}`);
+                    
+                    // Check if data is long enough to contain index
+                    if (data.length < encryptedOutputLengthOffset + 4 + encryptedOutputLength + 8) {
+                      console.log(`Account data not long enough to contain index`);
+                      continue;
+                    }
+                    
+                    // Index starts after encrypted_output
+                    const indexOffset = encryptedOutputLengthOffset + 4 + encryptedOutputLength;
+                    const indexBuffer = data.slice(indexOffset, indexOffset + 8);
+                    const index = BigInt(indexBuffer.readBigUInt64LE(0));
+                    
+                    console.log(`Extracted commitment: ${commitmentHex} with index: ${index}`);
+                    
+                    // Add commitment to Merkle tree with its index
+                    const added = commitmentTreeService.addCommitment(commitmentHex, index);
+                    console.log(`Added to tree: ${added ? 'success' : 'failed'}`);
+                    
+                    // Process the PDA through the existing service
+                    processNewPDA(potentialPDA, data);
+                  } catch (err) {
+                    console.error(`Error processing potential PDA ${potentialPDA}:`, err);
                   }
                 }
               } else {

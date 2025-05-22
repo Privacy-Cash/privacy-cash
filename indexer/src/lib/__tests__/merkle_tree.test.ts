@@ -111,6 +111,21 @@ describe('MerkleTree', () => {
       expect(elements[initialLength]).toBe('newElement');
     });
 
+    it('should throw an error for index exceeding array length', () => {
+      // Test the boundary condition fix for update method
+      const tree = new MerkleTree(3, lightWasm, ['elem0', 'elem1']);
+      
+      // This should throw (exceeds current length)
+      expect(() => {
+        tree.update(3, 'invalidElement');
+      }).toThrow('Insert index out of bounds');
+      
+      // This should be fine (at current length)
+      expect(() => {
+        tree.update(2, 'validElement');
+      }).not.toThrow();
+    });
+
     it('should handle updates in non-sequential order', () => {
       // Create a tree with 4 elements
       const tree = new MerkleTree(3, lightWasm, ['initial0', 'initial1', 'initial2', 'initial3']);

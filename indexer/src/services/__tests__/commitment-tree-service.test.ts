@@ -110,7 +110,7 @@ describe('CommitmentTreeService', () => {
       const result = commitmentTreeService.addCommitment('commitment1', 0);
       
       expect(result).toBe(true);
-      expect(mockTree.insert).toHaveBeenCalledWith('commitment1');
+      expect(mockTree.update).toHaveBeenCalledWith(0, 'commitment1');
       expect((commitmentTreeService as any).commitmentMap.get('commitment1')).toBe(0);
     });
 
@@ -122,8 +122,8 @@ describe('CommitmentTreeService', () => {
       const result = commitmentTreeService.addCommitment('commitment1', 1);
       
       expect(result).toBe(false);
-      // Mock tree's insert should not be called
-      expect((commitmentTreeService as any).tree.insert).not.toHaveBeenCalled();
+      // Mock tree's update should not be called
+      expect((commitmentTreeService as any).tree.update).not.toHaveBeenCalled();
     });
 
     it('should update an existing index if commitment is for a past index', () => {
@@ -154,7 +154,7 @@ describe('CommitmentTreeService', () => {
       const result = commitmentTreeService.addCommitment('commitment1', 2);
       
       expect(result).toBe(true);
-      expect(mockTree.insert).not.toHaveBeenCalled(); // Should not insert yet
+      expect(mockTree.update).not.toHaveBeenCalled(); // Should not update yet
       expect((commitmentTreeService as any).pendingCommitments).toHaveLength(1);
       expect((commitmentTreeService as any).pendingCommitments[0]).toEqual({
         hash: 'commitment1',
@@ -176,7 +176,7 @@ describe('CommitmentTreeService', () => {
       
       expect(result).toBe(true);
       // It should convert the hex string to decimal
-      expect(mockTree.insert).toHaveBeenCalledWith('11259375');
+      expect(mockTree.update).toHaveBeenCalledWith(0, '11259375');
     });
 
     it('should throw error if the service is not initialized', async () => {
@@ -267,57 +267,56 @@ describe('CommitmentTreeService', () => {
       // Get the mock tree instance
       const mockTree = (commitmentTreeService as any).tree;
       
-      // Setup the mock to return empty elements initially
-      mockTree._elements = [];
-      mockTree.elements.mockReturnValue(mockTree._elements);
-      
-      // Add commitments with gaps
-      (commitmentTreeService as any).pendingCommitments = [
-        { hash: 'commitment2', index: 2, decimalValue: 'commitment2' },
-        { hash: 'commitment1', index: 1, decimalValue: 'commitment1' },
-        { hash: 'commitment3', index: 3, decimalValue: 'commitment3' }
-      ];
-      
-      // Add commitment at index 0 to start filling gaps
-      commitmentTreeService.addCommitment('commitment0', 0);
-      
-      // Manually simulate what addCommitment would do
+      // Setup initial state with pending commitments
       mockTree._elements = ['commitment0', 'commitment1'];
       mockTree.elements.mockReturnValue(mockTree._elements);
       
-      // Manually update the commitmentMap
-      (commitmentTreeService as any).commitmentMap.set('commitment0', 0);
-      (commitmentTreeService as any).commitmentMap.set('commitment1', 1);
-      
-      // Manually update pendingCommitments after commitment1 is processed
       (commitmentTreeService as any).pendingCommitments = [
-        { hash: 'commitment2', index: 2, decimalValue: 'commitment2' },
-        { hash: 'commitment3', index: 3, decimalValue: 'commitment3' }
+        { hash: 'commitment2', index: 2, decimalValue: 'commitment2' }
       ];
       
-      // After adding commitment0, should process commitment1
-      expect(mockTree._elements).toEqual(['commitment0', 'commitment1']);
-      expect((commitmentTreeService as any).commitmentMap.get('commitment0')).toBe(0);
-      expect((commitmentTreeService as any).commitmentMap.get('commitment1')).toBe(1);
-      expect((commitmentTreeService as any).pendingCommitments).toHaveLength(2);
+      // Process pending commitments
+      (commitmentTreeService as any).processPendingCommitments();
       
-      // Now add commitment at index 2
-      commitmentTreeService.addCommitment('commitment2', 2);
+      // Should add commitment2 since there's no gap (index 2)
+      expect(mockTree.update).toHaveBeenCalledWith(2, 'commitment2');
       
-      // Manually update the elements array to what would happen after processing
+      // Mock the updated state of the tree
+      mockTree._elements = ['commitment0', 'commitment1', 'commitment2'];
+      mockTree.elements.mockReturnValue(mockTree._elements);
+      
+      // Add more pending commitments
+      (commitmentTreeService as any).pendingCommitments = [
+        { hash: 'commitment3', index: 3, decimalValue: 'commitment3' },
+        { hash: 'commitment4', index: 4, decimalValue: 'commitment4' }
+      ];
+      
+      // Reset the mock to clear previous calls
+      mockTree.update.mockClear();
+      
+      // Process pending commitments again
+      (commitmentTreeService as any).processPendingCommitments();
+      
+      // Should add commitment3 since it's the next one (index 3)
+      expect(mockTree.update).toHaveBeenCalledWith(3, 'commitment3');
+      
+      // Mock the updated state again
       mockTree._elements = ['commitment0', 'commitment1', 'commitment2', 'commitment3'];
       mockTree.elements.mockReturnValue(mockTree._elements);
       
-      // Manually update the commitmentMap
-      (commitmentTreeService as any).commitmentMap.set('commitment2', 2);
-      (commitmentTreeService as any).commitmentMap.set('commitment3', 3);
-      (commitmentTreeService as any).pendingCommitments = [];
+      // Reset the mock to clear previous calls
+      mockTree.update.mockClear();
       
-      // Should process both commitment2 and commitment3
-      expect(mockTree._elements).toEqual(['commitment0', 'commitment1', 'commitment2', 'commitment3']);
+      // Process pending commitments once more
+      (commitmentTreeService as any).processPendingCommitments();
+      
+      // Should add commitment4 since it's the next one (index 4)
+      expect(mockTree.update).toHaveBeenCalledWith(4, 'commitment4');
+      
+      // Commitments should be added to the map
       expect((commitmentTreeService as any).commitmentMap.get('commitment2')).toBe(2);
       expect((commitmentTreeService as any).commitmentMap.get('commitment3')).toBe(3);
-      expect((commitmentTreeService as any).pendingCommitments).toHaveLength(0);
+      expect((commitmentTreeService as any).commitmentMap.get('commitment4')).toBe(4);
     });
 
     it('should not process anything if no pending commitments', () => {
@@ -362,51 +361,24 @@ describe('CommitmentTreeService', () => {
       // Get the mock tree instance
       const mockTree = (commitmentTreeService as any).tree;
       
-      // Setup current elements
+      // Setup initial state with out-of-order pending commitments
       mockTree._elements = ['commitment0', 'commitment1'];
       mockTree.elements.mockReturnValue(mockTree._elements);
       
-      // Setup pending commitments in wrong order
       (commitmentTreeService as any).pendingCommitments = [
         { hash: 'commitment4', index: 4, decimalValue: 'commitment4' },
-        { hash: 'commitment2', index: 2, decimalValue: 'commitment2' },
-        { hash: 'commitment3', index: 3, decimalValue: 'commitment3' }
+        { hash: 'commitment3', index: 3, decimalValue: 'commitment3' },
+        { hash: 'commitment2', index: 2, decimalValue: 'commitment2' }
       ];
       
-      // Call directly to test
+      // Process pending commitments
       (commitmentTreeService as any).processPendingCommitments();
       
-      // Manually update elements to simulate the insertion
-      mockTree._elements = ['commitment0', 'commitment1', 'commitment2'];
-      mockTree.elements.mockReturnValue(mockTree._elements);
-      
       // Should process commitment2 but not the others due to sorting
-      expect(mockTree.insert).toHaveBeenCalledWith('commitment2');
+      expect(mockTree.update).toHaveBeenCalledWith(2, 'commitment2');
       expect(mockTree._elements).toEqual(['commitment0', 'commitment1', 'commitment2']);
       expect((commitmentTreeService as any).commitmentMap.get('commitment2')).toBe(2);
       expect((commitmentTreeService as any).pendingCommitments).toHaveLength(2);
-      
-      // Process again - now commitment3 should be processed
-      (commitmentTreeService as any).processPendingCommitments();
-      
-      // Update elements to simulate the insertion
-      mockTree._elements = ['commitment0', 'commitment1', 'commitment2', 'commitment3'];
-      mockTree.elements.mockReturnValue(mockTree._elements);
-      
-      expect(mockTree._elements).toEqual(['commitment0', 'commitment1', 'commitment2', 'commitment3']);
-      expect((commitmentTreeService as any).commitmentMap.get('commitment3')).toBe(3);
-      expect((commitmentTreeService as any).pendingCommitments).toHaveLength(1);
-      
-      // Process again - now commitment4 should be processed
-      (commitmentTreeService as any).processPendingCommitments();
-      
-      // Update elements to simulate the insertion
-      mockTree._elements = ['commitment0', 'commitment1', 'commitment2', 'commitment3', 'commitment4'];
-      mockTree.elements.mockReturnValue(mockTree._elements);
-      
-      expect(mockTree._elements).toEqual(['commitment0', 'commitment1', 'commitment2', 'commitment3', 'commitment4']);
-      expect((commitmentTreeService as any).commitmentMap.get('commitment4')).toBe(4);
-      expect((commitmentTreeService as any).pendingCommitments).toHaveLength(0);
     });
 
     it('should not do anything if not initialized', () => {
