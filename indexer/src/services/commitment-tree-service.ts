@@ -8,18 +8,25 @@ class CommitmentTreeService {
   private tree: MerkleTree | null = null;
   private initialized = false;
   private commitmentMap: Map<string, number> = new Map(); // Maps commitment hash to its index in the tree
-  private pendingCommitments: Array<{hash: string, index: number, decimalValue: string}> = []; // Store commitments with future indices
+  private lightWasm: any = null;
 
   /**
    * Initialize the commitment tree
    */
   async initialize(): Promise<void> {
+    if (this.initialized && this.tree) {
+      console.log('Commitment tree already initialized, skipping initialization');
+      return;
+    }
+
     try {
+      console.log('Initializing commitment tree service...');
+      
       // Initialize the light protocol hasher
-      const lightWasm = await WasmFactory.getInstance();
+      this.lightWasm = await WasmFactory.getInstance();
       
       // Create a new tree
-      this.tree = new MerkleTree(DEFAULT_TREE_HEIGHT, lightWasm);
+      this.tree = new MerkleTree(DEFAULT_TREE_HEIGHT, this.lightWasm);
       console.log('Created new Merkle tree');
       
       this.initialized = true;
@@ -27,53 +34,6 @@ class CommitmentTreeService {
     } catch (error) {
       console.error('Error initializing commitment tree:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Process any pending commitments that can now be added
-   */
-  private processPendingCommitments(): void {
-    if (!this.initialized || !this.tree) {
-      return;
-    }
-
-    // Current size of the tree
-    const currentSize = this.tree.elements().length;
-    
-    // Sort pending commitments by index
-    this.pendingCommitments.sort((a, b) => a.index - b.index);
-    
-    // Process commitments that can now be added
-    let i = 0;
-    while (i < this.pendingCommitments.length) {
-      const pending = this.pendingCommitments[i];
-      
-      // If this commitment is at the current size or has a gap, we can't add it yet
-      if (pending.index > currentSize) {
-        break;
-      }
-      
-      // Add the commitment directly
-      if (pending.index === currentSize) {
-        this.tree.insert(pending.decimalValue);
-        this.commitmentMap.set(pending.hash, pending.index);
-        console.log(`Added pending commitment ${pending.hash} at index ${pending.index}`);
-      } else if (pending.index < currentSize) {
-        // Update existing element
-        this.tree.update(pending.index, pending.decimalValue);
-        this.commitmentMap.set(pending.hash, pending.index);
-        console.log(`Updated existing element with pending commitment ${pending.hash} at index ${pending.index}`);
-      }
-      
-      // Remove this commitment from the pending list
-      this.pendingCommitments.splice(i, 1);
-      
-      // Don't increment i since we've removed an element
-    }
-    
-    if (this.pendingCommitments.length > 0) {
-      console.log(`${this.pendingCommitments.length} commitments still pending`);
     }
   }
 
@@ -123,10 +83,6 @@ class CommitmentTreeService {
         this.tree.insert(commitmentDecimal);
         this.commitmentMap.set(commitmentHash, numericIndex);
         console.log(`Added commitment ${commitmentHash} at index ${numericIndex}`);
-        
-        // Process any pending commitments that might now be valid
-        this.processPendingCommitments();
-        
         console.log(`New Merkle tree root: ${this.getRoot()}`);
         return true;
       } else if (numericIndex < currentSize) {
@@ -139,14 +95,9 @@ class CommitmentTreeService {
         console.log(`New Merkle tree root: ${this.getRoot()}`);
         return true;
       } else {
-        // Commitment belongs at a future index, add to pending list
-        console.log(`Adding commitment ${commitmentHash} to pending list (index ${numericIndex}, current size ${currentSize})`);
-        this.pendingCommitments.push({
-          hash: commitmentHash,
-          index: numericIndex,
-          decimalValue: commitmentDecimal
-        });
-        return true;
+        // Commitment belongs at a future index
+        console.log(`Cannot add commitment ${commitmentHash} at future index ${numericIndex}, current size is ${currentSize}`);
+        return false;
       }
     } catch (error) {
       console.error(`Error adding commitment ${commitmentHash} at index ${index}:`, error);
@@ -221,14 +172,6 @@ class CommitmentTreeService {
     }
     
     return this.tree.elements();
-  }
-
-  /**
-   * Get number of pending commitments
-   * @returns Number of commitments waiting to be added
-   */
-  getPendingCount(): number {
-    return this.pendingCommitments.length;
   }
 }
 

@@ -1,10 +1,9 @@
 import Koa from 'koa';
 import Router from '@koa/router';
 import bodyParser from 'koa-bodyparser';
-import { loadHistoricalPDAs, getAllCommitmentIds, getMerkleProof, getMerkleRoot } from './services/pda-service';
+import { getAllCommitmentIds, getMerkleProof, getMerkleRoot } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
-import { commitmentTreeService } from './services/commitment-tree-service';
-import { handleWebhook } from './controllers/webhook';
+import { handleWebhook, reloadCommitmentsAndUxto } from './controllers/webhook';
 
 // Define types for request bodies
 interface WebhookRequest {
@@ -80,34 +79,6 @@ router.get('/merkle/proof/:commitment', (ctx) => {
 // Webhook endpoint for transaction updates
 router.post('/zkcash/webhook/transaction', handleWebhook);
 
-// Simple test endpoint that always returns 200
-router.all('/test200', (ctx) => {
-  ctx.status = 200;
-  ctx.body = {
-    message: 'This endpoint always returns 200 OK',
-    method: ctx.method,
-    path: ctx.path,
-    headers: ctx.headers,
-    body: ctx.request.body
-  };
-});
-
-// Special test endpoint for Helius
-router.post('/helius-test', (ctx) => {
-  console.log('Helius test endpoint hit!');
-  console.log('Headers:', JSON.stringify(ctx.request.headers, null, 2));
-  console.log('Body:', JSON.stringify(ctx.request.body, null, 2));
-  console.log('Method:', ctx.method);
-  
-  // Always return success
-  ctx.status = 200;
-  ctx.body = {
-    success: true,
-    message: 'Helius test received',
-    receivedBody: ctx.request.body
-  };
-});
-
 // Configure routes
 app.use(router.routes());
 app.use(router.allowedMethods());
@@ -123,18 +94,17 @@ app.use(router.allowedMethods());
     console.log(`Using RPC endpoint: ${RPC_ENDPOINT}`);
     
     // Load historical PDAs
-    await loadHistoricalPDAs();
+    await reloadCommitmentsAndUxto();
     
     // Start server
     app.listen(PORT);
     console.log(`Server running on http://localhost:${PORT}`);
     
-    // Re-load PDAs every 15 minutes
-    setInterval(async () => {
-      console.log('Reloading PDA data...');
-      const ids = await loadHistoricalPDAs();
-      console.log(`Loaded ${ids.length} commitment IDs`);
-    }, 15 * 60 * 1000); // 15 minutes
+    // Periodic reload PDAs every 60 minutes to handle the case where some transactions aren't caught up
+    setInterval(() => {
+      console.log('Scheduled PDA reload...');
+      reloadCommitmentsAndUxto();
+    }, 60 * 60 * 1000); // 60 minutes
     
     console.log('Ready to receive webhooks at /zkcash/webhook/transaction');
   } catch (error) {

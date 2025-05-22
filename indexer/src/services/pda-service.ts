@@ -84,7 +84,7 @@ function getCommitmentId(account: CommitmentAccount): string {
 /**
  * Load all historical PDAs from the Solana blockchain
  */
-export async function loadHistoricalPDAs(): Promise<string[]> {
+export async function reloadCommitmentsAndUxtoInternal(): Promise<string[]> {
   console.log('Loading historical PDA data...');
   
   try {
@@ -137,10 +137,6 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
     if (commitments.length > 0) {
       const addedCount = commitmentTreeService.addCommitments(commitments);
       console.log(`Added ${addedCount} commitments to the Merkle tree`);
-      const pendingCount = commitmentTreeService.getPendingCount();
-      if (pendingCount > 0) {
-        console.log(`${pendingCount} commitments are pending (waiting for gaps to be filled)`);
-      }
       console.log(`Current Merkle tree root: ${commitmentTreeService.getRoot()}`);
     }
     
@@ -178,10 +174,9 @@ export function processNewPDA(accountPubkey: string, accountData: Buffer): void 
         // Add the commitment to the Merkle tree
         const added = commitmentTreeService.addCommitment(id, parsedAccount.index);
         if (added) {
-          const pendingCount = commitmentTreeService.getPendingCount();
-          if (pendingCount > 0) {
-            console.log(`${pendingCount} commitments are pending (waiting for gaps to be filled)`);
-          }
+          console.log(`Added commitment to the tree at index ${parsedAccount.index}`);
+        } else {
+          console.log(`Failed to add commitment at index ${parsedAccount.index}`);
         }
       }
     }
