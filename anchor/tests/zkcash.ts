@@ -242,7 +242,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: depositFee, // Fee
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
@@ -485,7 +484,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("withdrawEncryptedOutput1"),
       encryptedOutput2: Buffer.from("withdrawEncryptedOutput2"),
       fee: withdrawFee, // Use the same fee variable we used in calculations
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Calculate the hash for withdrawal
@@ -687,7 +685,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: depositFee, // Fee
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
@@ -930,7 +927,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("withdrawEncryptedOutput1"),
       encryptedOutput2: Buffer.from("withdrawEncryptedOutput2"),
       fee: withdrawFee, // Use the same fee variable we used in calculations
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Calculate the hash for withdrawal
@@ -1132,7 +1128,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: depositFee, // Fee
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
@@ -1375,7 +1370,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("withdrawEncryptedOutput1"),
       encryptedOutput2: Buffer.from("withdrawEncryptedOutput2"),
       fee: withdrawFee, // Use the same fee variable we used in calculations
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Calculate the hash for withdrawal
@@ -1577,7 +1571,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: new anchor.BN(50), // Fee
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
@@ -1769,7 +1762,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("withdrawEncryptedOutput1"),
       encryptedOutput2: Buffer.from("withdrawEncryptedOutput2"),
       fee: withdrawFee, // Use the same fee variable we used in calculations
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Calculate the hash for withdrawal
@@ -1982,7 +1974,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: new anchor.BN(100),
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Create a different ExtData to generate a different hash
@@ -1992,7 +1983,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: new anchor.BN(100),
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Calculate the hash using the modified data
@@ -2085,7 +2075,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: new anchor.BN(100),
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Calculate the correct extDataHash
@@ -2181,7 +2170,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: new anchor.BN(100),
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     // Calculate the correct extDataHash
@@ -2280,7 +2268,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: fee,
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     const calculatedExtDataHash = getExtDataHash(extData);
@@ -2466,7 +2453,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: new anchor.BN(100),
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
     
     const calculatedExtDataHash = getExtDataHash(extData);
@@ -2567,7 +2553,6 @@ describe("zkcash", () => {
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: fee,
-      tokenMint: new PublicKey("11111111111111111111111111111111")
     };
 
     const calculatedExtDataHash = getExtDataHash(extData);

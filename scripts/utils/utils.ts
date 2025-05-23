@@ -31,7 +31,6 @@ export function getExtDataHash(extData: {
   encryptedOutput1: string | Uint8Array;
   encryptedOutput2: string | Uint8Array;
   fee: string | number | BN;
-  tokenMint: string | PublicKey;
 }): Uint8Array {
   // Convert all inputs to their appropriate types
   const recipient = extData.recipient instanceof PublicKey 
@@ -45,10 +44,6 @@ export function getExtDataHash(extData: {
   // Always convert to Buffer
   const encryptedOutput1 = Buffer.from(extData.encryptedOutput1 as any);
   const encryptedOutput2 = Buffer.from(extData.encryptedOutput2 as any);
-  
-  const tokenMint = extData.tokenMint instanceof PublicKey 
-    ? extData.tokenMint 
-    : new PublicKey(extData.tokenMint);
 
   // Define the borsh schema matching the Rust struct
   const schema = {
@@ -58,7 +53,6 @@ export function getExtDataHash(extData: {
       encryptedOutput1: { array: { type: 'u8' } },
       encryptedOutput2: { array: { type: 'u8' } },
       fee: 'u64',
-      tokenMint: { array: { type: 'u8', len: 32 } },
     }
   };
 
@@ -68,7 +62,6 @@ export function getExtDataHash(extData: {
     encryptedOutput1: encryptedOutput1,
     encryptedOutput2: encryptedOutput2,
     fee: fee,  // BN instance - Borsh handles it correctly with u64 type
-    tokenMint: tokenMint.toBytes(),
   };
   
   // Serialize with Borsh

@@ -152,8 +152,6 @@ pub struct ExtData {
     pub encrypted_output1: Vec<u8>,
     pub encrypted_output2: Vec<u8>,
     pub fee: u64,
-    // Keep this for future SPL token support
-    pub token_mint: Pubkey,
 }
 
 #[derive(Accounts)]

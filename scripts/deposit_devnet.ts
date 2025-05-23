@@ -125,8 +125,7 @@ async function main() {
       extAmount: new BN(DEPOSIT_AMOUNT),
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new BN(FEE_AMOUNT),
-      tokenMint: new PublicKey("11111111111111111111111111111111")
+      fee: new BN(FEE_AMOUNT)
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
@@ -347,10 +346,6 @@ async function main() {
       // fee (8 bytes) - u64
       extDataBuf.writeBigUInt64LE(BigInt(extData.fee.toString()), extOffset);
       extOffset += 8;
-      
-      // token_mint pubkey (32 bytes)
-      extData.tokenMint.toBuffer().copy(extDataBuf, extOffset);
-      extOffset += 32;
       
       // Combine instruction discriminator with proof and extData
       const instructionData = Buffer.concat([

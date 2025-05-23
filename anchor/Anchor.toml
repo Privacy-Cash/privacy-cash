@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-zkcash = "F12PAMjHff2QHDwBTghE4BFzaaqNscKwno978La2vfQ5"
+zkcash = "BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh"
 
 [programs.devnet]
 zkcash = "BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh"
@@ -15,7 +15,7 @@ zkcash = "BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "./deploy-keypair.json"
 
 [scripts]

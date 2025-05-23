@@ -112,7 +112,6 @@ async function generateSampleProofForFirstDeposit(): Promise<{
     encryptedOutput1: mockEncrypt(outputs[0]),
     encryptedOutput2: mockEncrypt(outputs[1]),
     fee: fee,
-    tokenMint: new PublicKey("JCeoBX79HfatfaY6xvuNyCHf86hwgkCCWDpEycVHtime"),
   };
   
   // Generate extDataHash from the extData structure
@@ -340,7 +339,6 @@ async function generateSampleProofForWithdraw(): Promise<{
     encryptedOutput1: mockEncrypt(outputs[0]),
     encryptedOutput2: mockEncrypt(outputs[1]),
     fee: fee,
-    tokenMint: new PublicKey("JCeoBX79HfatfaY6xvuNyCHf86hwgkCCWDpEycVHtime"),
   };
   
   // Generate extDataHash from the extData structure
