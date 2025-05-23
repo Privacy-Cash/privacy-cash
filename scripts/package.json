@@ -5,7 +5,9 @@
   "main": "sample_proof_generator.ts",
   "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
+    "test:encryption": "jest __tests__/encryption.test.ts",
+    "example:encryption": "ts-node examples/encryption-example.ts",
     "start": "ts-node -r tsconfig-paths/register",
     "build": "tsc"
   },
@@ -15,7 +17,6 @@
     "@coral-xyz/anchor": "^0.29.0",
     "@solana/web3.js": "^1.98.2",
     "@types/node": "^22.14.0",
-    "bs58": "^6.0.0",
     "circom_runtime": "^0.1.28",
     "circomlib": "^2.0.5",
     "dotenv": "^16.4.7",
@@ -23,7 +24,6 @@
     "hardhat": "^2.23.0",
     "snarkjs": "^0.7.5",
     "tmp-promise": "^3.0.2",
-    "ts-node": "^10.9.1",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.0.0"
   },
@@ -31,10 +31,16 @@
     "@ethersproject/sha2": "^5.8.0",
     "@lightprotocol/hasher.rs": "^0.2.1",
     "@types/bn.js": "^5.1.5",
+    "@types/jest": "^29.5.14",
     "@types/snarkjs": "^0.7.9",
     "bigint-buffer": "^1.1.5",
     "bn.js": "^5.2.2",
     "borsh": "^2.0.0",
-    "ffjavascript": "^0.3.1"
+    "bs58": "^6.0.0",
+    "ffjavascript": "^0.3.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.4",
+    "ts-node": "^10.9.2",
+    "tweetnacl": "^1.0.3"
   }
 }
