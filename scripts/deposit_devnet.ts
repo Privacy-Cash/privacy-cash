@@ -204,6 +204,9 @@ async function main() {
     const encryptedOutput2 = encryptionService.encrypt(
       `${outputs[1].amount.toString()}|${outputs[1].blinding.toString()}|${outputs[1].index}`
     );
+
+    console.log(`outputs[0]`, outputs[0])
+    console.log(`outputs[1]`, outputs[1])
     
     console.log(`Encrypted output 1 size: ${encryptedOutput1.length} bytes`);
     console.log(`Encrypted output 2 size: ${encryptedOutput2.length} bytes`);

@@ -115,10 +115,10 @@ export function reloadCommitmentsAndUxto(): void {
       if (count > 0) {
         // Show last 10 outputs
         const outputs = userUxtosService.getAllEncryptedOutputs();
-        const lastOutputs = outputs.slice(Math.max(0, outputs.length - 10));
-        console.log(`Last ${lastOutputs.length} encrypted outputs:`);
-        lastOutputs.forEach((output, i) => {
-          const index = outputs.length - lastOutputs.length + i;
+        // const lastOutputs = outputs.slice(0, 10);
+        // console.log(`Last ${lastOutputs.length} encrypted outputs:`);
+        outputs.forEach((output, i) => {
+          const index = outputs.length - i;
           console.log(`  [${index}] ${output}`);
         });
         

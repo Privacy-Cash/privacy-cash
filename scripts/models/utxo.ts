@@ -33,7 +33,7 @@ export class Utxo {
      * Generate a new keypair for each UTXO
      */
     keypair, 
-    blinding = new BN('1000000000'), // Use fixed value for consistency instead of randomBN()
+    blinding = new BN(Math.floor(Math.random() * 1000000000)), // Use fixed value for consistency instead of randomBN()
     index = 0 
   }: { 
     lightWasm: LightWasm,
