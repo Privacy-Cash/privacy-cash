@@ -11,6 +11,7 @@ import { WasmFactory } from '@lightprotocol/hasher.rs';
 import { MerkleTree } from './utils/merkle_tree';
 // We'll use anchor only for getting the provider
 import * as anchor from "@coral-xyz/anchor";
+import { EncryptionService } from './encryption';
 
 dotenv.config();
 
@@ -72,6 +73,9 @@ async function main() {
     // Initialize the light protocol hasher
     const lightWasm = await WasmFactory.getInstance();
     
+    // Initialize the encryption service
+    const encryptionService = new EncryptionService();
+    
     // Load wallet keypair from deploy-keypair.json in anchor directory
     let payer: Keypair;
     
@@ -82,6 +86,10 @@ async function main() {
       const keypairJson = JSON.parse(readFileSync(deployKeypairPath, 'utf-8'));
       payer = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
       console.log('Using deploy keypair from anchor directory');
+      
+      // Generate encryption key from the payer keypair
+      encryptionService.generateEncryptionKey(payer);
+      console.log('Encryption key generated from wallet keypair');
     } catch (err) {
       console.error('Could not load deploy-keypair.json from anchor directory');
       return;
@@ -118,15 +126,6 @@ async function main() {
     console.log(`Tree Account: ${treeAccount.toString()}`);
     console.log(`Fee Recipient Account: ${feeRecipientAccount.toString()}`);
     console.log(`Tree Token Account: ${treeTokenAccount.toString()}`);
-
-    // Create the deposit ExtData
-    const extData = {
-      recipient: payer.publicKey,
-      extAmount: new BN(DEPOSIT_AMOUNT),
-      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
-      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
-      fee: new BN(FEE_AMOUNT)
-    };
 
     // Create the merkle tree with the pre-initialized poseidon hash
     const tree = new MerkleTree(20, lightWasm);
@@ -183,7 +182,7 @@ async function main() {
       new Utxo({ lightWasm, amount: outputAmount }), // Combined amount minus fee
       new Utxo({ lightWasm, amount: '0' }) // Empty UTXO
     ];
-
+    
     // Create mock Merkle path data for the inputs
     const inputMerklePathIndices = inputs.map((input) => input.index || 0);
     
@@ -192,12 +191,33 @@ async function main() {
       // Create an array of "0" strings for each level of the Merkle tree
       return [...new Array(tree.levels).fill("0")];
     });
-
+    
     // Generate nullifiers and commitments
     const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
     const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
 
-    // Calculate the extDataHash
+    // Encrypt the UTXO data using a compact format
+    const encryptedOutput1 = encryptionService.encrypt(
+      `${outputs[0].amount.toString()}|${outputs[0].blinding.toString()}|${outputs[0].index}`
+    );
+    
+    const encryptedOutput2 = encryptionService.encrypt(
+      `${outputs[1].amount.toString()}|${outputs[1].blinding.toString()}|${outputs[1].index}`
+    );
+    
+    console.log(`Encrypted output 1 size: ${encryptedOutput1.length} bytes`);
+    console.log(`Encrypted output 2 size: ${encryptedOutput2.length} bytes`);
+
+    // Create the deposit ExtData with real encrypted outputs
+    const extData = {
+      recipient: payer.publicKey,
+      extAmount: new BN(DEPOSIT_AMOUNT),
+      encryptedOutput1: encryptedOutput1,
+      encryptedOutput2: encryptedOutput2,
+      fee: new BN(FEE_AMOUNT)
+    };
+
+    // Calculate the extDataHash with the encrypted outputs
     const calculatedExtDataHash = getExtDataHash(extData);
 
     // Create the input for the proof generation
@@ -359,6 +379,7 @@ async function main() {
 
     // Serialize the proof and extData
     const serializedProof = serializeProofAndExtData(proofToSubmit, extData);
+    console.log(`Total serialized proof and extData size: ${serializedProof.length} bytes`);
 
     // Create the transaction instruction
     const instruction = new TransactionInstruction({
@@ -388,7 +409,6 @@ async function main() {
     const signature = await sendAndConfirmTransaction(connection, transaction, [payer]);
     console.log('Transaction sent:', signature);
     console.log(`Transaction link: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-
   } catch (error: any) {
     console.error('Error during deposit:', error);
   }

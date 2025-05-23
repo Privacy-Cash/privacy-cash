@@ -119,7 +119,7 @@ export function reloadCommitmentsAndUxto(): void {
         console.log(`Last ${lastOutputs.length} encrypted outputs:`);
         lastOutputs.forEach((output, i) => {
           const index = outputs.length - lastOutputs.length + i;
-          console.log(`  [${index}] ${output.substring(0, 16)}...`);
+          console.log(`  [${index}] ${output}`);
         });
         
         if (count > 10) {
