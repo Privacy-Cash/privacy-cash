@@ -9,8 +9,9 @@ dotenv.config();
 
 /**
  * Script to decrypt a specific encrypted UTXO
+ * @param encryptedUtxoHex Optional hex string of the encrypted UTXO to decrypt
  */
-async function decryptSpecificUtxo() {
+async function decryptSpecificUtxo(encryptedHex: string) {
   try {
     // Initialize the light protocol hasher
     const lightWasm = await WasmFactory.getInstance();
@@ -36,16 +37,13 @@ async function decryptSpecificUtxo() {
       console.error('Could not load deploy-keypair.json from anchor directory');
       return;
     }
-
-    // The specific encrypted UTXO to decrypt
-    const encryptedUtxoHex = '5e3ff771fd646662cfa7cfa6730c806b1432caacd93783ddcf30ae287f065372df009c8486871cfaa872ada2779e47fdb2a6de688e';
     
-    console.log(`Attempting to decrypt: ${encryptedUtxoHex}`);
-    console.log(`Hex length: ${encryptedUtxoHex.length} characters (${encryptedUtxoHex.length/2} bytes)`);
+    console.log(`Attempting to decrypt: ${encryptedHex}`);
+    console.log(`Hex length: ${encryptedHex.length} characters (${encryptedHex.length/2} bytes)`);
     
     try {
       // Convert hex string to Buffer
-      const encryptedBuffer = Buffer.from(encryptedUtxoHex, 'hex');
+      const encryptedBuffer = Buffer.from(encryptedHex, 'hex');
       console.log(`Buffer length: ${encryptedBuffer.length} bytes`);
       
       // Try to decrypt as a UtxoData first (the simpler format)
@@ -57,18 +55,8 @@ async function decryptSpecificUtxo() {
         // Now try to parse it as a UTXO
         const utxo = await encryptionService.decryptUtxo(encryptedBuffer, lightWasm);
         
-        console.log('\nDecrypted UTXO:');
-        console.log('- Amount:', utxo.amount.toString());
-        console.log('- Blinding:', utxo.blinding.toString());
-        console.log('- Index:', utxo.index);
-        
-        // Generate the commitment for verification
-        const commitment = await utxo.getCommitment();
-        console.log('- Commitment:', commitment);
-        
-        // Generate the nullifier
-        const nullifier = await utxo.getNullifier();
-        console.log('- Nullifier:', nullifier);
+        // Use the log method to display UTXO details
+        await utxo.log();
       } catch (error: any) {
         console.error('Failed to decrypt as UTXO:', error.message);
         console.log('Trying different decryption methods...');
@@ -90,15 +78,18 @@ async function decryptSpecificUtxo() {
           console.error('Raw decryption also failed:', decryptError.message);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing encrypted data:', error);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Script error:', error);
   }
 }
 
-// Run the function
-decryptSpecificUtxo()
+// Get encrypted UTXO hex from command line arguments if provided
+const encryptedUtxoFromArgs = process.argv.length > 2 ? process.argv[2] : undefined;
+
+// Run the function with optional command-line argument
+decryptSpecificUtxo('5e3ff771fd646662cfa7cfa6730c806b1432caacd93783ddcf30ae287f065372df009c8486871cfaa872ada2779e47fdb2a6de688e')
   .then(() => console.log('Decryption attempt completed'))
   .catch(err => console.error('Error running script:', err)); 

@@ -209,8 +209,8 @@ async function main() {
       index: outputs[1].index
     });
 
-    console.log(`outputs[0]`, outputs[0])
-    console.log(`outputs[1]`, outputs[1])
+    console.log(`outputs[0]`, await outputs[0].log());
+    console.log(`outputs[1]`, await outputs[1].log());
     
     console.log(`Encrypted output 1 size: ${encryptedOutput1.length} bytes`);
     console.log(`Encrypted output 2 size: ${encryptedOutput2.length} bytes`);

@@ -59,4 +59,31 @@ export class Utxo {
     
     return this.lightWasm.poseidonHashString([commitmentValue, new BN(this.index).toString(), signature]);
   }
+  
+  /**
+   * Log all the UTXO's public properties and derived values in JSON format
+   * @returns Promise that resolves once all logging is complete
+   */
+  async log(): Promise<void> {
+    // Prepare the UTXO data object
+    const utxoData: any = {
+      amount: this.amount.toString(),
+      blinding: this.blinding.toString(),
+      index: this.index,
+      keypair: {
+        pubkey: this.keypair.pubkey.toString()
+      }
+    };
+    
+    // Add derived values
+    try {
+      utxoData.commitment = await this.getCommitment();
+      utxoData.nullifier = await this.getNullifier();
+    } catch (error: any) {
+      utxoData.error = error.message;
+    }
+    
+    // Output as formatted JSON
+    console.log(JSON.stringify(utxoData, null, 2));
+  }
 } 
