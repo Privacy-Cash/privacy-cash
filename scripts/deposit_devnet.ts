@@ -11,7 +11,7 @@ import { WasmFactory } from '@lightprotocol/hasher.rs';
 import { MerkleTree } from './utils/merkle_tree';
 // We'll use anchor only for getting the provider
 import * as anchor from "@coral-xyz/anchor";
-import { EncryptionService } from './encryption';
+import { EncryptionService } from './utils/encryption';
 
 dotenv.config();
 
@@ -197,13 +197,17 @@ async function main() {
     const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
 
     // Encrypt the UTXO data using a compact format
-    const encryptedOutput1 = encryptionService.encrypt(
-      `${outputs[0].amount.toString()}|${outputs[0].blinding.toString()}|${outputs[0].index}`
-    );
+    const encryptedOutput1 = encryptionService.encryptUtxo({
+      amount: outputs[0].amount.toString(),
+      blinding: outputs[0].blinding.toString(),
+      index: outputs[0].index
+    });
     
-    const encryptedOutput2 = encryptionService.encrypt(
-      `${outputs[1].amount.toString()}|${outputs[1].blinding.toString()}|${outputs[1].index}`
-    );
+    const encryptedOutput2 = encryptionService.encryptUtxo({
+      amount: outputs[1].amount.toString(),
+      blinding: outputs[1].blinding.toString(),
+      index: outputs[1].index
+    });
 
     console.log(`outputs[0]`, outputs[0])
     console.log(`outputs[1]`, outputs[1])

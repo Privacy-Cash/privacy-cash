@@ -2,6 +2,22 @@ import { Keypair } from '@solana/web3.js';
 import * as nacl from 'tweetnacl';
 import * as bs58 from 'bs58';
 import * as crypto from 'crypto';
+import { Utxo } from '../models/utxo';
+import { WasmFactory } from '@lightprotocol/hasher.rs';
+import { BN } from 'bn.js';
+import { Keypair as UtxoKeypair } from '../models/keypair';
+import { ethers } from 'ethers';
+
+/**
+ * Represents a UTXO with minimal required fields
+ */
+export interface UtxoData {
+  amount: string;
+  blinding: string;
+  index: number | string;
+  // Optional additional fields
+  [key: string]: any;
+}
 
 /**
  * Service for handling encryption and decryption of UTXO data
@@ -190,5 +206,76 @@ export class EncryptionService {
    */
   public resetEncryptionKey(): void {
     this.encryptionKey = null;
+  }
+  
+  /**
+   * Encrypt a UTXO using a compact pipe-delimited format
+   * @param utxo The UTXO data to encrypt
+   * @returns The encrypted UTXO data as a Buffer
+   * @throws Error if the encryption key has not been generated
+   */
+  public encryptUtxo(utxo: UtxoData | Utxo): Buffer {
+    if (!this.encryptionKey) {
+      throw new Error('Encryption key not generated. Call generateEncryptionKey first.');
+    }
+    
+    // Create a compact string representation using pipe delimiter
+    let utxoString: string;
+    
+    if (utxo instanceof Utxo) {
+      // If it's a Utxo instance
+      utxoString = `${utxo.amount.toString()}|${utxo.blinding.toString()}|${utxo.index}`;
+    } else {
+      // If it's a UtxoData interface
+      utxoString = `${utxo.amount}|${utxo.blinding}|${utxo.index}`;
+    }
+    
+    // Use the regular encrypt method
+    return this.encrypt(utxoString);
+  }
+  
+  /**
+   * Decrypt an encrypted UTXO and parse it to a Utxo instance
+   * @param encryptedData The encrypted UTXO data
+   * @param lightWasm Optional LightWasm instance. If not provided, a new one will be created
+   * @returns Promise resolving to the decrypted Utxo instance
+   * @throws Error if the encryption key has not been generated or if decryption fails
+   */
+  public async decryptUtxo(encryptedData: Buffer | string, lightWasm?: any): Promise<Utxo> {
+    if (!this.encryptionKey) {
+      throw new Error('Encryption key not generated. Call generateEncryptionKey first.');
+    }
+    
+    // Convert hex string to Buffer if needed
+    const encryptedBuffer = typeof encryptedData === 'string' 
+      ? Buffer.from(encryptedData, 'hex')
+      : encryptedData;
+    
+    // Decrypt the data using the regular decrypt method
+    const decrypted = this.decrypt(encryptedBuffer);
+    
+    // Parse the pipe-delimited format
+    const decryptedStr = decrypted.toString();
+    const [amount, blinding, index] = decryptedStr.split('|');
+    
+    if (!amount || !blinding || index === undefined) {
+      throw new Error('Invalid UTXO format after decryption');
+    }
+    
+    // Get or create a LightWasm instance
+    const wasmInstance = lightWasm || await WasmFactory.getInstance();
+    
+    // Create a random private key for the UTXO keypair
+    // In a real implementation, you might want to derive this deterministically from the user's wallet
+    const privateKey = ethers.Wallet.createRandom().privateKey;
+    
+    // Create a Utxo instance
+    return new Utxo({
+      lightWasm: wasmInstance,
+      amount: amount,
+      blinding: blinding,
+      keypair: new UtxoKeypair(privateKey, wasmInstance),
+      index: Number(index)
+    });
   }
 } 
