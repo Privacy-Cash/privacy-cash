@@ -12,11 +12,13 @@ import { MerkleTree } from './utils/merkle_tree';
 // We'll use anchor only for getting the provider
 import * as anchor from "@coral-xyz/anchor";
 import { EncryptionService } from './utils/encryption';
+import { Keypair as UtxoKeypair } from './models/keypair';
+import * as ethers from 'ethers';
 
 dotenv.config();
 
 // Constants
-const DEPOSIT_AMOUNT = 1_000_000_000; // 1 SOL in lamports
+const DEPOSIT_AMOUNT = 80_000_000; // 0.08 SOL in lamports
 const FEE_AMOUNT = 10_000; // 0.00001 SOL in lamports
 const TRANSACT_IX_DISCRIMINATOR = Buffer.from([217, 149, 130, 143, 221, 52, 252, 119]);
 const CIRCUIT_PATH = path.resolve(__dirname, '../artifacts/circuits/transaction2');
@@ -68,6 +70,32 @@ function findCommitmentPDAs(proof: any) {
   return { commitment0PDA, commitment1PDA };
 }
 
+// Function to get tree state
+async function getTreeState(treeAccount: PublicKey) {
+  const treeAccountInfo = await connection.getAccountInfo(treeAccount);
+  if (!treeAccountInfo) {
+    throw new Error('Tree account not found');
+  }
+  
+  // Parse the account data manually
+  const treeAccountData = {
+    authority: new PublicKey(treeAccountInfo.data.slice(8, 40)),
+    nextIndex: new BN(treeAccountInfo.data.slice(40, 48), 'le'),
+    subtrees: Array.from({ length: 20 }, (_, i) => 
+      treeAccountInfo.data.slice(48 + i * 32, 48 + (i + 1) * 32)
+    ),
+    root: treeAccountInfo.data.slice(48 + 20 * 32, 48 + 20 * 32 + 32),
+    rootHistory: Array.from({ length: 10 }, (_, i) => 
+      treeAccountInfo.data.slice(48 + 20 * 32 + 32 + i * 32, 48 + 20 * 32 + 32 + (i + 1) * 32)
+    ),
+    rootIndex: new BN(treeAccountInfo.data.slice(48 + 20 * 32 + 32 + 10 * 32, 48 + 20 * 32 + 32 + 10 * 32 + 8), 'le'),
+    bump: treeAccountInfo.data[48 + 20 * 32 + 32 + 10 * 32 + 8],
+    _padding: treeAccountInfo.data.slice(48 + 20 * 32 + 32 + 10 * 32 + 9)
+  };
+  
+  return treeAccountData;
+}
+
 async function main() {
   try {
     // Initialize the light protocol hasher
@@ -88,7 +116,7 @@ async function main() {
       console.log('Using deploy keypair from anchor directory');
       
       // Generate encryption key from the payer keypair
-      encryptionService.generateEncryptionKey(payer);
+      encryptionService.deriveEncryptionKeyFromWallet(payer);
       console.log('Encryption key generated from wallet keypair');
     } catch (err) {
       console.error('Could not load deploy-keypair.json from anchor directory');
@@ -136,51 +164,58 @@ async function main() {
 
     // Check if the program is initialized by fetching the tree account directly
     try {
-      const treeAccountInfo = await connection.getAccountInfo(treeAccount);
-      if (!treeAccountInfo) {
-        throw new Error('Tree account not found');
-      }
+      // Get the tree state before the deposit
+      console.log('Fetching current tree state...');
+      const treeState = await getTreeState(treeAccount);
       
-      // Parse the account data manually
-      const treeAccountData = {
-        authority: new PublicKey(treeAccountInfo.data.slice(8, 40)),
-        nextIndex: new BN(treeAccountInfo.data.slice(40, 48), 'le'),
-        subtrees: Array.from({ length: 20 }, (_, i) => 
-          treeAccountInfo.data.slice(48 + i * 32, 48 + (i + 1) * 32)
-        ),
-        root: treeAccountInfo.data.slice(48 + 20 * 32, 48 + 20 * 32 + 32),
-        rootHistory: Array.from({ length: 10 }, (_, i) => 
-          treeAccountInfo.data.slice(48 + 20 * 32 + 32 + i * 32, 48 + 20 * 32 + 32 + (i + 1) * 32)
-        ),
-        rootIndex: new BN(treeAccountInfo.data.slice(48 + 20 * 32 + 32 + 10 * 32, 48 + 20 * 32 + 32 + 10 * 32 + 8), 'le'),
-        bump: treeAccountInfo.data[48 + 20 * 32 + 32 + 10 * 32 + 8],
-        _padding: treeAccountInfo.data.slice(48 + 20 * 32 + 32 + 10 * 32 + 9)
-      };
-      
-      console.log('Tree account found, program is initialized');
+      console.log('Tree state before deposit:');
+      console.log('- Current tree nextIndex:', treeState.nextIndex.toString());
+      console.log('- Total UTXOs in tree:', treeState.nextIndex.toString());
+      console.log('- Root Index:', treeState.rootIndex.mod(new BN(10)).toString());
       
       // Extract the root from the tree account data
-      const root = Buffer.from(treeAccountData.root).toString('hex');
+      const root = Buffer.from(treeState.root).toString('hex');
       console.log('Current tree root:', root);
     } catch (error) {
       console.error('Tree account not found. Has the program been initialized?');
       return;
     }
 
-    // Create inputs for the deposit (empty UTXOs)
+    // Generate a deterministic private key derived from the wallet keypair
+    const utxoPrivateKey = encryptionService.deriveUtxoPrivateKey();
+    
+    // Create a UTXO keypair that will be used for all inputs and outputs
+    const utxoKeypair = new UtxoKeypair(utxoPrivateKey, lightWasm);
+    console.log('Using wallet-derived UTXO keypair for deposit');
+
+    // Create inputs for the deposit (empty UTXOs) with the shared keypair
     const inputs = [
-      new Utxo({ lightWasm }),
-      new Utxo({ lightWasm })
+      new Utxo({ 
+        lightWasm,
+        keypair: utxoKeypair
+      }),
+      new Utxo({ 
+        lightWasm,
+        keypair: utxoKeypair
+      })
     ];
 
     // Calculate the output amount (deposit amount minus fee)
     const publicAmountNumber = new BN(DEPOSIT_AMOUNT - FEE_AMOUNT);
     const outputAmount = publicAmountNumber.toString();
     
-    // Create outputs for the deposit
+    // Create outputs for the deposit with the same shared keypair
     const outputs = [
-      new Utxo({ lightWasm, amount: outputAmount }), // Combined amount minus fee
-      new Utxo({ lightWasm, amount: '0' }) // Empty UTXO
+      new Utxo({ 
+        lightWasm, 
+        amount: outputAmount,
+        keypair: utxoKeypair
+      }), // Combined amount minus fee
+      new Utxo({ 
+        lightWasm, 
+        amount: '0',
+        keypair: utxoKeypair
+      }) // Empty UTXO
     ];
     
     // Create mock Merkle path data for the inputs
@@ -196,24 +231,33 @@ async function main() {
     const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
     const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
 
-    // Encrypt the UTXO data using a compact format
-    const encryptedOutput1 = encryptionService.encryptUtxo({
-      amount: outputs[0].amount.toString(),
-      blinding: outputs[0].blinding.toString(),
-      index: outputs[0].index
-    });
+    // Save original commitment and nullifier values for verification
+    console.log('\n=== UTXO VALIDATION ===');
+    console.log('Output 0 Commitment:', outputCommitments[0]);
+    console.log('Output 1 Commitment:', outputCommitments[1]);
     
-    const encryptedOutput2 = encryptionService.encryptUtxo({
-      amount: outputs[1].amount.toString(),
-      blinding: outputs[1].blinding.toString(),
-      index: outputs[1].index
-    });
+    // Encrypt the UTXO data using a compact format that includes the keypair
+    console.log('\nEncrypting UTXOs with keypair data...');
+    const encryptedOutput1 = encryptionService.encryptUtxo(outputs[0]);
+    const encryptedOutput2 = encryptionService.encryptUtxo(outputs[1]);
 
-    console.log(`outputs[0]`, await outputs[0].log());
-    console.log(`outputs[1]`, await outputs[1].log());
+    console.log(`\nOutput[0] (with value):`);
+    await outputs[0].log();
+    console.log(`\nOutput[1] (empty):`);
+    await outputs[1].log();
     
-    console.log(`Encrypted output 1 size: ${encryptedOutput1.length} bytes`);
+    console.log(`\nEncrypted output 1 size: ${encryptedOutput1.length} bytes`);
     console.log(`Encrypted output 2 size: ${encryptedOutput2.length} bytes`);
+    console.log(`Total encrypted outputs size: ${encryptedOutput1.length + encryptedOutput2.length} bytes (this is just the data size, not the count)`);
+    
+    // Test decryption to verify commitment values match
+    console.log('\n=== TESTING DECRYPTION ===');
+    console.log('Decrypting output 1 to verify commitment matches...');
+    const decryptedUtxo1 = await encryptionService.decryptUtxo(encryptedOutput1, utxoKeypair, lightWasm);
+    const decryptedCommitment1 = await decryptedUtxo1.getCommitment();
+    console.log('Original commitment:', outputCommitments[0]);
+    console.log('Decrypted commitment:', decryptedCommitment1);
+    console.log('Commitment matches:', outputCommitments[0] === decryptedCommitment1);
 
     // Create the deposit ExtData with real encrypted outputs
     const extData = {
@@ -416,6 +460,33 @@ async function main() {
     const signature = await sendAndConfirmTransaction(connection, transaction, [payer]);
     console.log('Transaction sent:', signature);
     console.log(`Transaction link: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+    
+    // Wait a moment for the transaction to be confirmed
+    console.log('Waiting for transaction confirmation...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // Check if UTXOs were added to the tree by fetching the tree account again
+    try {
+      console.log('Fetching updated tree state...');
+      const updatedTreeState = await getTreeState(treeAccount);
+      
+      console.log('Tree state after deposit:');
+      console.log('- Current tree nextIndex:', updatedTreeState.nextIndex.toString());
+      console.log('- Total UTXOs in tree:', updatedTreeState.nextIndex.toString());
+      console.log('- Root Index:', updatedTreeState.rootIndex.mod(new BN(10)).toString());
+      
+      // Extract the root from the tree account data
+      const newRoot = Buffer.from(updatedTreeState.root).toString('hex');
+      console.log('- New tree root:', newRoot);
+      
+      // Calculate the number of new UTXOs added
+      const previousState = await getTreeState(treeAccount);
+      const utxosAdded = updatedTreeState.nextIndex.sub(previousState.nextIndex).toString();
+      console.log('UTXOs added in this deposit:', utxosAdded);
+      console.log('Deposit successful! UTXOs were added to the Merkle tree.');
+    } catch (error) {
+      console.error('Failed to fetch tree account after deposit:', error);
+    }
   } catch (error: any) {
     console.error('Error during deposit:', error);
   }

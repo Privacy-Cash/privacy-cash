@@ -24,16 +24,33 @@ export interface UtxoData {
  */
 export class EncryptionService {
   private encryptionKey: Uint8Array | null = null;
-  private static readonly MESSAGE_TO_SIGN = 'ZKCash Account Generation';
   
   /**
-   * Generate a deterministic encryption key from a Solana keypair
-   * @param keypair The Solana keypair to use for signing
+   * Initialize the encryption service with an encryption key
+   * @param encryptionKey The encryption key to use for encryption and decryption
+   */
+  constructor(encryptionKey?: Uint8Array) {
+    if (encryptionKey) {
+      this.encryptionKey = encryptionKey;
+    }
+  }
+  
+  /**
+   * Set the encryption key directly
+   * @param encryptionKey The encryption key to set
+   */
+  public setEncryptionKey(encryptionKey: Uint8Array): void {
+    this.encryptionKey = encryptionKey;
+  }
+  
+  /**
+   * Generate an encryption key from a wallet keypair
+   * @param keypair The Solana keypair to derive the encryption key from
    * @returns The generated encryption key
    */
-  public generateEncryptionKey(keypair: Keypair): Uint8Array {
-    // Sign the constant message with the keypair
-    const message = Buffer.from(EncryptionService.MESSAGE_TO_SIGN);
+  public deriveEncryptionKeyFromWallet(keypair: Keypair): Uint8Array {
+    // Sign a constant message with the keypair
+    const message = Buffer.from('ZKCash Account Generation');
     const signature = nacl.sign.detached(message, keypair.secretKey);
     
     // Extract the first 31 bytes of the signature to create a deterministic key
@@ -46,62 +63,6 @@ export class EncryptionService {
   }
   
   /**
-   * Generates a deterministic keypair for UTXO operations from the encryption key
-   * @param salt Optional salt value to generate different keypairs from the same encryption key
-   * @returns A deterministic keypair derived from the encryption key
-   * @throws Error if the encryption key has not been generated
-   */
-  public getUtxoKeypair(salt: string = ''): { pubkey: string; privkey: string } {
-    if (!this.encryptionKey) {
-      throw new Error('Encryption key not generated. Call generateEncryptionKey first.');
-    }
-    
-    // Create a seed by combining the encryption key with an optional salt
-    const seedData = Buffer.concat([
-      Buffer.from(this.encryptionKey),
-      Buffer.from(salt)
-    ]);
-    
-    // Use a hash function to generate a deterministic seed
-    const hashedSeed = crypto.createHash('sha256').update(seedData).digest();
-    
-    // Use tweetnacl to generate a keypair from the seed
-    const keypair = nacl.sign.keyPair.fromSeed(hashedSeed.slice(0, 32));
-    
-    // Return the keypair in the format expected by the UTXO model
-    return {
-      pubkey: Buffer.from(keypair.publicKey).toString('hex'),
-      privkey: Buffer.from(keypair.secretKey.slice(0, 32)).toString('hex')
-    };
-  }
-  
-  /**
-   * Generates a deterministic private key for UTXO operations from the encryption key
-   * This key will be used to create a Keypair object for UTXOs
-   * @param salt Optional salt value to generate different private keys from the same encryption key
-   * @returns A private key in hex format that can be used to create a Keypair
-   * @throws Error if the encryption key has not been generated
-   */
-  public getUtxoPrivateKey(salt: string = ''): string {
-    if (!this.encryptionKey) {
-      throw new Error('Encryption key not generated. Call generateEncryptionKey first.');
-    }
-    
-    // Create a seed by combining the encryption key with an optional salt
-    const seedData = Buffer.concat([
-      Buffer.from(this.encryptionKey),
-      Buffer.from(salt)
-    ]);
-    
-    // Use a hash function to generate a deterministic seed
-    const hashedSeed = crypto.createHash('sha256').update(seedData).digest();
-    
-    // Convert to a hex string (needed for the Keypair constructor)
-    // The format needs to be compatible with ethers.js private key
-    return '0x' + hashedSeed.toString('hex');
-  }
-  
-  /**
    * Encrypt data with the stored encryption key
    * @param data The data to encrypt
    * @returns The encrypted data as a Buffer
@@ -109,7 +70,7 @@ export class EncryptionService {
    */
   public encrypt(data: Buffer | string): Buffer {
     if (!this.encryptionKey) {
-      throw new Error('Encryption key not generated. Call generateEncryptionKey first.');
+      throw new Error('Encryption key not set. Call setEncryptionKey or deriveEncryptionKeyFromWallet first.');
     }
     
     // Convert string to Buffer if needed
@@ -147,7 +108,7 @@ export class EncryptionService {
    */
   public decrypt(encryptedData: Buffer): Buffer {
     if (!this.encryptionKey) {
-      throw new Error('Encryption key not generated. Call generateEncryptionKey first.');
+      throw new Error('Encryption key not set. Call setEncryptionKey or deriveEncryptionKeyFromWallet first.');
     }
     
     // Extract the IV from the first 16 bytes
@@ -186,7 +147,7 @@ export class EncryptionService {
   }
   
   /**
-   * Check if the encryption key has been generated
+   * Check if the encryption key has been set
    * @returns True if the encryption key exists, false otherwise
    */
   public hasEncryptionKey(): boolean {
@@ -210,25 +171,17 @@ export class EncryptionService {
   
   /**
    * Encrypt a UTXO using a compact pipe-delimited format
-   * @param utxo The UTXO data to encrypt
+   * @param utxo The UTXO to encrypt
    * @returns The encrypted UTXO data as a Buffer
-   * @throws Error if the encryption key has not been generated
+   * @throws Error if the encryption key has not been set
    */
-  public encryptUtxo(utxo: UtxoData | Utxo): Buffer {
+  public encryptUtxo(utxo: Utxo): Buffer {
     if (!this.encryptionKey) {
-      throw new Error('Encryption key not generated. Call generateEncryptionKey first.');
+      throw new Error('Encryption key not set. Call setEncryptionKey or deriveEncryptionKeyFromWallet first.');
     }
     
     // Create a compact string representation using pipe delimiter
-    let utxoString: string;
-    
-    if (utxo instanceof Utxo) {
-      // If it's a Utxo instance
-      utxoString = `${utxo.amount.toString()}|${utxo.blinding.toString()}|${utxo.index}`;
-    } else {
-      // If it's a UtxoData interface
-      utxoString = `${utxo.amount}|${utxo.blinding}|${utxo.index}`;
-    }
+    const utxoString = `${utxo.amount.toString()}|${utxo.blinding.toString()}|${utxo.index}`;
     
     // Use the regular encrypt method
     return this.encrypt(utxoString);
@@ -237,13 +190,14 @@ export class EncryptionService {
   /**
    * Decrypt an encrypted UTXO and parse it to a Utxo instance
    * @param encryptedData The encrypted UTXO data
+   * @param keypair The UTXO keypair to use for the decrypted UTXO
    * @param lightWasm Optional LightWasm instance. If not provided, a new one will be created
    * @returns Promise resolving to the decrypted Utxo instance
-   * @throws Error if the encryption key has not been generated or if decryption fails
+   * @throws Error if the encryption key has not been set or if decryption fails
    */
-  public async decryptUtxo(encryptedData: Buffer | string, lightWasm?: any): Promise<Utxo> {
+  public async decryptUtxo(encryptedData: Buffer | string, keypair: UtxoKeypair, lightWasm?: any): Promise<Utxo> {
     if (!this.encryptionKey) {
-      throw new Error('Encryption key not generated. Call generateEncryptionKey first.');
+      throw new Error('Encryption key not set. Call setEncryptionKey or deriveEncryptionKeyFromWallet first.');
     }
     
     // Convert hex string to Buffer if needed
@@ -265,17 +219,30 @@ export class EncryptionService {
     // Get or create a LightWasm instance
     const wasmInstance = lightWasm || await WasmFactory.getInstance();
     
-    // Create a random private key for the UTXO keypair
-    // In a real implementation, you might want to derive this deterministically from the user's wallet
-    const privateKey = ethers.Wallet.createRandom().privateKey;
-    
-    // Create a Utxo instance
+    // Create a Utxo instance with the provided keypair
     return new Utxo({
       lightWasm: wasmInstance,
       amount: amount,
       blinding: blinding,
-      keypair: new UtxoKeypair(privateKey, wasmInstance),
+      keypair: keypair,
       index: Number(index)
     });
+  }
+  
+  /**
+   * Derive a deterministic UTXO private key from the wallet's encryption key
+   * @returns A private key in hex format that can be used to create a UTXO keypair
+   * @throws Error if the encryption key has not been set
+   */
+  public deriveUtxoPrivateKey(): string {
+    if (!this.encryptionKey) {
+      throw new Error('Encryption key not set. Call setEncryptionKey or deriveEncryptionKeyFromWallet first.');
+    }
+    
+    // Use a hash function to generate a deterministic private key from the encryption key
+    const hashedSeed = crypto.createHash('sha256').update(this.encryptionKey).digest();
+    
+    // Convert to a hex string compatible with ethers.js private key format
+    return '0x' + hashedSeed.toString('hex');
   }
 } 
