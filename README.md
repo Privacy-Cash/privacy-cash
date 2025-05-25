@@ -110,3 +110,14 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ```bash
    tsc && npm start
    ```
+
+# Scripts
+1.  Navigate to the indexer directory:
+   ```bash
+   cd scripts
+   ```
+
+2. Get your own decrypted utxos
+   ```bash
+   ts-node fetch_user_utxos.ts
+   ```
