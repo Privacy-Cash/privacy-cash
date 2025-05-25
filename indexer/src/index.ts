@@ -78,7 +78,7 @@ router.get('/merkle/proof/:commitment', (ctx) => {
 });
 
 // Check if an encrypted output exists
-router.get('/uxtos/check/:encryptedOutput', (ctx) => {
+router.get('/utxos/check/:encryptedOutput', (ctx) => {
   const encryptedOutput = ctx.params.encryptedOutput;
   const exists = hasEncryptedOutput(encryptedOutput);
   
@@ -88,7 +88,7 @@ router.get('/uxtos/check/:encryptedOutput', (ctx) => {
 });
 
 // Get all encrypted outputs
-router.get('/uxtos', (ctx) => {
+router.get('/utxos', (ctx) => {
   const encryptedOutputs = getAllEncryptedOutputs();
   ctx.body = {
     count: encryptedOutputs.length,
