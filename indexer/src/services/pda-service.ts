@@ -5,6 +5,9 @@ import bs58 from 'bs58';
 import { commitmentTreeService } from './commitment-tree-service';
 import { userUxtosService } from './user-uxtos-service';
 
+// Default tree height - must match the value in commitment-tree-service.ts
+const DEFAULT_TREE_HEIGHT = 20;
+
 // In-memory storage for PDAs (in production, use a database)
 let pdaIdList: string[] = [];
 
@@ -264,5 +267,36 @@ export function getAllEncryptedOutputs(): string[] {
   } catch (error) {
     console.error('Error getting all encrypted outputs:', error);
     return [];
+  }
+}
+
+/**
+ * Get a Merkle proof for a specific index in the tree
+ * @param index The index in the Merkle tree
+ * @returns The Merkle path elements or null if the index is invalid
+ */
+export function getMerkleProofByIndex(index: number): string[] | null {
+  try {
+    // Get all commitments from the tree
+    const commitments = commitmentTreeService.getAllCommitments();
+    
+    // Check if the index is valid
+    if (index < 0 || index >= commitments.length) {
+      console.error(`Invalid index ${index}, tree has ${commitments.length} elements`);
+      
+      // Return dummy Merkle proof with zeros instead of null
+      return [...new Array(DEFAULT_TREE_HEIGHT).fill("0")];
+    }
+    
+    // Get the proof from the tree
+    const proof = commitmentTreeService.getMerkleProof(index);
+    
+    // Return only the path elements
+    return proof.pathElements;
+  } catch (error) {
+    console.error('Error getting Merkle proof by index:', error);
+    
+    // Return dummy Merkle proof with zeros instead of null in case of error
+    return [...new Array(DEFAULT_TREE_HEIGHT).fill("0")];
   }
 } 

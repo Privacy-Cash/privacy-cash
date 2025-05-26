@@ -1,7 +1,7 @@
 import Koa from 'koa';
 import Router from '@koa/router';
 import bodyParser from 'koa-bodyparser';
-import { loadHistoricalPDAs, getAllCommitmentIds, getMerkleProof, getMerkleRoot, hasEncryptedOutput, getAllEncryptedOutputs } from './services/pda-service';
+import { loadHistoricalPDAs, getAllCommitmentIds, getMerkleProof, getMerkleRoot, hasEncryptedOutput, getAllEncryptedOutputs, getMerkleProofByIndex } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
 import { commitmentTreeService } from './services/commitment-tree-service';
 import { handleWebhook, reloadCommitmentsAndUxto } from './controllers/webhook';
@@ -75,6 +75,24 @@ router.get('/merkle/proof/:commitment', (ctx) => {
       error: 'Commitment not found in the Merkle tree'
     };
   }
+});
+
+// Get Merkle proof for a specific index
+router.get('/merkle/proof/index/:index', (ctx) => {
+  const index = parseInt(ctx.params.index, 10);
+  
+  if (isNaN(index)) {
+    ctx.status = 400;
+    ctx.body = {
+      error: 'Invalid index parameter. Must be a number.'
+    };
+    return;
+  }
+  
+  const pathElements = getMerkleProofByIndex(index);
+  
+  // Always return the proof - it will be a dummy proof if the index is invalid
+  ctx.body = pathElements;
 });
 
 // Check if an encrypted output exists
