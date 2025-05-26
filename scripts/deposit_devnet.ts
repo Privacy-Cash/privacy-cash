@@ -1,7 +1,6 @@
 import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, SystemProgram, sendAndConfirmTransaction, ComputeBudgetProgram } from '@solana/web3.js';
 import { BN } from 'bn.js';
 import { readFileSync } from 'fs';
-import * as fs from 'fs';
 import { Utxo } from './models/utxo';
 import { getExtDataHash } from './utils/utils';
 import { prove, parseProofToBytesArray, parseToBytesArray } from './utils/prover';
@@ -9,11 +8,8 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { WasmFactory } from '@lightprotocol/hasher.rs';
 import { MerkleTree } from './utils/merkle_tree';
-// We'll use anchor only for getting the provider
-import * as anchor from "@coral-xyz/anchor";
 import { EncryptionService } from './utils/encryption';
 import { Keypair as UtxoKeypair } from './models/keypair';
-import * as ethers from 'ethers';
 
 dotenv.config();
 
@@ -28,17 +24,6 @@ const PROGRAM_ID = new PublicKey('BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh')
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-
-interface MerkleTreeAccount {
-  authority: PublicKey;
-  nextIndex: typeof BN;
-  subtrees: Uint8Array[];
-  root: Uint8Array;
-  rootHistory: Uint8Array[];
-  rootIndex: typeof BN;
-  bump: number;
-  _padding: Uint8Array;
-}
 
 // Find nullifier PDAs for the given proof
 function findNullifierPDAs(proof: any) {
