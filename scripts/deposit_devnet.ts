@@ -158,28 +158,24 @@ async function main() {
     // Create the merkle tree with the pre-initialized poseidon hash
     const tree = new MerkleTree(20, lightWasm);
 
-    // Get the empty tree root as a fallback
-    let root = tree.root().toString();
-    console.log(`tree root: ${root}`);
+    // Initialize root variable
+    let root: string;
 
-    // Check if the program is initialized by fetching the tree account directly
     try {
-      // Get the tree state before the deposit
-      console.log('Fetching current tree state...');
-      const treeState = await getTreeState(treeAccount);
-      
-      console.log('Tree state before deposit:');
-      console.log('- Current tree nextIndex:', treeState.nextIndex.toString());
-      console.log('- Total UTXOs in tree:', treeState.nextIndex.toString());
-      console.log('- Root Index:', treeState.rootIndex.mod(new BN(10)).toString());
-      
-      // Extract the root from the tree account data
-      const root = Buffer.from(treeState.root).toString('hex');
-      console.log('Current tree root:', root);
+      console.log('Fetching Merkle root from API...');
+      const response = await fetch('https://api.thelive.bet/merkle/root');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Merkle root: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json() as { root: string };
+      root = data.root;
+      console.log(`Fetched root from API: ${root}`);
     } catch (error) {
-      console.error('Tree account not found. Has the program been initialized?');
-      return;
+      console.error('Failed to fetch root from API, exiting');
+      return; // Return early without a fallback
     }
+
+    console.log(`Using tree root: ${root}`);
 
     // Generate a deterministic private key derived from the wallet keypair
     const utxoPrivateKey = encryptionService.deriveUtxoPrivateKey();
