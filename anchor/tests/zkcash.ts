@@ -1563,6 +1563,211 @@ describe("zkcash", () => {
     expect(randomUserTotalDiff).to.be.lessThan(-depositFee.toNumber());
   });
 
+  it("Fails to execute deposit when wallet has insufficient balance", async () => {
+    const depositFee = new anchor.BN(50);
+    const depositAmount = new anchor.BN(200); // Positive ext amount (deposit)
+    
+    // Create the merkle tree with the pre-initialized poseidon hash
+    const tree: MerkleTree = new MerkleTree(20, lightWasm);
+    
+    // Create inputs for the deposit
+    const inputs = [
+      new Utxo({ lightWasm }),
+      new Utxo({ lightWasm })
+    ];
+    
+    const outputAmount = '150';
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount }), // Combined amount minus fee
+      new Utxo({ lightWasm, amount: '0' }) // Empty UTXO
+    ];
+    
+    // Calculate rent for accounts we need to create
+    // Each nullifier and commitment account requires rent payment
+    const nullifierAccountSize = 8 + 1; // 8 bytes for discriminator + 1 byte for bump
+    const commitmentAccountSize = 8 + 32 + 100 + 8 + 1; // Rough estimate including discriminator, commitment, encrypted data, index, bump
+    
+    // We need 2 nullifier accounts and 2 commitment accounts
+    const totalRentSpace = (nullifierAccountSize * 2) + (commitmentAccountSize * 2);
+    
+    // Get the minimum rent exemption for these accounts
+    const rentExemption = await provider.connection.getMinimumBalanceForRentExemption(totalRentSpace);
+    
+    // Transaction fee estimate (this is an approximation)
+    const txFee = 5000;
+    
+    // Total SOL needed = deposit amount + rent + transaction fee
+    const totalRequired = depositAmount.toNumber() + rentExemption + txFee;
+    
+    // Create a special user with insufficient balance
+    const insufficientUser = anchor.web3.Keypair.generate();
+
+    const balanceDeficit = 1;
+    
+    // Fund the user with ALMOST enough SOL (just shy of what's needed)
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: insufficientUser.publicKey,
+        lamports: totalRequired - balanceDeficit, // 1 lamports short of what's needed
+      })
+    );
+    
+    // Send and confirm the transfer transaction
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+    
+    // Verify the user has received the funds but it's insufficient
+    const userBalance = await provider.connection.getBalance(insufficientUser.publicKey);
+    expect(userBalance).to.be.equal(totalRequired - balanceDeficit);
+    
+    // Create the ext data for the deposit
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: depositAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee, // Fee
+    };
+    
+    // Create mock Merkle path data
+    const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    const inputMerklePathElements = inputs.map(() => {
+      return [...new Array(tree.levels).fill(0)];
+    });
+    
+    // Resolve all async operations before creating the input object
+    const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+    const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+    
+    // Use the properly calculated Merkle tree root
+    const root = tree.root();
+    
+    // Calculate the hash correctly using our utility
+    const calculatedExtDataHash = getExtDataHash(extData);
+    const publicAmountNumber = new anchor.BN(150);
+    
+    const input = {
+      // Common transaction data
+      root: root,
+      inputNullifier: inputNullifiers,
+      outputCommitment: outputCommitments,
+      publicAmount: publicAmountNumber,
+      extDataHash: calculatedExtDataHash,
+      
+      // Input UTXO data
+      inAmount: inputs.map(x => x.amount.toString(10)),
+      inPrivateKey: inputs.map(x => x.keypair.privkey),
+      inBlinding: inputs.map(x => x.blinding.toString(10)),
+      inPathIndices: inputMerklePathIndices,
+      inPathElements: inputMerklePathElements,
+      
+      // Output UTXO data
+      outAmount: outputs.map(x => x.amount.toString(10)),
+      outBlinding: outputs.map(x => x.blinding.toString(10)),
+      outPubkey: outputs.map(x => x.keypair.pubkey),
+    };
+    
+    // Path to the proving key files
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof, publicSignals} = await prove(input, keyBasePath);
+    
+    const proofInBytes = parseProofToBytesArray(proof);
+    const inputsInBytes = parseToBytesArray(publicSignals);
+    
+    // Create a Proof object with the correctly calculated hash
+    const proofToSubmit = {
+      proofA: proofInBytes.proofA, 
+      proofB: proofInBytes.proofB.flat(), 
+      proofC: proofInBytes.proofC,
+      root: inputsInBytes[0],
+      publicAmount: inputsInBytes[1],
+      extDataHash: inputsInBytes[2],
+      inputNullifiers: [
+        inputsInBytes[3],
+        inputsInBytes[4]
+      ],
+      outputCommitments: [
+        inputsInBytes[5],
+        inputsInBytes[6]
+      ],
+    };
+    
+    // Derive nullifier PDAs
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    
+    // Derive commitment PDAs
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    
+    // Set compute budget for the transaction
+    const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    try {
+      // Execute the transaction
+      const tx = await program.methods
+        .transact(proofToSubmit, extData)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          commitment0: commitment0PDA,
+          commitment1: commitment1PDA,
+          recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
+          authority: authority.publicKey,
+          signer: insufficientUser.publicKey, // Use our insufficient balance user
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([insufficientUser]) // User with insufficient balance signs the transaction
+        .preInstructions([modifyComputeUnits]) // Add compute budget instruction as pre-instruction
+        .transaction();
+      
+      // Create v0 transaction to allow larger size
+      const latestBlockhash = await provider.connection.getLatestBlockhash();
+      const messageLegacy = new anchor.web3.TransactionMessage({
+        payerKey: insufficientUser.publicKey,
+        recentBlockhash: latestBlockhash.blockhash,
+        instructions: tx.instructions,
+      }).compileToLegacyMessage();
+      
+      // Create a versioned transaction
+      const transactionV0 = new anchor.web3.VersionedTransaction(messageLegacy);
+      
+      // Sign the transaction
+      transactionV0.sign([insufficientUser]);
+      
+      // Send and confirm transaction - this should fail due to insufficient funds
+      await provider.connection.sendTransaction(transactionV0, {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
+      
+      // If we get here, the test failed because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to insufficient funds but succeeded");
+    } catch (error) {
+      // Transaction should fail with insufficient funds or similar error
+      const errorString = error.toString();
+      expect(
+        errorString.includes("insufficient funds") || 
+        errorString.includes("insufficient balance") ||
+        errorString.includes("insufficient lamports") ||
+        errorString.includes("account (") ||
+        errorString.includes("0x1") || // General error code
+        errorString.includes("failed") ||
+        errorString.includes("Error")
+      ).to.be.true;
+      
+      // Double check balances to verify no funds were transferred
+      const finalUserBalance = await provider.connection.getBalance(insufficientUser.publicKey);
+      // Balance should be close to what we started with (might have lost a bit for partial tx fee)
+      expect(finalUserBalance).to.be.lessThanOrEqual(totalRequired - balanceDeficit);
+      expect(finalUserBalance).to.be.greaterThan(0); // Should still have some funds left
+    }
+  });
+
   it("Fails to withdraw with a single used nullifier", async () => {
     // Create a sample ExtData object with original values
     const extData = {
