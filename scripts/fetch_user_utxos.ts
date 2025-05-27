@@ -8,6 +8,7 @@ import { Keypair as UtxoKeypair } from './models/keypair';
 import { Utxo } from './models/utxo';
 import axios from 'axios';
 import { Connection, PublicKey } from '@solana/web3.js';
+import BN from 'bn.js';
 
 dotenv.config();
 
@@ -141,6 +142,7 @@ export async function getMyUtxos(keypair: Keypair, apiUrl?: string): Promise<Utx
     
     console.log(`\nDecryption summary: ${successfulDecryptions} successful out of ${decryptionAttempts} attempts`);
     console.log(`Found ${myUtxos.length} UTXOs belonging to your keypair in ${encryptedOutputs.length} total UTXOs`);
+    
     return myUtxos;
   } catch (error: any) {
     console.error('Error fetching UTXOs:', error.message);
@@ -235,6 +237,14 @@ async function main() {
     }
     
     console.log(`\nTotal UTXOs found: ${myUtxos.length}`);
+    
+    // Calculate and display total balance
+    const totalBalance = myUtxos.reduce((sum, utxo) => sum.add(utxo.amount), new BN(0));
+    const LAMPORTS_PER_SOL = new BN(1000000000); // 1 billion lamports = 1 SOL
+    const balanceInSol = totalBalance.div(LAMPORTS_PER_SOL);
+    const remainderLamports = totalBalance.mod(LAMPORTS_PER_SOL);
+    const balanceInSolWithDecimals = balanceInSol.toNumber() + remainderLamports.toNumber() / 1000000000;
+    console.log(`Total balance: ${balanceInSolWithDecimals.toFixed(9)} SOL`);
   } catch (error: any) {
     console.error('Error in main function:', error.message);
   }
