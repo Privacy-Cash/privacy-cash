@@ -19,6 +19,10 @@ const FEE_AMOUNT = 10_000; // 0.00001 SOL in lamports
 const TRANSACT_IX_DISCRIMINATOR = Buffer.from([217, 149, 130, 143, 221, 52, 252, 119]);
 const CIRCUIT_PATH = path.resolve(__dirname, '../artifacts/circuits/transaction2');
 
+// Load user keypair from script_keypair.json
+const userKeypairJson = JSON.parse(readFileSync(path.join(__dirname, 'script_keypair.json'), 'utf-8'));
+const user = Keypair.fromSecretKey(Uint8Array.from(userKeypairJson));
+
 // Program ID for the zkcash program
 const PROGRAM_ID = new PublicKey('BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh');
 
@@ -90,28 +94,29 @@ async function main() {
     const encryptionService = new EncryptionService();
     
     // Load wallet keypair from deploy-keypair.json in anchor directory
-    let payer: Keypair;
+    let deployer: Keypair;
     
     try {
       // Try to load from deploy-keypair.json in anchor directory
       const anchorDirPath = path.join(__dirname, '..', 'anchor');
       const deployKeypairPath = path.join(anchorDirPath, 'deploy-keypair.json');
       const keypairJson = JSON.parse(readFileSync(deployKeypairPath, 'utf-8'));
-      payer = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
+      deployer = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
       console.log('Using deploy keypair from anchor directory');
       
-      // Generate encryption key from the payer keypair
-      encryptionService.deriveEncryptionKeyFromWallet(payer);
-      console.log('Encryption key generated from wallet keypair');
+      // Generate encryption key from the user keypair
+      encryptionService.deriveEncryptionKeyFromWallet(user);
+      console.log('Encryption key generated from user keypair');
     } catch (err) {
       console.error('Could not load deploy-keypair.json from anchor directory');
       return;
     }
 
-    console.log(`Using wallet: ${payer.publicKey.toString()}`);
+    console.log(`Deployer wallet: ${deployer.publicKey.toString()}`);
+    console.log(`User wallet: ${user.publicKey.toString()}`);
     
     // Check wallet balance
-    const balance = await connection.getBalance(payer.publicKey);
+    const balance = await connection.getBalance(user.publicKey);
     console.log(`Wallet balance: ${balance / 1e9} SOL`);
 
     if (balance < DEPOSIT_AMOUNT + FEE_AMOUNT) {
@@ -121,17 +126,17 @@ async function main() {
     
     // Derive PDA (Program Derived Addresses) for the tree account and other required accounts
     const [treeAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('merkle_tree'), payer.publicKey.toBuffer()],
+      [Buffer.from('merkle_tree'), deployer.publicKey.toBuffer()],
       PROGRAM_ID
     );
 
     const [feeRecipientAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('fee_recipient'), payer.publicKey.toBuffer()],
+      [Buffer.from('fee_recipient'), deployer.publicKey.toBuffer()],
       PROGRAM_ID
     );
 
     const [treeTokenAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('tree_token'), payer.publicKey.toBuffer()],
+      [Buffer.from('tree_token'), deployer.publicKey.toBuffer()],
       PROGRAM_ID
     );
 
@@ -242,7 +247,7 @@ async function main() {
 
     // Create the deposit ExtData with real encrypted outputs
     const extData = {
-      recipient: payer.publicKey,
+      recipient: user.publicKey,
       extAmount: new BN(DEPOSIT_AMOUNT),
       encryptedOutput1: encryptedOutput1,
       encryptedOutput2: encryptedOutput2,
@@ -422,10 +427,14 @@ async function main() {
         { pubkey: commitment0PDA, isSigner: false, isWritable: true },
         { pubkey: commitment1PDA, isSigner: false, isWritable: true },
         { pubkey: treeTokenAccount, isSigner: false, isWritable: true },
-        { pubkey: payer.publicKey, isSigner: false, isWritable: true },
+        // recipient
+        { pubkey: user.publicKey, isSigner: false, isWritable: true },
+        // fee recipient
         { pubkey: feeRecipientAccount, isSigner: false, isWritable: true },
-        { pubkey: payer.publicKey, isSigner: false, isWritable: false },
-        { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+        // fee recipient
+        { pubkey: deployer.publicKey, isSigner: false, isWritable: false },
+        // signer
+        { pubkey: user.publicKey, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       programId: PROGRAM_ID,
@@ -438,7 +447,7 @@ async function main() {
       .add(instruction);
     
     // Sign and send the transaction
-    const signature = await sendAndConfirmTransaction(connection, transaction, [payer]);
+    const signature = await sendAndConfirmTransaction(connection, transaction, [user]);
     console.log('Transaction sent:', signature);
     console.log(`Transaction link: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
     

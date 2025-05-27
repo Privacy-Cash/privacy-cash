@@ -18,3 +18,4 @@ indexer/.env.*.local
 indexer/.vscode
 indexer/.yarn
 indexer/.DS_Store
+scripts/script_keypair.json

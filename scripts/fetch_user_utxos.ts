@@ -195,19 +195,18 @@ export async function isUtxoSpent(connection: Connection, utxo: Utxo): Promise<b
  */
 async function main() {
   try {
-    // Load keypair from file (using deploy-keypair.json as an example)
+    // Load keypair from script_keypair.json
     let keypair: Keypair;
     
     try {
-      const anchorDirPath = path.join(__dirname, '..', 'anchor');
-      const deployKeypairPath = path.join(anchorDirPath, 'deploy-keypair.json');
-      const keypairJson = JSON.parse(readFileSync(deployKeypairPath, 'utf-8'));
+      // First try to load from script_keypair.json
+      const scriptKeypairPath = path.join(__dirname, 'script_keypair.json');
+      const keypairJson = JSON.parse(readFileSync(scriptKeypairPath, 'utf-8'));
       keypair = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
+      console.log('Using script_keypair.json');
     } catch (err) {
-      console.log('Could not load deploy-keypair.json, falling back to test-keypair.json');
-      const testKeypairPath = path.join(__dirname, 'test-keypair.json');
-      const keypairJson = JSON.parse(readFileSync(testKeypairPath, 'utf-8'));
-      keypair = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
+      console.log('Could not load script_keypair.json, falling back to deploy-keypair.json');
+      return;
     }
     
     console.log('Using keypair with public key:', keypair.publicKey.toBase58());
