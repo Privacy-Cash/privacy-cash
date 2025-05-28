@@ -9,8 +9,14 @@ import { Utxo } from './models/utxo';
 import axios from 'axios';
 import { Connection, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
+// @ts-ignore
+import * as ffjavascript from 'ffjavascript';
 
 dotenv.config();
+
+// Use type assertion for the utility functions (same pattern as in get_verification_keys.ts)
+const utils = ffjavascript.utils as any;
+const { unstringifyBigInts, leInt2Buff } = utils;
 
 // Program ID for the zkcash program - same as in deposit_devnet.ts
 const PROGRAM_ID = new PublicKey('BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh');
@@ -36,10 +42,11 @@ interface ApiResponse {
 /**
  * Fetch and decrypt all UTXOs for a user
  * @param keypair The user's Solana keypair
+ * @param connection Solana connection to fetch on-chain commitment accounts
  * @param apiUrl Optional custom API URL, defaults to 'https://api.thelive.bet/utxos'
  * @returns Array of decrypted UTXOs that belong to the user
  */
-export async function getMyUtxos(keypair: Keypair, apiUrl?: string): Promise<Utxo[]> {
+export async function getMyUtxos(keypair: Keypair, connection: Connection, apiUrl?: string): Promise<Utxo[]> {
   try {
     // Initialize the light protocol hasher
     const lightWasm = await WasmFactory.getInstance();
@@ -128,8 +135,74 @@ export async function getMyUtxos(keypair: Keypair, apiUrl?: string): Promise<Utx
         successfulDecryptions++;
         console.log(`✓ Successfully decrypted output #${i + 1}`);
         
-        // Set the index (since we don't have exact index information)
-        decryptedUtxo.index = i;
+        // Get the real index from the on-chain commitment account
+        try {
+          const commitment = await decryptedUtxo.getCommitment();
+          console.log(`Getting real index for commitment: ${commitment}`);
+          
+          // Convert decimal commitment string to byte array (same format as in proofs)
+          const commitmentBytes = Array.from(
+            leInt2Buff(unstringifyBigInts(commitment), 32)
+          ).reverse() as number[];
+          
+          // Derive the commitment PDA (could be either commitment0 or commitment1)
+          // We'll try both seeds since we don't know which one it is
+          let commitmentAccount = null;
+          let realIndex = null;
+          
+          // Try commitment0 seed
+          try {
+            const [commitment0PDA] = PublicKey.findProgramAddressSync(
+              [Buffer.from("commitment0"), Buffer.from(commitmentBytes)],
+              PROGRAM_ID
+            );
+            
+            const account0Info = await connection.getAccountInfo(commitment0PDA);
+            if (account0Info) {
+              // Parse the index from the account data according to CommitmentAccount structure:
+              // 0-8: Anchor discriminator
+              // 8-40: commitment (32 bytes)  
+              // 40-44: encrypted_output length (4 bytes)
+              // 44-44+len: encrypted_output data
+              // 44+len-52+len: index (8 bytes)
+              const encryptedOutputLength = account0Info.data.readUInt32LE(40);
+              const indexOffset = 44 + encryptedOutputLength;
+              const indexBytes = account0Info.data.slice(indexOffset, indexOffset + 8);
+              realIndex = new BN(indexBytes, 'le').toNumber();
+              console.log(`Found commitment0 account with index: ${realIndex}`);
+            }
+          } catch (e) {
+            // Try commitment1 seed if commitment0 fails
+            try {
+              const [commitment1PDA] = PublicKey.findProgramAddressSync(
+                [Buffer.from("commitment1"), Buffer.from(commitmentBytes)],
+                PROGRAM_ID
+              );
+              
+              const account1Info = await connection.getAccountInfo(commitment1PDA);
+              if (account1Info) {
+                // Parse the index from the account data according to CommitmentAccount structure
+                const encryptedOutputLength = account1Info.data.readUInt32LE(40);
+                const indexOffset = 44 + encryptedOutputLength;
+                const indexBytes = account1Info.data.slice(indexOffset, indexOffset + 8);
+                realIndex = new BN(indexBytes, 'le').toNumber();
+                console.log(`Found commitment1 account with index: ${realIndex}`);
+              }
+            } catch (e2) {
+              console.log(`Could not find commitment account for ${commitment}, using encrypted index: ${decryptedUtxo.index}`);
+            }
+          }
+          
+          // Update the UTXO with the real index if we found it
+          if (realIndex !== null) {
+            const oldIndex = decryptedUtxo.index;
+            decryptedUtxo.index = realIndex;
+            console.log(`Updated UTXO index from ${oldIndex} to ${realIndex}`);
+          }
+          
+        } catch (error: any) {
+          console.log(`Failed to get real index for UTXO: ${error.message}`);
+        }
         
         // Add to our list of UTXOs
         myUtxos.push(decryptedUtxo);
@@ -216,17 +289,17 @@ async function main() {
     // Check for custom API URL in .env file
     const apiUrl = process.env.UTXO_API_URL;
     
+    // Connect to Solana once instead of for each UTXO
+    const connection = new Connection(process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com');
+    
     // Fetch all UTXOs for this keypair
-    const myUtxos = await getMyUtxos(keypair, apiUrl);
+    const myUtxos = await getMyUtxos(keypair, connection, apiUrl);
     
     // Display them
     console.log('\nYour UTXOs:');
     if (myUtxos.length === 0) {
       console.log('No UTXOs found for this keypair.');
     } else {
-      // Connect to Solana once instead of for each UTXO
-      const connection = new Connection(process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com');
-      
       for (const utxo of myUtxos) {
         await utxo.log();
         
