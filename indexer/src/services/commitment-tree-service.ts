@@ -173,6 +173,18 @@ class CommitmentTreeService {
     
     return this.tree.elements();
   }
+
+  /**
+   * Get the current next index (number of elements in the tree)
+   * @returns The next index where a new commitment would be inserted
+   */
+  getNextIndex(): number {
+    if (!this.initialized || !this.tree) {
+      throw new Error('Commitment tree service not initialized');
+    }
+    
+    return this.tree.elements().length;
+  }
 }
 
 // Create and export a singleton instance

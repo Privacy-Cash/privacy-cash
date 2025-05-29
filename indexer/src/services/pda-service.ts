@@ -244,6 +244,18 @@ export function getMerkleRoot(): string {
 }
 
 /**
+ * Get the current next index
+ */
+export function getNextIndex(): number {
+  try {
+    return commitmentTreeService.getNextIndex();
+  } catch (error) {
+    console.error('Error getting next index:', error);
+    return 0;
+  }
+}
+
+/**
  * Check if an encrypted output exists
  * @param encryptedOutput The encrypted output to check
  * @returns true if the encrypted output exists, false otherwise

@@ -1,9 +1,8 @@
 import Koa from 'koa';
 import Router from '@koa/router';
 import bodyParser from 'koa-bodyparser';
-import { loadHistoricalPDAs, getAllCommitmentIds, getMerkleProof, getMerkleRoot, hasEncryptedOutput, getAllEncryptedOutputs, getMerkleProofByIndex } from './services/pda-service';
+import { getAllCommitmentIds, getMerkleProof, getMerkleRoot, getNextIndex, hasEncryptedOutput, getAllEncryptedOutputs, getMerkleProofByIndex } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
-import { commitmentTreeService } from './services/commitment-tree-service';
 import { handleWebhook, reloadCommitmentsAndUxto } from './controllers/webhook';
 
 // Define types for request bodies
@@ -57,8 +56,10 @@ router.get('/commitments', (ctx) => {
 // Get the current Merkle tree root
 router.get('/merkle/root', (ctx) => {
   const root = getMerkleRoot();
+  const nextIndex = getNextIndex();
   ctx.body = {
-    root
+    root,
+    nextIndex
   };
 });
 

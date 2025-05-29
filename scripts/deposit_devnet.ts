@@ -31,6 +31,24 @@ const PROGRAM_ID = new PublicKey('BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh')
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
+// Function to query remote tree state from indexer API
+async function queryRemoteTreeState(): Promise<{ root: string, nextIndex: number }> {
+  try {
+    console.log('Fetching Merkle root and nextIndex from API...');
+    const response = await fetch('https://api.thelive.bet/merkle/root');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Merkle root and nextIndex: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json() as { root: string, nextIndex: number };
+    console.log(`Fetched root from API: ${data.root}`);
+    console.log(`Fetched nextIndex from API: ${data.nextIndex}`);
+    return data;
+  } catch (error) {
+    console.error('Failed to fetch root and nextIndex from API:', error);
+    throw error;
+  }
+}
+
 // Function to fetch Merkle proof from API for a given commitment
 async function fetchMerkleProof(commitment: string): Promise<{ pathElements: string[], pathIndices: number[] }> {
   try {
@@ -79,30 +97,30 @@ function findCommitmentPDAs(proof: any) {
 }
 
 // Function to get tree state
-async function getTreeState(treeAccount: PublicKey) {
-  const treeAccountInfo = await connection.getAccountInfo(treeAccount);
-  if (!treeAccountInfo) {
-    throw new Error('Tree account not found');
-  }
+// async function getTreeState(treeAccount: PublicKey) {
+//   const treeAccountInfo = await connection.getAccountInfo(treeAccount);
+//   if (!treeAccountInfo) {
+//     throw new Error('Tree account not found');
+//   }
   
-  // Parse the account data manually
-  const treeAccountData = {
-    authority: new PublicKey(treeAccountInfo.data.slice(8, 40)),
-    nextIndex: new BN(treeAccountInfo.data.slice(40, 48), 'le'),
-    subtrees: Array.from({ length: 20 }, (_, i) => 
-      treeAccountInfo.data.slice(48 + i * 32, 48 + (i + 1) * 32)
-    ),
-    root: treeAccountInfo.data.slice(48 + 20 * 32, 48 + 20 * 32 + 32),
-    rootHistory: Array.from({ length: 10 }, (_, i) => 
-      treeAccountInfo.data.slice(48 + 20 * 32 + 32 + i * 32, 48 + 20 * 32 + 32 + (i + 1) * 32)
-    ),
-    rootIndex: new BN(treeAccountInfo.data.slice(48 + 20 * 32 + 32 + 10 * 32, 48 + 20 * 32 + 32 + 10 * 32 + 8), 'le'),
-    bump: treeAccountInfo.data[48 + 20 * 32 + 32 + 10 * 32 + 8],
-    _padding: treeAccountInfo.data.slice(48 + 20 * 32 + 32 + 10 * 32 + 9)
-  };
+//   // Parse the account data manually
+//   const treeAccountData = {
+//     authority: new PublicKey(treeAccountInfo.data.slice(8, 40)),
+//     nextIndex: new BN(treeAccountInfo.data.slice(40, 48), 'le'),
+//     subtrees: Array.from({ length: 20 }, (_, i) => 
+//       treeAccountInfo.data.slice(48 + i * 32, 48 + (i + 1) * 32)
+//     ),
+//     root: treeAccountInfo.data.slice(48 + 20 * 32, 48 + 20 * 32 + 32),
+//     rootHistory: Array.from({ length: 10 }, (_, i) => 
+//       treeAccountInfo.data.slice(48 + 20 * 32 + 32 + i * 32, 48 + 20 * 32 + 32 + (i + 1) * 32)
+//     ),
+//     rootIndex: new BN(treeAccountInfo.data.slice(48 + 20 * 32 + 32 + 10 * 32, 48 + 20 * 32 + 32 + 10 * 32 + 8), 'le'),
+//     bump: treeAccountInfo.data[48 + 20 * 32 + 32 + 10 * 32 + 8],
+//     _padding: treeAccountInfo.data.slice(48 + 20 * 32 + 32 + 10 * 32 + 9)
+//   };
   
-  return treeAccountData;
-}
+//   return treeAccountData;
+// }
 
 async function main() {
   try {
@@ -156,24 +174,21 @@ async function main() {
     // Create the merkle tree with the pre-initialized poseidon hash
     const tree = new MerkleTree(20, lightWasm);
 
-    // Initialize root variable
+    // Initialize root and nextIndex variables
     let root: string;
+    let currentNextIndex: number;
 
     try {
-      console.log('Fetching Merkle root from API...');
-      const response = await fetch('https://api.thelive.bet/merkle/root');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Merkle root: ${response.status} ${response.statusText}`);
-      }
-      const data = await response.json() as { root: string };
+      const data = await queryRemoteTreeState();
       root = data.root;
-      console.log(`Fetched root from API: ${root}`);
+      currentNextIndex = data.nextIndex;
     } catch (error) {
-      console.error('Failed to fetch root from API, exiting');
+      console.error('Failed to fetch root and nextIndex from API, exiting');
       return; // Return early without a fallback
     }
 
     console.log(`Using tree root: ${root}`);
+    console.log(`New UTXOs will be inserted at indices: ${currentNextIndex} and ${currentNextIndex + 1}`);
 
     // Generate a deterministic private key derived from the wallet keypair
     const utxoPrivateKey = encryptionService.deriveUtxoPrivateKey();
@@ -288,13 +303,6 @@ async function main() {
     const publicAmountForCircuit = new BN(extAmount).sub(new BN(FEE_AMOUNT)).add(FIELD_SIZE).mod(FIELD_SIZE);
     console.log(`Public amount calculation: (${extAmount} - ${FEE_AMOUNT} + FIELD_SIZE) % FIELD_SIZE = ${publicAmountForCircuit.toString()}`);
     
-    // Get current tree state to determine where new UTXOs will be inserted
-    console.log('Fetching current tree state to determine UTXO indices...');
-    const currentTreeState = await getTreeState(treeAccount);
-    const currentNextIndex = currentTreeState.nextIndex.toNumber();
-    console.log(`Current tree nextIndex: ${currentNextIndex}`);
-    console.log(`New UTXOs will be inserted at indices: ${currentNextIndex} and ${currentNextIndex + 1}`);
-
     // Create outputs for the transaction with the same shared keypair
     const outputs = [
       new Utxo({ 
@@ -562,29 +570,30 @@ async function main() {
     
     // Wait a moment for the transaction to be confirmed
     console.log('Waiting for transaction confirmation...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(resolve => setTimeout(resolve, 10000));
     
     // Check if UTXOs were added to the tree by fetching the tree account again
     try {
       console.log('Fetching updated tree state...');
-      const updatedTreeState = await getTreeState(treeAccount);
+      const updatedTreeState = await queryRemoteTreeState();
       
       console.log('Tree state after deposit:');
-      console.log('- Current tree nextIndex:', updatedTreeState.nextIndex.toString());
-      console.log('- Total UTXOs in tree:', updatedTreeState.nextIndex.toString());
-      console.log('- Root Index:', updatedTreeState.rootIndex.mod(new BN(10)).toString());
+      console.log('- Current tree nextIndex:', updatedTreeState.nextIndex);
+      console.log('- Total UTXOs in tree:', updatedTreeState.nextIndex);
+      console.log('- New tree root:', updatedTreeState.root);
       
-      // Extract the root from the tree account data
-      const newRoot = Buffer.from(updatedTreeState.root).toString('hex');
-      console.log('- New tree root:', newRoot);
+      // Calculate the number of new UTXOs added (should be 2)
+      const expectedNextIndex = currentNextIndex + 2;
+      const utxosAdded = updatedTreeState.nextIndex - currentNextIndex;
+      console.log(`UTXOs added in this deposit: ${utxosAdded} (expected: 2)`);
       
-      // Calculate the number of new UTXOs added
-      const previousState = await getTreeState(treeAccount);
-      const utxosAdded = updatedTreeState.nextIndex.sub(previousState.nextIndex).toString();
-      console.log('UTXOs added in this deposit:', utxosAdded);
-      console.log('Deposit successful! UTXOs were added to the Merkle tree.');
+      if (updatedTreeState.nextIndex === expectedNextIndex) {
+        console.log('Deposit successful! UTXOs were added to the Merkle tree.');
+      } else {
+        console.log(`Warning: Expected nextIndex to be ${expectedNextIndex}, but got ${updatedTreeState.nextIndex}`);
+      }
     } catch (error) {
-      console.error('Failed to fetch tree account after deposit:', error);
+      console.error('Failed to fetch tree state after deposit:', error);
     }
   } catch (error: any) {
     console.error('Error during deposit:', error);
