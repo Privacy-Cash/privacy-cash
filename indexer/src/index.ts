@@ -1,6 +1,7 @@
 import Koa from 'koa';
 import Router from '@koa/router';
 import bodyParser from 'koa-bodyparser';
+import cors from '@koa/cors';
 import { getAllCommitmentIds, getMerkleProof, getMerkleRoot, getNextIndex, hasEncryptedOutput, getAllEncryptedOutputs, getMerkleProofByIndex } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
 import { handleWebhook, reloadCommitmentsAndUxto } from './controllers/webhook';
@@ -32,6 +33,11 @@ app.use(async (ctx, next) => {
 });
 
 // Configure middleware
+// TODO: Only allow requests from the live.bet domain and localhost
+app.use(cors({
+  origin: '*',
+  credentials: true
+ }))
 app.use(bodyParser());
 
 // Define routes
