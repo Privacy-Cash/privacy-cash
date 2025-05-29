@@ -235,30 +235,53 @@ export async function isUtxoSpent(connection: Connection, utxo: Utxo): Promise<b
     const nullifier = await utxo.getNullifier();
     console.log(`Checking if UTXO with nullifier ${nullifier} is spent`);
     
-    // Looking at the Rust code and how it uses nullifiers, we need to use the raw bytes of the nullifier
-    // for PDA derivation. We'll use a simpler approach than the previous one, leveraging
-    // the fact that Solana already has seeds limited to 32 bytes.
+    // Convert decimal nullifier string to byte array (same format as in proofs)
+    // This matches how commitments are handled and how the Rust code expects the seeds
+    const nullifierBytes = Array.from(
+      leInt2Buff(unstringifyBigInts(nullifier), 32)
+    ).reverse() as number[];
     
-    // Use a hex hash of the nullifier instead of the raw value to keep the seed size manageable
-    const crypto = require('crypto');
-    const nullifierHash = crypto.createHash('sha256').update(nullifier).digest();
+    // Try both nullifier0 and nullifier1 seeds since we don't know which one it would use
+    let isSpent = false;
     
-    // Now use this hash for the PDA derivation
-    const [nullifierPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("nullifier0"), nullifierHash],
-      PROGRAM_ID
-    );
+    // Try nullifier0 seed
+    try {
+      const [nullifier0PDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("nullifier0"), Buffer.from(nullifierBytes)],
+        PROGRAM_ID
+      );
+      
+      console.log(`Derived nullifier0 PDA: ${nullifier0PDA.toBase58()}`);
+      const nullifier0Account = await connection.getAccountInfo(nullifier0PDA);
+      if (nullifier0Account !== null) {
+        isSpent = true;
+        console.log(`UTXO is spent (nullifier0 account exists)`);
+        return isSpent;
+      }
+    } catch (e) {
+      // PDA derivation failed for nullifier0, continue to nullifier1
+    }
     
-    console.log(`Derived nullifier PDA: ${nullifierPda.toBase58()}`);
+    // Try nullifier1 seed
+    try {
+      const [nullifier1PDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("nullifier1"), Buffer.from(nullifierBytes)],
+        PROGRAM_ID
+      );
+      
+      console.log(`Derived nullifier1 PDA: ${nullifier1PDA.toBase58()}`);
+      const nullifier1Account = await connection.getAccountInfo(nullifier1PDA);
+      if (nullifier1Account !== null) {
+        isSpent = true;
+        console.log(`UTXO is spent (nullifier1 account exists)`);
+        return isSpent;
+      }
+    } catch (e) {
+      // PDA derivation failed for nullifier1 as well
+    }
     
-    // Check if this account exists
-    const nullifierAccount = await connection.getAccountInfo(nullifierPda);
-    
-    // If the account exists, the UTXO has been spent
-    const isSpent = nullifierAccount !== null;
-    console.log(`UTXO is ${isSpent ? 'spent' : 'unspent'}`);
-    
-    return isSpent;
+    console.log(`UTXO is unspent (no nullifier accounts found)`);
+    return false;
   } catch (error) {
     console.error('Error checking if UTXO is spent:', error);
     return false; // Default to unspent in case of errors
