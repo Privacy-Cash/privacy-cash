@@ -112,26 +112,15 @@ async function main() {
     // Initialize the encryption service
     const encryptionService = new EncryptionService();
     
-    // Load wallet keypair from deploy-keypair.json in anchor directory
-    let deployer: Keypair;
+    // Use hardcoded deployer public key
+    const deployer = new PublicKey('1NpWc4q6VYJmg9V3TQenvHMTr8qiDDrrT4TV27SxQms');
+    console.log('Using hardcoded deployer public key');
     
-    try {
-      // Try to load from deploy-keypair.json in anchor directory
-      const anchorDirPath = path.join(__dirname, '..', 'anchor');
-      const deployKeypairPath = path.join(anchorDirPath, 'deploy-keypair.json');
-      const keypairJson = JSON.parse(readFileSync(deployKeypairPath, 'utf-8'));
-      deployer = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
-      console.log('Using deploy keypair from anchor directory');
-      
-      // Generate encryption key from the user keypair
-      encryptionService.deriveEncryptionKeyFromWallet(user);
-      console.log('Encryption key generated from user keypair');
-    } catch (err) {
-      console.error('Could not load deploy-keypair.json from anchor directory');
-      return;
-    }
+    // Generate encryption key from the user keypair
+    encryptionService.deriveEncryptionKeyFromWallet(user);
+    console.log('Encryption key generated from user keypair');
 
-    console.log(`Deployer wallet: ${deployer.publicKey.toString()}`);
+    console.log(`Deployer wallet: ${deployer.toString()}`);
     console.log(`User wallet: ${user.publicKey.toString()}`);
     
     // Check wallet balance
@@ -145,17 +134,17 @@ async function main() {
     
     // Derive PDA (Program Derived Addresses) for the tree account and other required accounts
     const [treeAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('merkle_tree'), deployer.publicKey.toBuffer()],
+      [Buffer.from('merkle_tree'), deployer.toBuffer()],
       PROGRAM_ID
     );
 
     const [feeRecipientAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('fee_recipient'), deployer.publicKey.toBuffer()],
+      [Buffer.from('fee_recipient'), deployer.toBuffer()],
       PROGRAM_ID
     );
 
     const [treeTokenAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('tree_token'), deployer.publicKey.toBuffer()],
+      [Buffer.from('tree_token'), deployer.toBuffer()],
       PROGRAM_ID
     );
 
@@ -552,7 +541,7 @@ async function main() {
         // fee recipient
         { pubkey: feeRecipientAccount, isSigner: false, isWritable: true },
         // fee recipient
-        { pubkey: deployer.publicKey, isSigner: false, isWritable: false },
+        { pubkey: deployer, isSigner: false, isWritable: false },
         // signer
         { pubkey: user.publicKey, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
