@@ -5,6 +5,7 @@ import cors from '@koa/cors';
 import { getAllCommitmentIds, getMerkleProof, getMerkleRoot, getNextIndex, hasEncryptedOutput, getAllEncryptedOutputs, getMerkleProofByIndex } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
 import { handleWebhook, reloadCommitmentsAndUxto } from './controllers/webhook';
+import { handleWithdraw, getRelayerInfo } from './controllers/withdraw';
 
 // Define types for request bodies
 interface WebhookRequest {
@@ -123,6 +124,10 @@ router.get('/utxos', (ctx) => {
 
 // Webhook endpoint for transaction updates
 router.post('/zkcash/webhook/transaction', handleWebhook);
+
+// Withdraw endpoints
+router.post('/withdraw', handleWithdraw);
+router.get('/relayer', getRelayerInfo);
 
 // Configure routes
 app.use(router.routes());

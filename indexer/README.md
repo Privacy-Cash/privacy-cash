@@ -7,6 +7,7 @@ This service indexes commitment PDAs created by the ZKCash Solana program and pr
 - Historical data loading on startup
 - Real-time updates via Helius webhooks
 - API to retrieve commitment IDs
+- Withdraw transaction relay service
 
 ## Setup
 
@@ -51,11 +52,39 @@ The webhook will:
 
 ## API Endpoints
 
-- `GET /health` - Health check endpoint
+### Core Endpoints
+- `GET /` - Health check endpoint
 - `GET /commitments` - Returns a list of all commitment IDs
-- `GET /merkle/root` - Returns the current Merkle tree root
+- `GET /merkle/root` - Returns the current Merkle tree root and nextIndex
 - `GET /merkle/proof/:commitment` - Returns the Merkle proof for a specific commitment
+- `GET /merkle/proof/index/:index` - Returns the Merkle proof for a specific index
+- `GET /utxos/check/:encryptedOutput` - Check if an encrypted output exists
+- `GET /utxos` - Get all encrypted outputs
 - `POST /zkcash/webhook/transaction` - Webhook endpoint for Helius transactions
+
+### Withdraw Endpoints
+- `POST /withdraw` - Submit a withdraw transaction (relayed by indexer)
+- `GET /relayer` - Get relayer public key information
+
+The withdraw endpoint expects a payload with the same structure as deposit transactions:
+```json
+{
+  "serializedProof": "base64-encoded-proof-and-extdata",
+  "treeAccount": "PublicKey",
+  "nullifier0PDA": "PublicKey", 
+  "nullifier1PDA": "PublicKey",
+  "commitment0PDA": "PublicKey",
+  "commitment1PDA": "PublicKey",
+  "treeTokenAccount": "PublicKey",
+  "recipient": "PublicKey",
+  "feeRecipientAccount": "PublicKey",
+  "deployer": "PublicKey",
+  "extAmount": 123456,
+  "encryptedOutput1": "base64-encoded-data",
+  "encryptedOutput2": "base64-encoded-data", 
+  "fee": 10000
+}
+```
 
 ## Development
 
@@ -73,4 +102,10 @@ This indexer expects commitment accounts with the following Anchor-generated str
 - 8 bytes index
 - 1 byte bump
 
-Adjust the parsing in `src/services/pda-service.ts` and `src/controllers/webhook.ts` if your account structure differs. 
+Adjust the parsing in `src/services/pda-service.ts` and `src/controllers/webhook.ts` if your account structure differs.
+
+### Relayer Setup
+
+The relayer uses a dedicated keypair stored in `relayer_fee_payer_keypair.json`:
+- **Purpose**: Signs and pays fees for withdraw transactions submitted to the indexer
+- **Pattern**: Uses the same transaction structure as deposits but relayed through the indexer 

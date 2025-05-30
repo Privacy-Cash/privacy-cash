@@ -18,4 +18,5 @@ indexer/.env.*.local
 indexer/.vscode
 indexer/.yarn
 indexer/.DS_Store
+indexer/relayer_fee_payer_keypair.json
 scripts/script_keypair.json
