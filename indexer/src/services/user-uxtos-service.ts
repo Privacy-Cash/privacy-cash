@@ -92,6 +92,46 @@ class UserUxtosService {
 
     return this.encryptedOutputs.size;
   }
+
+  /**
+   * Get encrypted outputs in a specified range with pagination
+   * @param start The starting index (inclusive)
+   * @param end The ending index (inclusive)
+   * @returns Object containing the range of encrypted outputs and pagination info
+   */
+  getEncryptedOutputsRange(start: number, end: number): { 
+    encrypted_outputs: string[], 
+    hasMore: boolean,
+    total: number,
+    start: number,
+    end: number 
+  } {
+    if (!this.initialized) {
+      throw new Error('UserUxtosService not initialized');
+    }
+
+    // Convert set to array for indexing
+    const allOutputs = Array.from(this.encryptedOutputs);
+    const total = allOutputs.length;
+    
+    // Validate parameters
+    if (start < 0) start = 0;
+    if (end < start) end = start;
+    
+    // Get the range
+    const rangeOutputs = allOutputs.slice(start, end + 1);
+    
+    // Check if there are more items after the current range
+    const hasMore = end + 1 < total;
+    
+    return {
+      encrypted_outputs: rangeOutputs,
+      hasMore,
+      total,
+      start,
+      end: Math.min(end, total - 1)
+    };
+  }
 }
 
 // Create and export a singleton instance

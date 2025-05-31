@@ -6,11 +6,85 @@ import { getAllCommitmentIds, getMerkleProof, getMerkleRoot, getNextIndex, hasEn
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
 import { handleWebhook, reloadCommitmentsAndUxto } from './controllers/webhook';
 import { handleWithdraw, getRelayerInfo } from './controllers/withdraw';
+import { userUxtosService } from './services/user-uxtos-service';
 
 // Define types for request bodies
 interface WebhookRequest {
   pubkey: string;
   accountData: string;
+}
+
+/**
+ * Handle UTXOs range request with parameter validation
+ * @param startParam The start parameter as string
+ * @param endParam The end parameter as string
+ * @returns Response object with data or error
+ */
+function handleUtxosRangeRequest(startParam: string | undefined, endParam: string | undefined): {
+  success: boolean;
+  status: number;
+  data?: {
+    encrypted_outputs: string[];
+    hasMore: boolean;
+    total: number;
+    start: number;
+    end: number;
+  };
+  error?: string;
+} {
+  try {
+    if (!startParam || !endParam) {
+      return {
+        success: false,
+        status: 400,
+        error: 'Missing required parameters. Both start and end are required.'
+      };
+    }
+
+    const start = parseInt(startParam);
+    const end = parseInt(endParam,);
+
+    if (isNaN(start) || isNaN(end)) {
+      return {
+        success: false,
+        status: 400,
+        error: 'Invalid parameters. Both start and end must be valid numbers.'
+      };
+    }
+
+    // Validate parameter values
+    if (start < 0) {
+      return {
+        success: false,
+        status: 400,
+        error: 'Start parameter must be non-negative.'
+      };
+    }
+
+    if (end < start) {
+      return {
+        success: false,
+        status: 400,
+        error: 'End parameter must be greater than or equal to start parameter.'
+      };
+    }
+
+    // Get the range data
+    const result = userUxtosService.getEncryptedOutputsRange(start, end);
+    
+    return {
+      success: true,
+      status: 200,
+      data: result
+    };
+  } catch (error) {
+    console.error('Error handling UTXOs range request:', error);
+    return {
+      success: false,
+      status: 500,
+      error: 'Internal server error'
+    };
+  }
 }
 
 // Initialize the application
@@ -120,6 +194,23 @@ router.get('/utxos', (ctx) => {
     count: encryptedOutputs.length,
     encrypted_outputs: encryptedOutputs
   };
+});
+
+// Get encrypted outputs in a range with pagination
+router.get('/utxos/range', (ctx) => {
+  const startParam = ctx.query.start as string;
+  const endParam = ctx.query.end as string;
+  
+  const result = handleUtxosRangeRequest(startParam, endParam);
+  
+  ctx.status = result.status;
+  if (result.success) {
+    ctx.body = result.data;
+  } else {
+    ctx.body = {
+      error: result.error
+    };
+  }
 });
 
 // Webhook endpoint for transaction updates
