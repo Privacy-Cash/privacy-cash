@@ -3058,6 +3058,47 @@ describe("withdraw_fees", () => {
     }
   });
 
+  it("Fails to withdraw amount that would break rent exemption (InsufficientFundsToMaintainRentExemption)", async () => {
+    // Get the current balance of fee recipient
+    const feeRecipientBalance = await provider.connection.getBalance(feeRecipientPDA);
+    
+    // Calculate the minimum rent exemption for FeeRecipientAccount
+    const feeRecipientAccountSize = 8 + 32 + 1; // discriminator + authority + bump
+    const rentExemption = await provider.connection.getMinimumBalanceForRentExemption(feeRecipientAccountSize);
+    
+    // Try to withdraw an amount that would leave the account below rent exemption
+    // We'll withdraw everything except 1 lamport less than rent exemption
+    const withdrawAmount = feeRecipientBalance - rentExemption + 1;
+    
+    // Ensure we have enough balance to make this a meaningful test
+    expect(feeRecipientBalance).to.be.greaterThan(rentExemption);
+    expect(withdrawAmount).to.be.greaterThan(0);
+    
+    try {
+      await program.methods
+        .withdrawFees(new anchor.BN(withdrawAmount))
+        .accounts({
+          feeRecipientAccount: feeRecipientPDA,
+          recipient: recipient.publicKey,
+          authority: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([authority])
+        .rpc();
+      
+      // If we get here, the test failed because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to rent exemption violation but succeeded");
+    } catch (error) {
+      // Check for the specific error code for rent exemption
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x1778") || // InsufficientFundsToMaintainRentExemption error code
+        errorString.includes("InsufficientFundsToMaintainRentExemption") ||
+        errorString.includes("insufficient funds to maintain rent exemption")
+      ).to.be.true;
+    }
+  });
+
   it("Fails when authority is not the fee_recipient_account's authority (Unauthorized)", async () => {
     const withdrawAmount = 0.01 * LAMPORTS_PER_SOL; // 0.01 SOL
     
@@ -3105,13 +3146,14 @@ describe("withdraw_fees", () => {
   });
 
   it("Can withdraw the entire fee recipient balance", async () => {
-    // Get the current balance of fee recipient (minus rent exemption)
+    // Get the current balance of fee recipient
     const feeRecipientBalance = await provider.connection.getBalance(feeRecipientPDA);
-    const rentExemption = await provider.connection.getMinimumBalanceForRentExemption(
-      8 + 32 + 1 // FeeRecipientAccount: discriminator + authority + bump
-    );
     
-    // Withdraw everything except rent exemption
+    // Calculate the minimum rent exemption using the same logic as the smart contract
+    const feeRecipientAccountSize = 8 + 32 + 1; // discriminator + authority (Pubkey) + bump (u8)
+    const rentExemption = await provider.connection.getMinimumBalanceForRentExemption(feeRecipientAccountSize);
+    
+    // Withdraw everything except rent exemption (exactly what the smart contract allows)
     const withdrawAmount = feeRecipientBalance - rentExemption;
     
     expect(withdrawAmount).to.be.greaterThan(0);
@@ -3238,5 +3280,46 @@ describe("withdraw_fees", () => {
     expect(recipient1Balance).to.equal(withdrawAmount);
     expect(recipient2Balance).to.equal(withdrawAmount);
     expect(recipient3Balance).to.equal(withdrawAmount);
+  });
+
+  it("Can withdraw exact maximum amount (leaving exactly rent exemption)", async () => {
+    // Get the current balance of fee recipient
+    const feeRecipientBalance = await provider.connection.getBalance(feeRecipientPDA);
+    
+    // Calculate the minimum rent exemption for FeeRecipientAccount
+    const feeRecipientAccountSize = 8 + 32 + 1; // discriminator + authority + bump
+    const rentExemption = await provider.connection.getMinimumBalanceForRentExemption(feeRecipientAccountSize);
+    
+    // Withdraw exactly the maximum allowed amount (leaving exactly rent exemption)
+    const withdrawAmount = feeRecipientBalance - rentExemption;
+    
+    // Ensure we have enough balance to make this a meaningful test
+    expect(feeRecipientBalance).to.be.greaterThan(rentExemption);
+    expect(withdrawAmount).to.be.greaterThan(0);
+    
+    // Get initial recipient balance
+    const recipientBalanceBefore = await provider.connection.getBalance(recipient.publicKey);
+    
+    // Execute the withdraw_fees instruction - this should succeed
+    const txSig = await program.methods
+      .withdrawFees(new anchor.BN(withdrawAmount))
+      .accounts({
+        feeRecipientAccount: feeRecipientPDA,
+        recipient: recipient.publicKey,
+        authority: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([authority])
+      .rpc();
+    
+    expect(txSig).to.be.a('string');
+    
+    // Get final balances
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceAfter = await provider.connection.getBalance(recipient.publicKey);
+    
+    // Verify the transfer happened correctly and exactly rent exemption remains
+    expect(feeRecipientBalanceAfter).to.equal(rentExemption);
+    expect(recipientBalanceAfter).to.equal(recipientBalanceBefore + withdrawAmount);
   });
 });

@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use light_hasher::Poseidon;
 use anchor_lang::solana_program::hash::{hash};
+use anchor_lang::solana_program::sysvar::rent::Rent;
 use ark_ff::PrimeField;
 use ark_bn254::Fr;
 
@@ -48,6 +49,18 @@ pub mod zkcash {
         require!(
             fee_recipient_account_info.lamports() >= amount,
             ErrorCode::InsufficientFundsForWithdrawal
+        );
+
+        // Calculate minimum rent exemption for the fee recipient account
+        let rent = Rent::get()?;
+        let fee_recipient_account_size = 8 + std::mem::size_of::<FeeRecipientAccount>(); // 8 bytes for discriminator + account size
+        let min_rent_exempt_balance = rent.minimum_balance(fee_recipient_account_size);
+        
+        // Check that after withdrawal, the fee recipient account will still be rent-exempt
+        let remaining_balance = fee_recipient_account_info.lamports().saturating_sub(amount);
+        require!(
+            remaining_balance >= min_rent_exempt_balance,
+            ErrorCode::InsufficientFundsToMaintainRentExemption
         );
 
         // Transfer the specified amount from fee recipient to recipient
@@ -373,4 +386,6 @@ pub enum ErrorCode {
     InvalidExtAmount,
     #[msg("Public amount calculation resulted in an overflow/underflow.")]
     PublicAmountCalculationError,
+    #[msg("Insufficient funds to maintain rent exemption")]
+    InsufficientFundsToMaintainRentExemption,
 }
