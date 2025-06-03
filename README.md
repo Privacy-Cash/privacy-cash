@@ -126,3 +126,8 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ```bash
    ts-node check_fees_balance.ts
    ```
+
+4. Withdraw fees
+   ```bash
+   ts-node withdraw_fees.ts <recipient_address> [amount_in_SOL]
+   ```
