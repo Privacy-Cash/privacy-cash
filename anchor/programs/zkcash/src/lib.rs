@@ -40,6 +40,24 @@ pub mod zkcash {
         Ok(())
     }
 
+    pub fn withdraw_fees(ctx: Context<WithdrawFees>, amount: u64) -> Result<()> {
+        let fee_recipient_account_info = ctx.accounts.fee_recipient_account.to_account_info();
+        let recipient_account_info = ctx.accounts.recipient.to_account_info();
+
+        // Check that the fee recipient account has sufficient funds
+        require!(
+            fee_recipient_account_info.lamports() >= amount,
+            ErrorCode::InsufficientFundsForWithdrawal
+        );
+
+        // Transfer the specified amount from fee recipient to recipient
+        **fee_recipient_account_info.try_borrow_mut_lamports()? -= amount;
+        **recipient_account_info.try_borrow_mut_lamports()? += amount;
+
+        msg!("Withdrew {} lamports from fee recipient to {}", amount, ctx.accounts.recipient.key());
+        Ok(())
+    }
+
     pub fn transact(ctx: Context<Transact>, proof: Proof, ext_data: ExtData) -> Result<()> {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
 
@@ -268,6 +286,25 @@ pub struct Initialize<'info> {
     pub tree_token_account: Account<'info, TreeTokenAccount>,
     
     #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawFees<'info> {
+    #[account(
+        mut,
+        seeds = [b"fee_recipient", authority.key().as_ref()],
+        bump = fee_recipient_account.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub fee_recipient_account: Account<'info, FeeRecipientAccount>,
+    
+    /// The recipient account where fees will be withdrawn to
+    #[account(mut)]
+    pub recipient: SystemAccount<'info>,
+    
     pub authority: Signer<'info>,
     
     pub system_program: Program<'info, System>,

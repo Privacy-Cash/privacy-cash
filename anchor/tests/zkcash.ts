@@ -2859,3 +2859,384 @@ describe("zkcash", () => {
     }
   });
 });
+
+describe("withdraw_fees", () => {
+  // Configure the client to use the local cluster.
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+  
+  const program = anchor.workspace.Zkcash as Program<Zkcash>;
+
+  // Generate keypairs for the accounts needed in the test
+  let treeAccountPDA: PublicKey;
+  let feeRecipientPDA: PublicKey;
+  let treeBump: number;
+  let feeRecipientBump: number;
+  let authority: anchor.web3.Keypair;
+  let recipient: anchor.web3.Keypair;
+  let fundingAccount: anchor.web3.Keypair;
+
+  // Initialize variables for tree token account
+  let treeTokenAccountPDA: PublicKey;
+  let treeTokenBump: number;
+
+  // --- Funding a wallet to use for paying transaction fees ---
+  before(async () => {
+    // Generate a funding account to pay for transactions
+    fundingAccount = anchor.web3.Keypair.generate();
+    
+    // Airdrop SOL to the funding account
+    console.log(`Airdropping SOL to funding account ${fundingAccount.publicKey.toBase58()}...`);
+    const airdropSignature = await provider.connection.requestAirdrop(
+      fundingAccount.publicKey,
+      100 * LAMPORTS_PER_SOL // Airdrop 100 SOL
+    );
+
+    // Confirm the transaction
+    const latestBlockHash = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction({
+      blockhash: latestBlockHash.blockhash,
+      lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+      signature: airdropSignature,
+    });
+
+    console.log("Airdrop complete.");
+
+    // Check the balance
+    const balance = await provider.connection.getBalance(fundingAccount.publicKey);
+    console.log(`Funding account balance: ${balance / LAMPORTS_PER_SOL} SOL`);
+    expect(balance).to.be.greaterThan(0);
+  });
+
+  // Reset program state before each test
+  beforeEach(async () => {
+    // Generate a fresh authority keypair for each test (ensuring unique PDAs)
+    authority = anchor.web3.Keypair.generate();
+
+    // Transfer enough SOL from funding account to the new authority
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: authority.publicKey,
+        lamports: 2 * LAMPORTS_PER_SOL, // 2 SOL to ensure enough for rent
+      })
+    );
+    
+    // Send and confirm the transfer transaction
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+    
+    // Verify the authority has received funds
+    const authorityBalance = await provider.connection.getBalance(authority.publicKey);
+    expect(authorityBalance).to.be.greaterThan(0);
+    
+    // Generate new recipient keypair for each test
+    recipient = anchor.web3.Keypair.generate();
+    
+    // Calculate the PDA for the tree account with the new authority
+    const [treePda, pdaBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("merkle_tree"), authority.publicKey.toBuffer()],
+      program.programId
+    );
+    treeAccountPDA = treePda;
+    treeBump = pdaBump;
+
+    // Calculate the PDA for the fee recipient account with the new authority
+    const [feeRecipientPda, feeRecipientPdaBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("fee_recipient"), authority.publicKey.toBuffer()],
+      program.programId
+    );
+    feeRecipientPDA = feeRecipientPda;
+    feeRecipientBump = feeRecipientPdaBump;
+    
+    // Calculate the PDA for the tree token account with the new authority
+    const [treeTokenPda, treeTokenPdaBump] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("tree_token"), authority.publicKey.toBuffer()],
+      program.programId
+    );
+    treeTokenAccountPDA = treeTokenPda;
+    treeTokenBump = treeTokenPdaBump;
+    
+    // Initialize a fresh tree account for each test
+    try {
+      await program.methods
+        .initialize()
+        .accounts({
+          treeAccount: treeAccountPDA,
+          feeRecipientAccount: feeRecipientPDA,
+          treeTokenAccount: treeTokenAccountPDA,
+          authority: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([authority])
+        .rpc();
+        
+      // Fund the feeRecipientAccount with SOL for withdrawal tests
+      const feeRecipientAirdropSignature = await provider.connection.requestAirdrop(feeRecipientPDA, 1 * LAMPORTS_PER_SOL);
+      const latestBlockHash = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction({
+        blockhash: latestBlockHash.blockhash,
+        lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+        signature: feeRecipientAirdropSignature,
+      });
+      
+      // Verify the initialization was successful
+      const feeRecipientAccount = await program.account.feeRecipientAccount.fetch(feeRecipientPDA);
+      expect(feeRecipientAccount.authority.equals(authority.publicKey)).to.be.true;
+      expect(feeRecipientAccount.bump).to.equal(feeRecipientBump);
+    } catch (error) {
+      console.error("Error initializing accounts:", error);
+      if ('logs' in error) {
+        console.error("Error logs:", error.logs);
+      }
+      throw error;
+    }
+  });
+
+  it("Can successfully withdraw fees to a recipient", async () => {
+    const withdrawAmount = 0.1 * LAMPORTS_PER_SOL; // 0.1 SOL
+    
+    // Get initial balances
+    const feeRecipientBalanceBefore = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceBefore = await provider.connection.getBalance(recipient.publicKey);
+    
+    // Ensure fee recipient has enough funds
+    expect(feeRecipientBalanceBefore).to.be.greaterThan(withdrawAmount);
+    
+    // Execute the withdraw_fees instruction
+    const txSig = await program.methods
+      .withdrawFees(new anchor.BN(withdrawAmount))
+      .accounts({
+        feeRecipientAccount: feeRecipientPDA,
+        recipient: recipient.publicKey,
+        authority: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([authority])
+      .rpc();
+    
+    expect(txSig).to.be.a('string');
+    
+    // Get final balances
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceAfter = await provider.connection.getBalance(recipient.publicKey);
+    
+    // Verify the transfer happened correctly
+    expect(feeRecipientBalanceAfter).to.equal(feeRecipientBalanceBefore - withdrawAmount);
+    expect(recipientBalanceAfter).to.equal(recipientBalanceBefore + withdrawAmount);
+  });
+
+  it("Fails to withdraw more than available (InsufficientFundsForWithdrawal)", async () => {
+    // Get the current balance of fee recipient
+    const feeRecipientBalance = await provider.connection.getBalance(feeRecipientPDA);
+    
+    // Try to withdraw more than available
+    const withdrawAmount = feeRecipientBalance + 1; // 1 lamport more than available
+    
+    try {
+      await program.methods
+        .withdrawFees(new anchor.BN(withdrawAmount))
+        .accounts({
+          feeRecipientAccount: feeRecipientPDA,
+          recipient: recipient.publicKey,
+          authority: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([authority])
+        .rpc();
+      
+      // If we get here, the test failed because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to insufficient funds but succeeded");
+    } catch (error) {
+      // Check for the specific error code
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x1774") || // InsufficientFundsForWithdrawal error code
+        errorString.includes("InsufficientFundsForWithdrawal") ||
+        errorString.includes("insufficient funds")
+      ).to.be.true;
+    }
+  });
+
+  it("Fails when authority is not the fee_recipient_account's authority (Unauthorized)", async () => {
+    const withdrawAmount = 0.01 * LAMPORTS_PER_SOL; // 0.01 SOL
+    
+    // Create a different authority (unauthorized user)
+    const unauthorizedAuthority = anchor.web3.Keypair.generate();
+    
+    // Fund the unauthorized authority to pay for transaction fees
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: unauthorizedAuthority.publicKey,
+        lamports: 0.1 * LAMPORTS_PER_SOL,
+      })
+    );
+    
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+    
+    try {
+      await program.methods
+        .withdrawFees(new anchor.BN(withdrawAmount))
+        .accounts({
+          feeRecipientAccount: feeRecipientPDA,
+          recipient: recipient.publicKey,
+          authority: unauthorizedAuthority.publicKey, // Wrong authority
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([unauthorizedAuthority]) // Wrong signer
+        .rpc();
+      
+      // If we get here, the test failed because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to unauthorized access but succeeded");
+    } catch (error) {
+      // Check for authorization-related errors
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x1770") || // Unauthorized error code
+        errorString.includes("Unauthorized") ||
+        errorString.includes("ConstraintSeeds") ||
+        errorString.includes("0x7d6") || // ConstraintSeeds code
+        errorString.includes("has_one") ||
+        errorString.includes("constraint was violated")
+      ).to.be.true;
+    }
+  });
+
+  it("Can withdraw the entire fee recipient balance", async () => {
+    // Get the current balance of fee recipient (minus rent exemption)
+    const feeRecipientBalance = await provider.connection.getBalance(feeRecipientPDA);
+    const rentExemption = await provider.connection.getMinimumBalanceForRentExemption(
+      8 + 32 + 1 // FeeRecipientAccount: discriminator + authority + bump
+    );
+    
+    // Withdraw everything except rent exemption
+    const withdrawAmount = feeRecipientBalance - rentExemption;
+    
+    expect(withdrawAmount).to.be.greaterThan(0);
+    
+    // Get initial recipient balance
+    const recipientBalanceBefore = await provider.connection.getBalance(recipient.publicKey);
+    
+    // Execute the withdraw_fees instruction
+    const txSig = await program.methods
+      .withdrawFees(new anchor.BN(withdrawAmount))
+      .accounts({
+        feeRecipientAccount: feeRecipientPDA,
+        recipient: recipient.publicKey,
+        authority: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([authority])
+      .rpc();
+    
+    expect(txSig).to.be.a('string');
+    
+    // Get final balances
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceAfter = await provider.connection.getBalance(recipient.publicKey);
+    
+    // Verify the transfer happened correctly
+    expect(feeRecipientBalanceAfter).to.equal(rentExemption); // Should only have rent exemption left
+    expect(recipientBalanceAfter).to.equal(recipientBalanceBefore + withdrawAmount);
+  });
+
+  it("Can withdraw zero amount (edge case)", async () => {
+    const withdrawAmount = 0;
+    
+    // Get initial balances
+    const feeRecipientBalanceBefore = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceBefore = await provider.connection.getBalance(recipient.publicKey);
+    
+    // Execute the withdraw_fees instruction with zero amount
+    const txSig = await program.methods
+      .withdrawFees(new anchor.BN(withdrawAmount))
+      .accounts({
+        feeRecipientAccount: feeRecipientPDA,
+        recipient: recipient.publicKey,
+        authority: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([authority])
+      .rpc();
+    
+    expect(txSig).to.be.a('string');
+    
+    // Get final balances
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipientPDA);
+    const recipientBalanceAfter = await provider.connection.getBalance(recipient.publicKey);
+    
+    // Verify no transfer happened
+    expect(feeRecipientBalanceAfter).to.equal(feeRecipientBalanceBefore);
+    expect(recipientBalanceAfter).to.equal(recipientBalanceBefore);
+  });
+
+  it("Can withdraw multiple times to different recipients", async () => {
+    const withdrawAmount = 0.05 * LAMPORTS_PER_SOL; // 0.05 SOL each
+    
+    // Create additional recipients
+    const recipient2 = anchor.web3.Keypair.generate();
+    const recipient3 = anchor.web3.Keypair.generate();
+    
+    // Get initial fee recipient balance
+    const feeRecipientBalanceBefore = await provider.connection.getBalance(feeRecipientPDA);
+    
+    // Ensure we have enough funds for multiple withdrawals
+    expect(feeRecipientBalanceBefore).to.be.greaterThan(withdrawAmount * 3);
+    
+    // First withdrawal to recipient 1
+    const txSig1 = await program.methods
+      .withdrawFees(new anchor.BN(withdrawAmount))
+      .accounts({
+        feeRecipientAccount: feeRecipientPDA,
+        recipient: recipient.publicKey,
+        authority: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([authority])
+      .rpc();
+    
+    expect(txSig1).to.be.a('string');
+    
+    // Second withdrawal to recipient 2
+    const txSig2 = await program.methods
+      .withdrawFees(new anchor.BN(withdrawAmount))
+      .accounts({
+        feeRecipientAccount: feeRecipientPDA,
+        recipient: recipient2.publicKey,
+        authority: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([authority])
+      .rpc();
+    
+    expect(txSig2).to.be.a('string');
+    
+    // Third withdrawal to recipient 3
+    const txSig3 = await program.methods
+      .withdrawFees(new anchor.BN(withdrawAmount))
+      .accounts({
+        feeRecipientAccount: feeRecipientPDA,
+        recipient: recipient3.publicKey,
+        authority: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([authority])
+      .rpc();
+    
+    expect(txSig3).to.be.a('string');
+    
+    // Get final balances
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipientPDA);
+    const recipient1Balance = await provider.connection.getBalance(recipient.publicKey);
+    const recipient2Balance = await provider.connection.getBalance(recipient2.publicKey);
+    const recipient3Balance = await provider.connection.getBalance(recipient3.publicKey);
+    
+    // Verify all transfers happened correctly
+    expect(feeRecipientBalanceAfter).to.equal(feeRecipientBalanceBefore - (withdrawAmount * 3));
+    expect(recipient1Balance).to.equal(withdrawAmount);
+    expect(recipient2Balance).to.equal(withdrawAmount);
+    expect(recipient3Balance).to.equal(withdrawAmount);
+  });
+});
