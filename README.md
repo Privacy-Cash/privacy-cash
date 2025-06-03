@@ -121,3 +121,8 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ```bash
    ts-node fetch_user_utxos.ts
    ```
+
+3. Get fees and protocol balances
+   ```bash
+   ts-node check_fees_balance.ts
+   ```
