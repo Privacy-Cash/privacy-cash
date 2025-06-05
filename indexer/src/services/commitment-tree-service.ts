@@ -1,6 +1,6 @@
 import { WasmFactory } from '@lightprotocol/hasher.rs';
 import { MerkleTree } from '../lib/merkle_tree';
-import { logger } from '../index';
+import { logger } from '../utils/logger';
 
 // Default tree height for the Merkle tree
 const DEFAULT_TREE_HEIGHT = 20;

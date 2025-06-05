@@ -11,7 +11,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import { connection, PROGRAM_ID } from '../config';
-import { logger } from '../index';
+import { logger } from '../utils/logger';
 
 // Use the same instruction discriminator as deposit
 const TRANSACT_IX_DISCRIMINATOR = Buffer.from([217, 149, 130, 143, 221, 52, 252, 119]);

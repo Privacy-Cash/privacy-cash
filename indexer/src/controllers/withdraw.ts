@@ -4,7 +4,7 @@ import {
   getRelayerPublicKey, 
   WithdrawParams 
 } from '../services/withdraw-service';
-import { logger } from '../index';
+import { logger } from '../utils/logger';
 
 // Submit withdraw transaction endpoint
 export async function handleWithdraw(ctx: Context) {

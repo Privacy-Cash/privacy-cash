@@ -1,4 +1,4 @@
-import { logger } from '../index';
+import { logger } from '../utils/logger';
 
 /**
  * UserUxtosService maintains a hashset of encrypted UXTOs

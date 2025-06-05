@@ -2,7 +2,7 @@ import { Context } from 'koa';
 import { loadHistoricalPDAs } from '../services/pda-service';
 import { PROGRAM_ID } from '../config';
 import { userUxtosService } from '../services/user-uxtos-service';
-import { logger } from '../index';
+import { logger } from '../utils/logger';
 
 // Flag to track if a reload is already in progress
 let reloadInProgress = false;

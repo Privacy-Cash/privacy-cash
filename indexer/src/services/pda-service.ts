@@ -4,7 +4,7 @@ import * as crypto from 'crypto';
 import bs58 from 'bs58';
 import { commitmentTreeService } from './commitment-tree-service';
 import { userUxtosService } from './user-uxtos-service';
-import { logger } from '../index';
+import { logger } from '../utils/logger';
 
 // Default tree height - must match the value in commitment-tree-service.ts
 const DEFAULT_TREE_HEIGHT = 20;
