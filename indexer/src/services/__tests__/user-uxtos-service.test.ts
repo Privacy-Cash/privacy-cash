@@ -188,4 +188,206 @@ describe('UserUxtosService', () => {
       );
     });
   });
+
+  describe('ordering behavior', () => {
+    it('should maintain insertion order in getAllEncryptedOutputs', () => {
+      const outputs = [
+        'first0123456789abcdef0123456789ab',
+        'second456789abcdef0123456789abcd',
+        'third89abcdef0123456789abcdef01',
+        'fourth3456789abcdef0123456789ab',
+        'fifth56789abcdef0123456789abcde',
+        'sixth789abcdef0123456789abcdef0',
+        'seventh9abcdef0123456789abcdef01',
+        'eighthbcdef0123456789abcdef0123',
+        'ninthcdef0123456789abcdef01234',
+        'tenthdef0123456789abcdef012345',
+        'eleventhef0123456789abcdef01234',
+        'twelfthf0123456789abcdef012345',
+        'thirteenth0123456789abcdef0123',
+        'fourteenth123456789abcdef01234',
+        'fifteenth23456789abcdef012345',
+        'sixteenth3456789abcdef0123456',
+        'seventeenth456789abcdef01234'
+      ];
+      
+      // Add outputs in specific order
+      outputs.forEach(output => userUxtosService.addEncryptedOutput(output));
+      
+      // Get all outputs
+      const result = userUxtosService.getAllEncryptedOutputs();
+      
+      // Verify they're returned in the same order
+      expect(result).toEqual(outputs);
+    });
+
+    it('should maintain insertion order in getEncryptedOutputsRange', () => {
+      const outputs = [
+        'alpha123456789abcdef0123456789ab',
+        'beta456789abcdef0123456789abcd',
+        'gamma89abcdef0123456789abcdef01',
+        'delta3456789abcdef0123456789ab',
+        'epsilon56789abcdef0123456789abc',
+        'zeta789abcdef0123456789abcdef0',
+        'eta9abcdef0123456789abcdef012',
+        'thetabcdef0123456789abcdef0123',
+        'iotacdef0123456789abcdef01234',
+        'kappadef0123456789abcdef012345',
+        'lambdaef0123456789abcdef01234',
+        'muf0123456789abcdef012345678',
+        'nu0123456789abcdef0123456789',
+        'xi123456789abcdef0123456789a',
+        'omicron23456789abcdef01234567',
+        'pi3456789abcdef012345678901',
+        'rho456789abcdef0123456789012',
+        'sigma56789abcdef01234567890',
+        'tau6789abcdef012345678901ab'
+      ];
+      
+      // Add outputs in specific order
+      outputs.forEach(output => userUxtosService.addEncryptedOutput(output));
+      
+      // Get range from index 5 to 12
+      const result = userUxtosService.getEncryptedOutputsRange(5, 12);
+      
+      // Verify the range maintains order
+      expect(result.encrypted_outputs).toEqual([
+        'zeta789abcdef0123456789abcdef0',
+        'eta9abcdef0123456789abcdef012',
+        'thetabcdef0123456789abcdef0123',
+        'iotacdef0123456789abcdef01234',
+        'kappadef0123456789abcdef012345',
+        'lambdaef0123456789abcdef01234',
+        'muf0123456789abcdef012345678',
+        'nu0123456789abcdef0123456789'
+      ]);
+      expect(result.start).toBe(5);
+      expect(result.end).toBe(12);
+      expect(result.total).toBe(19);
+      expect(result.hasMore).toBe(true);
+    });
+
+    it('should handle mixed string and Uint8Array inputs while maintaining order', () => {
+      const mixedInputs = [
+        'string01_123456789abcdef012345',
+        new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        'string02_456789abcdef01234567',
+        new Uint8Array([11, 12, 13, 14, 15, 16, 17, 18]),
+        'string03_789abcdef0123456789a',
+        new Uint8Array([19, 20, 21, 22, 23, 24, 25, 26]),
+        'string04_abcdef0123456789abc',
+        new Uint8Array([27, 28, 29, 30, 31, 32, 33, 34]),
+        'string05_bcdef0123456789abcd',
+        new Uint8Array([35, 36, 37, 38, 39, 40, 41, 42]),
+        'string06_cdef0123456789abcde',
+        new Uint8Array([43, 44, 45, 46, 47, 48, 49, 50]),
+        'string07_def0123456789abcdef',
+        new Uint8Array([51, 52, 53, 54, 55, 56, 57, 58]),
+        'string08_ef0123456789abcdef0',
+        new Uint8Array([59, 60, 61, 62, 63, 64, 65, 66]),
+        'string09_f0123456789abcdef01'
+      ];
+      
+      // Add in mixed order
+      mixedInputs.forEach(input => userUxtosService.addEncryptedOutput(input));
+      
+      // Get all outputs
+      const result = userUxtosService.getAllEncryptedOutputs();
+      
+      // Build expected order with Uint8Arrays converted to hex
+      const expectedOrder = mixedInputs.map(input => 
+        input instanceof Uint8Array 
+          ? Buffer.from(input).toString('hex')
+          : input
+      );
+      
+      expect(result).toEqual(expectedOrder);
+      expect(result).toHaveLength(17);
+    });
+
+    it('should maintain insertion order even with duplicate entries', () => {
+      const outputsWithDuplicates = [
+        'first0123456789abcdef0123456789ab',
+        'second456789abcdef0123456789abcd',
+        'third89abcdef0123456789abcdef01',
+        'second456789abcdef0123456789abcd', // duplicate of index 1
+        'fourth3456789abcdef0123456789ab',
+        'first0123456789abcdef0123456789ab', // duplicate of index 0
+        'fifth56789abcdef0123456789abcde',
+        'sixth789abcdef0123456789abcdef0',
+        'third89abcdef0123456789abcdef01', // duplicate of index 2
+        'seventh9abcdef0123456789abcdef01',
+        'eighth8bcdef0123456789abcdef012',
+        'fourth3456789abcdef0123456789ab', // duplicate of index 4
+        'ninth9cdef0123456789abcdef0123',
+        'tenth0def0123456789abcdef01234',
+        'fifth56789abcdef0123456789abcde', // duplicate of index 6
+        'eleventh1ef0123456789abcdef012',
+        'twelfth2f0123456789abcdef0123',
+        'sixth789abcdef0123456789abcdef0', // duplicate of index 7
+        'thirteenth30123456789abcdef012'
+      ];
+      
+      // Expected unique outputs in order of first occurrence
+      const expectedUniqueOutputs = [
+        'first0123456789abcdef0123456789ab',    // first occurrence at index 0
+        'second456789abcdef0123456789abcd',     // first occurrence at index 1
+        'third89abcdef0123456789abcdef01',      // first occurrence at index 2
+        'fourth3456789abcdef0123456789ab',      // first occurrence at index 4
+        'fifth56789abcdef0123456789abcde',      // first occurrence at index 6
+        'sixth789abcdef0123456789abcdef0',      // first occurrence at index 7
+        'seventh9abcdef0123456789abcdef01',     // first occurrence at index 9
+        'eighth8bcdef0123456789abcdef012',      // first occurrence at index 10
+        'ninth9cdef0123456789abcdef0123',       // first occurrence at index 12
+        'tenth0def0123456789abcdef01234',       // first occurrence at index 13
+        'eleventh1ef0123456789abcdef012',       // first occurrence at index 15
+        'twelfth2f0123456789abcdef0123',        // first occurrence at index 16
+        'thirteenth30123456789abcdef012'        // first occurrence at index 18
+      ];
+      
+      // Track which additions were successful vs duplicates
+      const addResults: boolean[] = [];
+      
+      // Add outputs in order, tracking results
+      outputsWithDuplicates.forEach(output => {
+        const added = userUxtosService.addEncryptedOutput(output);
+        addResults.push(added);
+      });
+      
+      // Verify that duplicates were rejected appropriately
+      const expectedResults = [
+        true,  // first - added
+        true,  // second - added
+        true,  // third - added
+        false, // second (duplicate) - rejected
+        true,  // fourth - added
+        false, // first (duplicate) - rejected
+        true,  // fifth - added
+        true,  // sixth - added
+        false, // third (duplicate) - rejected
+        true,  // seventh - added
+        true,  // eighth - added
+        false, // fourth (duplicate) - rejected
+        true,  // ninth - added
+        true,  // tenth - added  
+        false, // fifth (duplicate) - rejected
+        true,  // eleventh - added
+        true,  // twelfth - added
+        false, // sixth (duplicate) - rejected
+        true   // thirteenth - added
+      ];
+      
+      expect(addResults).toEqual(expectedResults);
+      
+      // Get all outputs and verify order
+      const result = userUxtosService.getAllEncryptedOutputs();
+      
+      // Should maintain order of first occurrence of each unique item
+      expect(result).toEqual(expectedUniqueOutputs);
+      expect(result).toHaveLength(expectedUniqueOutputs.length);
+      
+      // Verify count matches unique items
+      expect(userUxtosService.getEncryptedOutputCount()).toBe(expectedUniqueOutputs.length);
+    });
+  });
 }); 
