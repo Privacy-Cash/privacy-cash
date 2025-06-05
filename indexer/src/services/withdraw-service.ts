@@ -11,6 +11,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import { connection, PROGRAM_ID } from '../config';
+import { logger } from '../index';
 
 // Use the same instruction discriminator as deposit
 const TRANSACT_IX_DISCRIMINATOR = Buffer.from([217, 149, 130, 143, 221, 52, 252, 119]);
@@ -57,7 +58,7 @@ export function getRelayerPublicKey(): PublicKey {
     const keypair = loadRelayerKeypair();
     return keypair.publicKey;
   } catch (error) {
-    console.error('Failed to load relayer keypair:', error);
+    logger.error('Failed to load relayer keypair:', error);
     throw error;
   }
 }
@@ -65,7 +66,7 @@ export function getRelayerPublicKey(): PublicKey {
 // Submit withdraw transaction
 export async function submitWithdrawTransaction(params: WithdrawParams): Promise<string> {
   try {
-    console.log('Processing withdraw request:', {
+    logger.info('Processing withdraw request:', {
       recipient: params.recipient,
       extAmount: params.extAmount,
       fee: params.fee,
@@ -74,7 +75,7 @@ export async function submitWithdrawTransaction(params: WithdrawParams): Promise
 
     // Load the relayer keypair
     const relayerKeypair = loadRelayerKeypair();
-    console.log('Using relayer:', relayerKeypair.publicKey.toString());
+    logger.info('Using relayer:', relayerKeypair.publicKey.toString());
 
     // Decode the serialized proof from base64
     const serializedProofData = Buffer.from(params.serializedProof, 'base64');
@@ -108,11 +109,11 @@ export async function submitWithdrawTransaction(params: WithdrawParams): Promise
       }
     );
 
-    console.log('Withdraw transaction submitted successfully:', signature);
+    logger.info('Withdraw transaction submitted successfully:', signature);
     return signature;
 
   } catch (error) {
-    console.error('Failed to submit withdraw transaction:', error);
+    logger.error('Failed to submit withdraw transaction:', error);
     throw error;
   }
 }
@@ -137,7 +138,7 @@ function createWithdrawInstruction(
   // (discriminator + proof + extData) as created by the client
   const instructionData = serializedProofData;
 
-  console.log(`Using instruction data size: ${instructionData.length} bytes`);
+  logger.info(`Using instruction data size: ${instructionData.length} bytes`);
 
   return new TransactionInstruction({
     keys: [
@@ -169,7 +170,7 @@ export async function getRelayerBalance(): Promise<number> {
     const balance = await connection.getBalance(keypair.publicKey);
     return balance / 1e9; // Convert lamports to SOL
   } catch (error) {
-    console.error('Failed to get relayer balance:', error);
+    logger.error('Failed to get relayer balance:', error);
     throw error;
   }
 } 

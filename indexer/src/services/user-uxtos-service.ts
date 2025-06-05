@@ -1,3 +1,5 @@
+import { logger } from '../index';
+
 /**
  * UserUxtosService maintains a hashset of encrypted UXTOs
  */
@@ -10,16 +12,16 @@ class UserUxtosService {
    */
   initialize(): void {
     if (this.initialized) {
-      console.log('UserUxtosService already initialized, skipping initialization');
+      logger.info('UserUxtosService already initialized, skipping initialization');
       return;
     }
 
     try {
-      console.log('Initializing UserUxtosService...');
+      logger.info('Initializing UserUxtosService...');
       this.initialized = true;
-      console.log(`UserUxtosService initialized with ${this.encryptedOutputs.size} encrypted outputs`);
+      logger.info(`UserUxtosService initialized with ${this.encryptedOutputs.size} encrypted outputs`);
     } catch (error) {
-      console.error('Error initializing UserUxtosService:', error);
+      logger.error('Error initializing UserUxtosService:', error);
       throw error;
     }
   }
@@ -41,13 +43,13 @@ class UserUxtosService {
 
     // Check if encrypted output already exists
     if (this.encryptedOutputs.has(outputString)) {
-      console.log(`Encrypted output ${outputString.substring(0, 16)}... already exists`);
+      logger.info(`Encrypted output ${outputString.substring(0, 16)}... already exists`);
       return false;
     }
 
     // Add to the set
     this.encryptedOutputs.add(outputString);
-    console.log(`Added encrypted output ${outputString.substring(0, 16)}...`);
+    logger.info(`Added encrypted output ${outputString.substring(0, 16)}...`);
     return true;
   }
 

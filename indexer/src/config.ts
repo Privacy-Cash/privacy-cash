@@ -17,9 +17,3 @@ export const RPC_ENDPOINT = process.env.RPC_ENDPOINT || DEFAULT_RPC_ENDPOINT;
 
 // Create a connection to the Solana network
 export const connection = new Connection(RPC_ENDPOINT, 'confirmed');
-
-// Log environment variables on startup
-console.log('Environment variables:');
-console.log(`- PROGRAM_ID: ${PROGRAM_ID.toString()}`);
-console.log(`- PORT: ${PORT}`);
-console.log(`- RPC_ENDPOINT: ${RPC_ENDPOINT}`); 

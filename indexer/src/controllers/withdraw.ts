@@ -4,6 +4,7 @@ import {
   getRelayerPublicKey, 
   WithdrawParams 
 } from '../services/withdraw-service';
+import { logger } from '../index';
 
 // Submit withdraw transaction endpoint
 export async function handleWithdraw(ctx: Context) {
@@ -68,7 +69,7 @@ export async function handleWithdraw(ctx: Context) {
       return;
     }
 
-    console.log('Received withdraw request:', {
+    logger.info('Received withdraw request:', {
       recipient: params.recipient,
       extAmount: params.extAmount,
       fee: params.fee,
@@ -85,7 +86,7 @@ export async function handleWithdraw(ctx: Context) {
     };
 
   } catch (error) {
-    console.error('Error handling withdraw request:', error);
+    logger.error('Error handling withdraw request: ' + String(error));
     
     ctx.status = 500;
     ctx.body = {
@@ -108,7 +109,7 @@ export async function getRelayerInfo(ctx: Context) {
     };
 
   } catch (error) {
-    console.error('Error getting relayer info:', error);
+    logger.error('Error getting relayer info: ' + String(error));
     
     ctx.status = 500;
     ctx.body = {

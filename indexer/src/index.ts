@@ -2,6 +2,8 @@ import Koa from 'koa';
 import Router from '@koa/router';
 import bodyParser from 'koa-bodyparser';
 import cors from '@koa/cors';
+import AWS from 'aws-sdk';
+import bunyan from 'bunyan';
 import { getAllCommitmentIds, getMerkleProof, getMerkleRoot, getNextIndex, hasEncryptedOutput, getAllEncryptedOutputs, getMerkleProofByIndex } from './services/pda-service';
 import { PROGRAM_ID, RPC_ENDPOINT, PORT } from './config';
 import { handleWebhook, reloadCommitmentsAndUxto } from './controllers/webhook';
@@ -78,7 +80,7 @@ function handleUtxosRangeRequest(startParam: string | undefined, endParam: strin
       data: result
     };
   } catch (error) {
-    console.error('Error handling UTXOs range request:', error);
+    logger.error('Error handling UTXOs range request:', error);
     return {
       success: false,
       status: 500,
@@ -86,6 +88,32 @@ function handleUtxosRangeRequest(startParam: string | undefined, endParam: strin
     };
   }
 }
+
+// Initialize AWS SDK
+AWS.config.update({
+  region: process.env.AWS_REGION,
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+});
+
+const CloudWatchStream = require('bunyan-aws');
+const myStream = new CloudWatchStream({
+           logGroupName: 'solana-privacy',
+           logStreamName: 'ec2-server1-stream',
+           cloudWatchOptions: {
+               region: process.env.REGION,
+               sslEnabled: true
+           }
+       });
+       
+export const logger = bunyan.createLogger({
+    name: 'logger',
+    streams: [{
+        stream: myStream,
+        type: 'raw',
+        level: 'info',
+    }]
+}); 
 
 // Initialize the application
 const app = new Koa();
@@ -96,7 +124,7 @@ app.use(async (ctx, next) => {
   try {
     await next();
   } catch (err) {
-    console.error('Unhandled error in request:', err);
+    logger.error('Unhandled error in request:', err);
     ctx.status = 500;
     ctx.body = { 
       success: false, 
@@ -227,29 +255,22 @@ app.use(router.allowedMethods());
 // Start the server
 (async () => {
   try {
-    console.log('Loading .env from:', process.env.DOTENV_CONFIG_PATH || '.env');
-    console.log('Environment variables:');
-    console.log(`- PROGRAM_ID: ${PROGRAM_ID}`);
-    console.log(`- PORT: ${PORT}`);
-    console.log(`- RPC_ENDPOINT: ${RPC_ENDPOINT}`);
-    console.log(`Using RPC endpoint: ${RPC_ENDPOINT}`);
-    
     // Load historical PDAs
     await reloadCommitmentsAndUxto();
     
     // Start server
     app.listen(PORT);
-    console.log(`Server running on http://localhost:${PORT}`);
+    logger.info(`Server running on http://localhost:${PORT}`);
     
     // Periodic reload PDAs every 60 minutes to handle the case where some transactions aren't caught up
     setInterval(() => {
-      console.log('Scheduled PDA reload...');
+      logger.info('Scheduled PDA reload...');
       reloadCommitmentsAndUxto();
     }, 60 * 60 * 1000); // 60 minutes
     
-    console.log('Ready to receive webhooks at /zkcash/webhook/transaction');
+    logger.info('Ready to receive webhooks at /zkcash/webhook/transaction');
   } catch (error) {
-    console.error('Failed to initialize:', error);
+    logger.error('Failed to initialize:', error);
     process.exit(1);
   }
 })(); 

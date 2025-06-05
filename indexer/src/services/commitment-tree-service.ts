@@ -1,5 +1,6 @@
 import { WasmFactory } from '@lightprotocol/hasher.rs';
 import { MerkleTree } from '../lib/merkle_tree';
+import { logger } from '../index';
 
 // Default tree height for the Merkle tree
 const DEFAULT_TREE_HEIGHT = 20;
@@ -15,24 +16,24 @@ class CommitmentTreeService {
    */
   async initialize(): Promise<void> {
     if (this.initialized && this.tree) {
-      console.log('Commitment tree already initialized, skipping initialization');
+      logger.info('Commitment tree already initialized, skipping initialization');
       return;
     }
 
     try {
-      console.log('Initializing commitment tree service...');
+      logger.info('Initializing commitment tree service...');
       
       // Initialize the light protocol hasher
       this.lightWasm = await WasmFactory.getInstance();
       
       // Create a new tree
       this.tree = new MerkleTree(DEFAULT_TREE_HEIGHT, this.lightWasm);
-      console.log('Created new Merkle tree');
+      logger.info('Created new Merkle tree');
       
       this.initialized = true;
-      console.log(`Merkle tree initialized with root: ${this.getRoot()}`);
+      logger.info(`Merkle tree initialized with root: ${this.getRoot()}`);
     } catch (error) {
-      console.error('Error initializing commitment tree:', error);
+      logger.error('Error initializing commitment tree:' + String(error));
       throw error;
     }
   }
@@ -54,7 +55,7 @@ class CommitmentTreeService {
 
     // Check if commitment already exists
     if (this.commitmentMap.has(commitmentHash)) {
-      console.log(`Commitment ${commitmentHash} already exists at index ${this.commitmentMap.get(commitmentHash)}`);
+      logger.info(`Commitment ${commitmentHash} already exists at index ${this.commitmentMap.get(commitmentHash)}`);
       return false;
     }
 
@@ -72,7 +73,7 @@ class CommitmentTreeService {
         commitmentDecimal = BigInt('0x' + commitmentHash).toString();
       }
       
-      console.log(`Processing commitment ${commitmentHash} at index ${numericIndex}, decimal value: ${commitmentDecimal}`);
+      logger.info(`Processing commitment ${commitmentHash} at index ${numericIndex}, decimal value: ${commitmentDecimal}`);
       
       // Get current tree size
       const currentSize = this.tree.elements().length;
@@ -82,25 +83,25 @@ class CommitmentTreeService {
         // Normal case: add as next element
         this.tree.insert(commitmentDecimal);
         this.commitmentMap.set(commitmentHash, numericIndex);
-        console.log(`Added commitment ${commitmentHash} at index ${numericIndex}`);
-        console.log(`New Merkle tree root: ${this.getRoot()}`);
+        logger.info(`Added commitment ${commitmentHash} at index ${numericIndex}`);
+        logger.info(`New Merkle tree root: ${this.getRoot()}`);
         return true;
       } else if (numericIndex < currentSize) {
         // Commitment belongs at an index that already has an element
         // This shouldn't happen, but we handle it by updating the element
-        console.warn(`Updating commitment at index ${numericIndex}, this is unusual`);
+        logger.warn(`Updating commitment at index ${numericIndex}, this is unusual`);
         this.tree.update(numericIndex, commitmentDecimal);
         this.commitmentMap.set(commitmentHash, numericIndex);
-        console.log(`Updated commitment ${commitmentHash} at index ${numericIndex}`);
-        console.log(`New Merkle tree root: ${this.getRoot()}`);
+        logger.info(`Updated commitment ${commitmentHash} at index ${numericIndex}`);
+        logger.info(`New Merkle tree root: ${this.getRoot()}`);
         return true;
       } else {
         // Commitment belongs at a future index
-        console.log(`Cannot add commitment ${commitmentHash} at future index ${numericIndex}, current size is ${currentSize}`);
+        logger.info(`Cannot add commitment ${commitmentHash} at future index ${numericIndex}, current size is ${currentSize}`);
         return false;
       }
     } catch (error) {
-      console.error(`Error adding commitment ${commitmentHash} at index ${index}:`, error);
+      logger.error(`Error adding commitment ${commitmentHash} at index ${index}:` + String(error));
       return false;
     }
   }

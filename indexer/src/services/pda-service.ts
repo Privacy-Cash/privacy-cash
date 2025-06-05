@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import bs58 from 'bs58';
 import { commitmentTreeService } from './commitment-tree-service';
 import { userUxtosService } from './user-uxtos-service';
+import { logger } from '../index';
 
 // Default tree height - must match the value in commitment-tree-service.ts
 const DEFAULT_TREE_HEIGHT = 20;
@@ -46,7 +47,7 @@ function parseCommitmentAccount(accountInfo: AccountInfo<Buffer>): CommitmentAcc
     // Check if this is a CommitmentAccount by comparing the discriminator
     const discriminator = accountInfo.data.slice(0, 8);
     if (!discriminator.equals(COMMITMENT_DISCRIMINATOR)) {
-      console.log(`Account ${accountInfo.owner} is not a valid commitment account`);
+      logger.info(`Account ${accountInfo.owner} is not a valid commitment account`);
       return null;
     }
 
@@ -72,7 +73,7 @@ function parseCommitmentAccount(accountInfo: AccountInfo<Buffer>): CommitmentAcc
     
     return { commitment, encrypted_output, index, bump };
   } catch (error) {
-    console.error('Error parsing commitment account:', error);
+    logger.error('Error parsing commitment account:', error);
     return null;
   }
 }
@@ -89,7 +90,7 @@ function getCommitmentId(account: CommitmentAccount): string {
  * Load all historical PDAs from the Solana blockchain
  */
 export async function loadHistoricalPDAs(): Promise<string[]> {
-  console.log('Loading historical PDA data...');
+  logger.info('Loading historical PDA data...');
   
   try {
     // Initialize the commitment tree service first
@@ -111,20 +112,20 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
       ],
     });
     
-    console.log(`Found ${accounts.length} program accounts`);
+    logger.info(`Found ${accounts.length} program accounts`);
     
     // Process each account to extract IDs
     const ids: string[] = [];
     const commitments: Array<{hash: string, index: bigint}> = [];
     
     for (const { pubkey, account } of accounts) {
-      console.log(`Processing account ${pubkey} with data size ${account.data.length} bytes`);
+      logger.info(`Processing account ${pubkey} with data size ${account.data.length} bytes`);
       const parsedAccount = parseCommitmentAccount(account);
       
       if (parsedAccount) {
         const id = getCommitmentId(parsedAccount);
         ids.push(id);
-        console.log(`Added commitment ID: ${id} (index: ${parsedAccount.index})`);
+        logger.info(`Added commitment ID: ${id} (index: ${parsedAccount.index})`);
         
         // Add to the commitments array for bulk insertion into the tree
         commitments.push({
@@ -135,26 +136,26 @@ export async function loadHistoricalPDAs(): Promise<string[]> {
         // Add the encrypted output to the user UXTOs service
         userUxtosService.addEncryptedOutput(parsedAccount.encrypted_output);
       } else {
-        console.log(`Account ${pubkey} is not a valid commitment account`);
+        logger.info(`Account ${pubkey} is not a valid commitment account`);
       }
     }
     
     // Store the IDs in memory
     pdaIdList = ids;
-    console.log(`Loaded ${pdaIdList.length} commitment IDs`);
+    logger.info(`Loaded ${pdaIdList.length} commitment IDs`);
     
     // Add all commitments to the tree at once
     if (commitments.length > 0) {
       const addedCount = commitmentTreeService.addCommitments(commitments);
-      console.log(`Added ${addedCount} commitments to the Merkle tree`);
-      console.log(`Current Merkle tree root: ${commitmentTreeService.getRoot()}`);
+      logger.info(`Added ${addedCount} commitments to the Merkle tree`);
+      logger.info(`Current Merkle tree root: ${commitmentTreeService.getRoot()}`);
     }
     
-    console.log(`Total encrypted outputs in hashset: ${userUxtosService.getEncryptedOutputCount()}`);
+    logger.info(`Total encrypted outputs in hashset: ${userUxtosService.getEncryptedOutputCount()}`);
     
     return ids;
   } catch (error) {
-    console.error('Error loading historical PDAs:', error);
+    logger.error('Error loading historical PDAs:', error);
     throw error;
   }
 }
@@ -181,14 +182,14 @@ export function processNewPDA(accountPubkey: string, accountData: Buffer): void 
       // Add to our in-memory list if not already present
       if (!pdaIdList.includes(id)) {
         pdaIdList.push(id);
-        console.log(`Added new commitment ID: ${id} (index: ${parsedAccount.index})`);
+        logger.info(`Added new commitment ID: ${id} (index: ${parsedAccount.index})`);
         
         // Add the commitment to the Merkle tree
         const added = commitmentTreeService.addCommitment(id, parsedAccount.index);
         if (added) {
-          console.log(`Added commitment to the tree at index ${parsedAccount.index}`);
+          logger.info(`Added commitment to the tree at index ${parsedAccount.index}`);
         } else {
-          console.log(`Failed to add commitment at index ${parsedAccount.index}`);
+          logger.info(`Failed to add commitment at index ${parsedAccount.index}`);
         }
         
         // Add the encrypted output to the user UXTOs service
@@ -196,7 +197,7 @@ export function processNewPDA(accountPubkey: string, accountData: Buffer): void 
       }
     }
   } catch (error) {
-    console.error('Error processing new PDA:', error);
+    logger.error('Error processing new PDA:', error);
   }
 }
 
@@ -226,7 +227,7 @@ export function getMerkleProof(commitmentId: string): {pathElements: string[], p
     // Get the proof from the tree
     return commitmentTreeService.getMerkleProof(index);
   } catch (error) {
-    console.error('Error getting Merkle proof:', error);
+    logger.error('Error getting Merkle proof:', error);
     return null;
   }
 }
@@ -238,7 +239,7 @@ export function getMerkleRoot(): string {
   try {
     return commitmentTreeService.getRoot();
   } catch (error) {
-    console.error('Error getting Merkle root:', error);
+    logger.error('Error getting Merkle root:', error);
     return '';
   }
 }
@@ -250,7 +251,7 @@ export function getNextIndex(): number {
   try {
     return commitmentTreeService.getNextIndex();
   } catch (error) {
-    console.error('Error getting next index:', error);
+    logger.error('Error getting next index:', error);
     return 0;
   }
 }
@@ -264,7 +265,7 @@ export function hasEncryptedOutput(encryptedOutput: Uint8Array | string): boolea
   try {
     return userUxtosService.hasEncryptedOutput(encryptedOutput);
   } catch (error) {
-    console.error('Error checking encrypted output:', error);
+    logger.error('Error checking encrypted output:', error);
     return false;
   }
 }
@@ -277,7 +278,7 @@ export function getAllEncryptedOutputs(): string[] {
   try {
     return userUxtosService.getAllEncryptedOutputs();
   } catch (error) {
-    console.error('Error getting all encrypted outputs:', error);
+    logger.error('Error getting all encrypted outputs:', error);
     return [];
   }
 }
@@ -294,7 +295,7 @@ export function getMerkleProofByIndex(index: number): string[] | null {
     
     // Check if the index is valid
     if (index < 0 || index >= commitments.length) {
-      console.error(`Invalid index ${index}, tree has ${commitments.length} elements`);
+      logger.error(`Invalid index ${index}, tree has ${commitments.length} elements`);
       
       // Return dummy Merkle proof with zeros instead of null
       return [...new Array(DEFAULT_TREE_HEIGHT).fill("0")];
@@ -306,7 +307,7 @@ export function getMerkleProofByIndex(index: number): string[] | null {
     // Return only the path elements
     return proof.pathElements;
   } catch (error) {
-    console.error('Error getting Merkle proof by index:', error);
+    logger.error('Error getting Merkle proof by index:', error);
     
     // Return dummy Merkle proof with zeros instead of null in case of error
     return [...new Array(DEFAULT_TREE_HEIGHT).fill("0")];
