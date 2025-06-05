@@ -108,7 +108,7 @@ export function reloadCommitmentsAndUxto(): void {
           logger.info(`... and ${count - 10} more at the beginning`);
         }
       }
-      logger.info(`-------------------------------------------`);
+      logger.info(`----------- ENCRYPTED OUTPUTS FINISHED PROCESSING -------------`);
       
       reloadInProgress = false;
       
