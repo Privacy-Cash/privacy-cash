@@ -1,10 +1,5 @@
 import { PublicKey } from '@solana/web3.js';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
 import { Connection } from '@solana/web3.js';
-
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 // Default values
 const DEFAULT_PROGRAM_ID = 'BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh';
