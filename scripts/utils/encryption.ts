@@ -50,7 +50,7 @@ export class EncryptionService {
    */
   public deriveEncryptionKeyFromWallet(keypair: Keypair): Uint8Array {
     // Sign a constant message with the keypair
-    const message = Buffer.from('ZKCash Account Generation');
+    const message = Buffer.from('Privacy Money account sign in');
     const signature = nacl.sign.detached(message, keypair.secretKey);
     
     // Extract the first 31 bytes of the signature to create a deterministic key
