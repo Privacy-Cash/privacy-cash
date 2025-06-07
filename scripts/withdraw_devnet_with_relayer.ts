@@ -24,7 +24,7 @@ const CIRCUIT_PATH = path.resolve(__dirname, '../artifacts/circuits/transaction2
 const RECIPIENT_ADDRESS = new PublicKey('1NpWc4q6VYJmg9V3TQenvHMTr8qiDDrrT4TV27SxQms');
 
 // Indexer API endpoint
-const INDEXER_API_URL = 'https://api.thelive.bet';
+const INDEXER_API_URL = 'https://api.privacycash.org/';
 
 // Load user keypair from script_keypair.json
 const userKeypairJson = JSON.parse(readFileSync(path.join(__dirname, 'script_keypair.json'), 'utf-8'));

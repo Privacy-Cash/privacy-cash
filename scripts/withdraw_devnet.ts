@@ -37,7 +37,7 @@ const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 async function queryRemoteTreeState(): Promise<{ root: string, nextIndex: number }> {
   try {
     console.log('Fetching Merkle root and nextIndex from API...');
-    const response = await fetch('https://api.thelive.bet/merkle/root');
+    const response = await fetch('https://api.privacycash.org/merkle/root');
     if (!response.ok) {
       throw new Error(`Failed to fetch Merkle root and nextIndex: ${response.status} ${response.statusText}`);
     }
@@ -55,7 +55,7 @@ async function queryRemoteTreeState(): Promise<{ root: string, nextIndex: number
 async function fetchMerkleProof(commitment: string): Promise<{ pathElements: string[], pathIndices: number[] }> {
   try {
     console.log(`Fetching Merkle proof for commitment: ${commitment}`);
-    const response = await fetch(`https://api.thelive.bet/merkle/proof/${commitment}`);
+    const response = await fetch(`https://api.privacycash.org/merkle/proof/${commitment}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch Merkle proof: ${response.status} ${response.statusText}`);
     }

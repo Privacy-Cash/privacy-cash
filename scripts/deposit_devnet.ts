@@ -35,7 +35,7 @@ const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 async function queryRemoteTreeState(): Promise<{ root: string, nextIndex: number }> {
   try {
     console.log('Fetching Merkle root and nextIndex from API...');
-    const response = await fetch('https://api.thelive.bet/merkle/root');
+    const response = await fetch('https://api.privacycash.org/merkle/root');
     if (!response.ok) {
       throw new Error(`Failed to fetch Merkle root and nextIndex: ${response.status} ${response.statusText}`);
     }
@@ -53,7 +53,7 @@ async function queryRemoteTreeState(): Promise<{ root: string, nextIndex: number
 async function fetchMerkleProof(commitment: string): Promise<{ pathElements: string[], pathIndices: number[] }> {
   try {
     console.log(`Fetching Merkle proof for commitment: ${commitment}`);
-    const response = await fetch(`https://api.thelive.bet/merkle/proof/${commitment}`);
+    const response = await fetch(`https://api.privacycash.org/merkle/proof/${commitment}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch Merkle proof: ${response.status} ${response.statusText}`);
     }
@@ -253,51 +253,71 @@ async function main() {
         return [...new Array(tree.levels).fill("0")];
       });
     } else {
-      // Scenario 2: Deposit that consolidates with existing UTXO
+      // Scenario 2: Deposit that consolidates with existing UTXO(s)
       const firstUtxo = existingUnspentUtxos[0];
       const firstUtxoAmount = firstUtxo.amount;
+      const secondUtxoAmount = existingUnspentUtxos.length > 1 ? existingUnspentUtxos[1].amount : new BN(0);
       extAmount = DEPOSIT_AMOUNT; // Still depositing new funds
       
-      // Output combines existing UTXO amount + new deposit amount - fee
-      outputAmount = firstUtxoAmount.add(new BN(DEPOSIT_AMOUNT)).sub(new BN(FEE_AMOUNT)).toString();
+      // Output combines existing UTXO amounts + new deposit amount - fee
+      outputAmount = firstUtxoAmount.add(secondUtxoAmount).add(new BN(DEPOSIT_AMOUNT)).sub(new BN(FEE_AMOUNT)).toString();
       
       console.log(`Deposit with consolidation scenario:`);
-      console.log(`Existing UTXO amount: ${firstUtxoAmount.toString()}`);
+      console.log(`First existing UTXO amount: ${firstUtxoAmount.toString()}`);
+      if (secondUtxoAmount.gt(new BN(0))) {
+        console.log(`Second existing UTXO amount: ${secondUtxoAmount.toString()}`);
+      }
       console.log(`New deposit amount: ${DEPOSIT_AMOUNT}`);
       console.log(`Fee amount: ${FEE_AMOUNT}`);
-      console.log(`Output amount (existing + deposit - fee): ${outputAmount}`);
+      console.log(`Output amount (existing UTXOs + deposit - fee): ${outputAmount}`);
       console.log(`External amount (deposit): ${extAmount}`);
       
       console.log('\nFirst UTXO to be consolidated:');
       await firstUtxo.log();
 
-      // Use first existing UTXO as first input, dummy UTXO as second input
+      // Use first existing UTXO as first input, and either second UTXO or dummy UTXO as second input
+      const secondUtxo = existingUnspentUtxos.length > 1 ? existingUnspentUtxos[1] : new Utxo({ 
+        lightWasm,
+        keypair: utxoKeypair,
+        amount: '0'
+      });
+      
       inputs = [
         firstUtxo, // Use the first existing UTXO
-        new Utxo({ 
-          lightWasm,
-          keypair: utxoKeypair
-        }) // Dummy UTXO for second input
+        secondUtxo // Use second UTXO if available, otherwise dummy
       ];
 
-      // Fetch Merkle proof for the first (real) UTXO
+      // Fetch Merkle proofs for real UTXOs
       const firstUtxoCommitment = await firstUtxo.getCommitment();
       const firstUtxoMerkleProof = await fetchMerkleProof(firstUtxoCommitment);
       
-      // Use the real pathIndices from API for first input, mock index for second input
+      let secondUtxoMerkleProof;
+      if (secondUtxo.amount.gt(new BN(0))) {
+        // Second UTXO is real, fetch its proof
+        const secondUtxoCommitment = await secondUtxo.getCommitment();
+        secondUtxoMerkleProof = await fetchMerkleProof(secondUtxoCommitment);
+        console.log('\nSecond UTXO to be consolidated:');
+        await secondUtxo.log();
+      }
+      
+      // Use the real pathIndices from API for real inputs, mock index for dummy input
       inputMerklePathIndices = [
         firstUtxo.index || 0, // Use the real UTXO's index  
-        0 // Dummy UTXO index
+        secondUtxo.amount.gt(new BN(0)) ? (secondUtxo.index || 0) : 0 // Real UTXO index or dummy
       ];
       
-      // Create Merkle path elements: real proof for first input, zeros for second input
+      // Create Merkle path elements: real proof for real inputs, zeros for dummy input
       inputMerklePathElements = [
-        firstUtxoMerkleProof.pathElements, // Real Merkle proof for existing UTXO
-        [...new Array(tree.levels).fill("0")] // Zero-filled for dummy UTXO
+        firstUtxoMerkleProof.pathElements, // Real Merkle proof for first existing UTXO
+        secondUtxo.amount.gt(new BN(0)) ? secondUtxoMerkleProof!.pathElements : [...new Array(tree.levels).fill("0")] // Real proof or zero-filled for dummy
       ];
       
-      console.log(`Using real UTXO with amount: ${firstUtxo.amount.toString()} and index: ${firstUtxo.index}`);
-      console.log(`Merkle proof path indices from API: [${firstUtxoMerkleProof.pathIndices.join(', ')}]`);
+      console.log(`Using first UTXO with amount: ${firstUtxo.amount.toString()} and index: ${firstUtxo.index}`);
+      console.log(`Using second ${secondUtxo.amount.gt(new BN(0)) ? 'UTXO' : 'dummy UTXO'} with amount: ${secondUtxo.amount.toString()}${secondUtxo.amount.gt(new BN(0)) ? ` and index: ${secondUtxo.index}` : ''}`);
+      console.log(`First UTXO Merkle proof path indices from API: [${firstUtxoMerkleProof.pathIndices.join(', ')}]`);
+      if (secondUtxo.amount.gt(new BN(0))) {
+        console.log(`Second UTXO Merkle proof path indices from API: [${secondUtxoMerkleProof!.pathIndices.join(', ')}]`);
+      }
     }
     
     const publicAmountForCircuit = new BN(extAmount).sub(new BN(FEE_AMOUNT)).add(FIELD_SIZE).mod(FIELD_SIZE);

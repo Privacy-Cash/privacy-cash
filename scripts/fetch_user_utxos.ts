@@ -43,7 +43,7 @@ interface ApiResponse {
  * Fetch and decrypt all UTXOs for a user
  * @param keypair The user's Solana keypair
  * @param connection Solana connection to fetch on-chain commitment accounts
- * @param apiUrl Optional custom API URL, defaults to 'https://api.thelive.bet/utxos'
+ * @param apiUrl Optional custom API URL, defaults to 'https://api.privacycash.org/utxos'
  * @returns Array of decrypted UTXOs that belong to the user
  */
 export async function getMyUtxos(keypair: Keypair, connection: Connection, apiUrl?: string): Promise<Utxo[]> {
@@ -62,7 +62,7 @@ export async function getMyUtxos(keypair: Keypair, connection: Connection, apiUr
     console.log(`Fetching UTXOs for address: ${keypair.publicKey.toBase58()}`);
     
     // Use default API URL if not provided
-    const url = apiUrl || 'https://api.thelive.bet/utxos';
+    const url = apiUrl || 'https://api.privacycash.org/utxos';
     console.log(`Using API endpoint: ${url}`);
     
     // Fetch all UTXOs from the API
@@ -284,7 +284,7 @@ export async function isUtxoSpent(connection: Connection, utxo: Utxo): Promise<b
     return false;
   } catch (error) {
     console.error('Error checking if UTXO is spent:', error);
-    return false; // Default to unspent in case of errors
+    return true; // Default to spent in case of errors
   }
 }
 
