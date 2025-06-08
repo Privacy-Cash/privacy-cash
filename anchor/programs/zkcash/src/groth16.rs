@@ -1,3 +1,4 @@
+// Source is taken from: https://github.com/Lightprotocol/groth16-solana/blob/master/src/groth16.rs
 //! ```rust,ignore
 //! let mut public_inputs_vec = Vec::new();
 //! for input in PUBLIC_INPUTS.chunks(32) {
