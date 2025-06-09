@@ -4,4 +4,5 @@ include "./transaction.circom";
 
 // Simplified transaction circuit for debugging
 // We're ignoring levels, nIns, nOuts, and zeroLeaf since our simplified circuit doesn't use them
-component main {public [root, publicAmount, extDataHash, inputNullifier, outputCommitment]} = Transaction(20, 2, 2);
+// Use 26 as the level, the same as light protocol v1.
+component main {public [root, publicAmount, extDataHash, inputNullifier, outputCommitment]} = Transaction(26, 2, 2);

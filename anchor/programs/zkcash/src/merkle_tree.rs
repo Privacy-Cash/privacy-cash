@@ -2,7 +2,7 @@ use light_hasher::Hasher;
 use crate::MerkleTreeAccount;
 
 pub const ROOT_HISTORY_SIZE: usize = 100;
-pub const DEFAULT_HEIGHT: usize = 20;
+pub const DEFAULT_HEIGHT: usize = 26;
 
 pub struct MerkleTree;
 

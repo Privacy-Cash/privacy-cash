@@ -2,7 +2,7 @@ import { PublicKey } from '@solana/web3.js';
 import { Connection } from '@solana/web3.js';
 
 // Default values
-const DEFAULT_PROGRAM_ID = 'BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh';
+const DEFAULT_PROGRAM_ID = '8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF';
 const DEFAULT_RPC_ENDPOINT = 'https://api.devnet.solana.com';
 
 // Get environment variables or use defaults

@@ -5,7 +5,7 @@ use anchor_lang::solana_program::sysvar::rent::Rent;
 use ark_ff::PrimeField;
 use ark_bn254::Fr;
 
-declare_id!("BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh");
+declare_id!("8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF");
 
 pub mod merkle_tree;
 pub mod utils;

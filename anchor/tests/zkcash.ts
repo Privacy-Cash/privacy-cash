@@ -245,7 +245,7 @@ describe("zkcash", () => {
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
-    const tree: MerkleTree = new MerkleTree(20, lightWasm);
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
 
     // Create inputs for the first deposit
     const inputs = [
@@ -287,7 +287,7 @@ describe("zkcash", () => {
       root: root,
       inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
       outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
-      publicAmount: publicAmountNumber,
+      publicAmount: publicAmountNumber.toString(),
       extDataHash: calculatedExtDataHash,
       
       // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
@@ -688,7 +688,7 @@ describe("zkcash", () => {
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
-    const tree: MerkleTree = new MerkleTree(20, lightWasm);
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
 
     // Create inputs for the first deposit
     const inputs = [
@@ -730,7 +730,7 @@ describe("zkcash", () => {
       root: root,
       inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
       outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
-      publicAmount: outputAmount,
+      publicAmount: outputAmount.toString(),
       extDataHash: calculatedExtDataHash,
       
       // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
@@ -1131,7 +1131,7 @@ describe("zkcash", () => {
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
-    const tree: MerkleTree = new MerkleTree(20, lightWasm);
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
 
     // Create inputs for the first deposit
     const inputs = [
@@ -1173,7 +1173,7 @@ describe("zkcash", () => {
       root: root,
       inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
       outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
-      publicAmount: publicAmountNumber,
+      publicAmount: publicAmountNumber.toString(),
       extDataHash: calculatedExtDataHash,
       
       // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
@@ -1568,7 +1568,7 @@ describe("zkcash", () => {
     const depositAmount = new anchor.BN(200); // Positive ext amount (deposit)
     
     // Create the merkle tree with the pre-initialized poseidon hash
-    const tree: MerkleTree = new MerkleTree(20, lightWasm);
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
     
     // Create inputs for the deposit
     const inputs = [
@@ -1652,7 +1652,7 @@ describe("zkcash", () => {
       root: root,
       inputNullifier: inputNullifiers,
       outputCommitment: outputCommitments,
-      publicAmount: publicAmountNumber,
+      publicAmount: publicAmountNumber.toString(),
       extDataHash: calculatedExtDataHash,
       
       // Input UTXO data
@@ -1779,7 +1779,7 @@ describe("zkcash", () => {
     };
 
     // Create the merkle tree with the pre-initialized poseidon hash
-    const tree: MerkleTree = new MerkleTree(20, lightWasm);
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
 
     // Create inputs for the first deposit
     const inputs = [
@@ -1820,7 +1820,7 @@ describe("zkcash", () => {
       root: root,
       inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
       outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
-      publicAmount: new anchor.BN(150),
+      publicAmount: new anchor.BN(150).toString(),
       extDataHash: calculatedExtDataHash,
       
       // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
@@ -2488,7 +2488,7 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
 
     // Create the merkle tree with the pre-initialized poseidon hash
-    const tree: MerkleTree = new MerkleTree(20, lightWasm);
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
 
     // Create inputs for the first deposit
     const inputs = [
@@ -2522,7 +2522,7 @@ describe("zkcash", () => {
       root: root,
       inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
       outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
-      publicAmount: publicAmount,
+      publicAmount: publicAmount.toString(),
       extDataHash: calculatedExtDataHash,
       
       // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
@@ -2773,7 +2773,7 @@ describe("zkcash", () => {
     const calculatedExtDataHash = getExtDataHash(extData);
     
     // Create the merkle tree with the pre-initialized poseidon hash
-    const tree: MerkleTree = new MerkleTree(20, lightWasm);
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
 
     // Create inputs for the first deposit
     const inputs = [
@@ -2807,7 +2807,7 @@ describe("zkcash", () => {
       root: root,
       inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
       outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
-      publicAmount: publicAmount,
+      publicAmount: publicAmount.toString(),
       extDataHash: calculatedExtDataHash,
       
       // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format

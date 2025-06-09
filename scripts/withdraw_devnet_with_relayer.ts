@@ -21,7 +21,7 @@ const FEE_AMOUNT = 10_000; // 0.00001 SOL in lamports
 const TRANSACT_IX_DISCRIMINATOR = Buffer.from([217, 149, 130, 143, 221, 52, 252, 119]);
 const CIRCUIT_PATH = path.resolve(__dirname, '../artifacts/circuits/transaction2');
 // Recipient address for withdrawal
-const RECIPIENT_ADDRESS = new PublicKey('1NpWc4q6VYJmg9V3TQenvHMTr8qiDDrrT4TV27SxQms');
+const RECIPIENT_ADDRESS = new PublicKey('2rDPKjjxMteR4vHFgFnZiZ6KzSLeUnH7nVEdnCQCVu52');
 
 // Indexer API endpoint
 const INDEXER_API_URL = 'https://api.privacycash.org/';
@@ -31,7 +31,7 @@ const userKeypairJson = JSON.parse(readFileSync(path.join(__dirname, 'script_key
 const user = Keypair.fromSecretKey(Uint8Array.from(userKeypairJson));
 
 // Program ID for the zkcash program
-const PROGRAM_ID = new PublicKey('BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh');
+const PROGRAM_ID = new PublicKey('8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF');
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -236,7 +236,7 @@ async function main() {
     const encryptionService = new EncryptionService();
     
     // Use hardcoded deployer public key
-    const deployer = new PublicKey('1NpWc4q6VYJmg9V3TQenvHMTr8qiDDrrT4TV27SxQms');
+    const deployer = new PublicKey('2rDPKjjxMteR4vHFgFnZiZ6KzSLeUnH7nVEdnCQCVu52');
     console.log('Using hardcoded deployer public key');
     
     // Generate encryption key from the user keypair

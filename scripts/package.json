@@ -15,6 +15,7 @@
     "@coral-xyz/anchor": "^0.28.0",
     "@lightprotocol/hasher.rs": "^0.2.1",
     "@solana/web3.js": "^1.78.5",
+    "circomlib": "^2.0.5",
     "axios": "^1.6.2",
     "bn.js": "^5.2.1",
     "borsh": "^2.0.0",

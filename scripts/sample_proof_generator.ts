@@ -46,7 +46,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
   const lightWasm = await WasmFactory.getInstance();
 
   // Create the merkle tree with the pre-initialized poseidon hash
-  const tree = new MerkleTree(20, lightWasm, [], {
+  const tree = new MerkleTree(26, lightWasm, [], {
     zeroElement: 0
   });
   
@@ -127,7 +127,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
     inputNullifier: inputNullifiers.map(n => n.toString()), 
     outputCommitment: outputCommitments.map(c => c.toString()),
     publicAmount: publicAmount.toString(),
-    extDataHash: extDataHash.toString(),
+    extDataHash: extDataHash,
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
     inAmount: inputs.map(x => x.amount.toString(10)),
@@ -249,7 +249,7 @@ async function generateSampleProofForWithdraw(): Promise<{
   const lightWasm = await WasmFactory.getInstance();
 
   // Create the merkle tree with the pre-initialized poseidon hash
-  const tree = new MerkleTree(20, lightWasm, [], {
+  const tree = new MerkleTree(26, lightWasm, [], {
     zeroElement: 0
   });
   
@@ -354,7 +354,7 @@ async function generateSampleProofForWithdraw(): Promise<{
     inputNullifier: inputNullifiers.map(n => n.toString()), 
     outputCommitment: outputCommitments.map(c => c.toString()),
     publicAmount: publicAmount.toString(),
-    extDataHash: extDataHash.toString(),
+    extDataHash: extDataHash,
     
     // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
     inAmount: inputs.map(x => x.amount.toString(10)),

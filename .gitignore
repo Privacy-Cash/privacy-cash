@@ -10,6 +10,7 @@ anchor/node_modules
 anchor/test-ledger
 anchor/.yarn
 anchor/deploy-keypair.json
+anchor/program-keypair.json
 indexer/node_modules
 indexer/dist
 indexer/.env

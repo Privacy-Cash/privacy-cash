@@ -22,7 +22,7 @@ This service indexes commitment PDAs created by the ZKCash Solana program and pr
    RPC_ENDPOINT=https://devnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY
 
    # Program ID
-   PROGRAM_ID=BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh
+   PROGRAM_ID=8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF
    ```
 
 3. Build the project:
@@ -40,7 +40,7 @@ This service indexes commitment PDAs created by the ZKCash Solana program and pr
 1. Go to the [Helius Dashboard](https://dev.helius.xyz/dashboard) and create a new webhook.
 2. Use the following webhook settings:
    - Webhook URL: `https://your-server.com/zkcash/webhook/transaction`
-   - Account Addresses: Your program ID (`BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh`)
+   - Account Addresses: Your program ID (`8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF`)
    - Transaction Type: `Raw` 
    - Network: `devnet` (or the network where your program is deployed)
 

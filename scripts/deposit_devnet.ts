@@ -26,7 +26,7 @@ const userKeypairJson = JSON.parse(readFileSync(path.join(__dirname, 'script_key
 const user = Keypair.fromSecretKey(Uint8Array.from(userKeypairJson));
 
 // Program ID for the zkcash program
-const PROGRAM_ID = new PublicKey('BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh');
+const PROGRAM_ID = new PublicKey('8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF');
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -131,7 +131,7 @@ async function main() {
     const encryptionService = new EncryptionService();
     
     // Use hardcoded deployer public key
-    const deployer = new PublicKey('1NpWc4q6VYJmg9V3TQenvHMTr8qiDDrrT4TV27SxQms');
+    const deployer = new PublicKey('2rDPKjjxMteR4vHFgFnZiZ6KzSLeUnH7nVEdnCQCVu52');
     console.log('Using hardcoded deployer public key');
     
     // Generate encryption key from the user keypair
@@ -172,7 +172,7 @@ async function main() {
     console.log(`Tree Token Account: ${treeTokenAccount.toString()}`);
 
     // Create the merkle tree with the pre-initialized poseidon hash
-    const tree = new MerkleTree(20, lightWasm);
+    const tree = new MerkleTree(26, lightWasm);
 
     // Initialize root and nextIndex variables
     let root: string;

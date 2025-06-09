@@ -3,7 +3,7 @@ import { MerkleTree } from '../lib/merkle_tree';
 import { logger } from '../utils/logger';
 
 // Default tree height for the Merkle tree
-const DEFAULT_TREE_HEIGHT = 20;
+const DEFAULT_TREE_HEIGHT = 26;
 
 class CommitmentTreeService {
   private tree: MerkleTree | null = null;

@@ -19,7 +19,7 @@ const utils = ffjavascript.utils as any;
 const { unstringifyBigInts, leInt2Buff } = utils;
 
 // Program ID for the zkcash program - same as in deposit_devnet.ts
-const PROGRAM_ID = new PublicKey('BByY3XVe36QEn3omkkzZM7rst2mKqt4S4XMCrbM9oUTh');
+const PROGRAM_ID = new PublicKey('8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF');
 
 /**
  * Interface for the UTXO data returned from the API
