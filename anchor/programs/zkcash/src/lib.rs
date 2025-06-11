@@ -166,8 +166,8 @@ pub mod zkcash {
         }
 
         let next_index_to_insert = tree_account.next_index;
-        MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account);
-        MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account);
+        MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account)?;
+        MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account)?;
 
         ctx.accounts.commitment0.commitment = proof.output_commitments[0];
         ctx.accounts.commitment0.encrypted_output = ext_data.encrypted_output1.clone();

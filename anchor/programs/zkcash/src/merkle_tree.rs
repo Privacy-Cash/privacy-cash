@@ -1,5 +1,6 @@
 use light_hasher::Hasher;
-use crate::MerkleTreeAccount;
+use crate::{MerkleTreeAccount, ErrorCode};
+use anchor_lang::prelude::*;
 
 pub const ROOT_HISTORY_SIZE: usize = 100;
 pub const DEFAULT_HEIGHT: usize = 26;
@@ -23,7 +24,7 @@ impl MerkleTree {
     pub fn append<H: Hasher>(
         leaf: [u8; 32],
         tree_account: &mut MerkleTreeAccount,
-    ) -> [[u8; 32]; DEFAULT_HEIGHT] {
+    ) -> Result<[[u8; 32]; DEFAULT_HEIGHT]> {
         let mut current_index = tree_account.next_index as usize;
         let mut current_level_hash = leaf;
         let mut left;
@@ -50,13 +51,17 @@ impl MerkleTree {
         }
         
         tree_account.root = current_level_hash;
-        tree_account.next_index += 1;
+        tree_account.next_index = tree_account.next_index
+            .checked_add(1)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
         
-        let new_root_index = (tree_account.root_index as usize + 1) % ROOT_HISTORY_SIZE;
+        let new_root_index = (tree_account.root_index as usize)
+            .checked_add(1)
+            .ok_or(ErrorCode::ArithmeticOverflow)? % ROOT_HISTORY_SIZE;
         tree_account.root_index = new_root_index as u64;
         tree_account.root_history[new_root_index] = current_level_hash;
         
-        proof
+        Ok(proof)
     }
 
     pub fn is_known_root(tree_account: &MerkleTreeAccount, root: [u8; 32]) -> bool {
