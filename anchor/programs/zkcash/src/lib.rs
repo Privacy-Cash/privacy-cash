@@ -73,6 +73,11 @@ pub mod zkcash {
         Ok(())
     }
 
+    /**
+     * Users deposit or withdraw from the program.
+     * 
+     * Reentrant attacks are not possible, because nullifier creation is checked by anchor first.
+     */
     pub fn transact(ctx: Context<Transact>, proof: Proof, ext_data: ExtData) -> Result<()> {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
 
