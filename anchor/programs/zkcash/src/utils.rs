@@ -131,13 +131,6 @@ pub fn check_public_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 
     };
 
     let provided_amount = U256::from_big_endian(&public_amount_bytes);
-
-    msg!("FIELD_SIZE: {}", FIELD_SIZE);
-    msg!("Calculated public amount: {}", result_public_amount);
-    msg!("Provided fee: {}", fee_u256);
-    msg!("Provided ext_amount: {}", ext_amount);
-    msg!("Provided public amount: {}", provided_amount);
-
     result_public_amount == provided_amount
 }
 
