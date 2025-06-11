@@ -176,7 +176,8 @@ pub mod zkcash {
         
         ctx.accounts.commitment1.commitment = proof.output_commitments[1];
         ctx.accounts.commitment1.encrypted_output = ext_data.encrypted_output2.clone();
-        ctx.accounts.commitment1.index = next_index_to_insert + 1;
+        ctx.accounts.commitment1.index = next_index_to_insert.checked_add(1)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
         ctx.accounts.commitment1.bump = ctx.bumps.commitment1;
         
         Ok(())
