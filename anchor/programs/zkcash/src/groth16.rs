@@ -1,4 +1,5 @@
 // Source is taken from: https://github.com/Lightprotocol/groth16-solana/blob/master/src/groth16.rs
+// We don't need checked math on public inputs, because the passed in public input length is fixed at 7.
 //! ```rust,ignore
 //! let mut public_inputs_vec = Vec::new();
 //! for input in PUBLIC_INPUTS.chunks(32) {
