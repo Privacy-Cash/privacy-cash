@@ -101,7 +101,11 @@ pub fn check_public_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 
     let ext_amount_u256 = if ext_amount >= 0 {
         U256::from(ext_amount as u64)
     } else {
-        U256::from((-ext_amount) as u64)
+        let abs_ext_amount = match ext_amount.checked_neg() {
+            Some(val) => val,
+            None => return false,
+        };
+        U256::from(abs_ext_amount as u64)
     };
 
     // return false if the deposit amount is barely enough to cover the fee
@@ -110,9 +114,20 @@ pub fn check_public_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 
     }
 
     let result_public_amount = if ext_amount >= 0 {
+        // Safe: we already checked ext_amount_u256 > fee_u256
         (ext_amount_u256 - fee_u256) % FIELD_SIZE
     } else {
-        (FIELD_SIZE - ext_amount_u256 - fee_u256) % FIELD_SIZE
+        // Check for overflow before performing the operations
+        let total_deduction = match ext_amount_u256.checked_add(fee_u256) {
+            Some(val) => val,
+            None => return false,
+        };
+        
+        if total_deduction > FIELD_SIZE {
+            return false;
+        }
+        
+        (FIELD_SIZE - total_deduction) % FIELD_SIZE
     };
 
     let provided_amount = U256::from_big_endian(&public_amount_bytes);

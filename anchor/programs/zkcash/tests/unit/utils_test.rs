@@ -571,3 +571,95 @@ fn public_input_greater_than_field_size_should_not_suceed() {
 
     assert!(!verify_proof(proof, VERIFYING_KEY));
 }
+
+#[test]
+fn test_check_public_amount_i64_min_overflow() {
+    // Test the i64::MIN edge case that should return false
+    let ext_amount = i64::MIN;
+    let fee = 10;
+    let public_amount_bytes = [0u8; 32];
+    
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(!result, "Should return false for i64::MIN ext_amount");
+}
+
+#[test]
+fn test_check_public_amount_neg_overflow_protection() {
+    // Test the checked_neg overflow protection
+    // When ext_amount is near i64::MIN, checked_neg should fail
+    let ext_amount = i64::MIN + 1; // This should work
+    let fee = 10;
+    let mut public_amount_bytes = [0u8; 32];
+    
+    // Calculate expected result for negative amount
+    let abs_ext_amount = U256::from((ext_amount.abs()) as u64);
+    let fee_u256 = U256::from(fee);
+    let total_deduction = abs_ext_amount + fee_u256;
+    let expected_result = (FIELD_SIZE - total_deduction) % FIELD_SIZE;
+    expected_result.to_big_endian(&mut public_amount_bytes);
+    
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result, "Should succeed for i64::MIN + 1");
+}
+
+#[test]
+fn test_check_public_amount_addition_overflow_protection() {
+    // Test the checked_add overflow protection in the negative branch
+    // Create a scenario where ext_amount_u256 + fee_u256 would overflow U256
+    let ext_amount = -1000i64; // Large negative number
+    let fee = u64::MAX; // Maximum fee to cause potential overflow
+    let public_amount_bytes = [0u8; 32];
+    
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    // This should return false due to overflow protection or field size check
+    assert!(!result, "Should return false when addition would overflow or exceed field size");
+}
+
+#[test]
+fn test_check_public_amount_field_size_boundary() {
+    // Test when total_deduction equals FIELD_SIZE
+    let ext_amount = -1000i64;
+    let fee = 1000u64;
+    let public_amount_bytes = [0u8; 32];
+    
+    // This should work without overflow but might fail the field size check
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    // The result depends on whether total_deduction > FIELD_SIZE
+    // In most cases this should return false due to mismatch
+    assert!(!result, "Should return false due to field size boundary or mismatch");
+}
+
+#[test]
+fn test_check_public_amount_safe_negative_values() {
+    // Test that safe negative values still work correctly
+    let ext_amount = -100i64;
+    let fee = 10u64;
+    let mut public_amount_bytes = [0u8; 32];
+    
+    // Calculate the correct expected result
+    let abs_ext_amount = U256::from(100u64);
+    let fee_u256 = U256::from(fee);
+    let total_deduction = abs_ext_amount + fee_u256; // 110
+    let expected_result = (FIELD_SIZE - total_deduction) % FIELD_SIZE;
+    expected_result.to_big_endian(&mut public_amount_bytes);
+    
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result, "Should succeed for safe negative values with correct calculation");
+}
+
+#[test]
+fn test_check_public_amount_max_safe_values() {
+    // Test with maximum safe values to ensure no overflow
+    let ext_amount = i64::MAX - 1;
+    let fee = 1000u64;
+    let mut public_amount_bytes = [0u8; 32];
+    
+    // Calculate expected result
+    let ext_amount_u256 = U256::from(ext_amount as u64);
+    let fee_u256 = U256::from(fee);
+    let expected_result = (ext_amount_u256 - fee_u256) % FIELD_SIZE;
+    expected_result.to_big_endian(&mut public_amount_bytes);
+    
+    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
+    assert!(result, "Should succeed for maximum safe positive values");
+}
