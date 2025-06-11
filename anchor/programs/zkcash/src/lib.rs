@@ -45,12 +45,6 @@ pub mod zkcash {
         let fee_recipient_account_info = ctx.accounts.fee_recipient_account.to_account_info();
         let recipient_account_info = ctx.accounts.recipient.to_account_info();
 
-        // Check that the fee recipient account has sufficient funds
-        require!(
-            fee_recipient_account_info.lamports() >= amount,
-            ErrorCode::InsufficientFundsForWithdrawal
-        );
-
         // Calculate minimum rent exemption for the fee recipient account
         let rent = Rent::get()?;
         let fee_recipient_account_size = 8 + std::mem::size_of::<FeeRecipientAccount>(); // 8 bytes for discriminator + account size
@@ -63,9 +57,17 @@ pub mod zkcash {
             ErrorCode::InsufficientFundsToMaintainRentExemption
         );
 
-        // Transfer the specified amount from fee recipient to recipient
-        **fee_recipient_account_info.try_borrow_mut_lamports()? -= amount;
-        **recipient_account_info.try_borrow_mut_lamports()? += amount;
+        // Transfer the specified amount from fee recipient to recipient using checked arithmetic
+        let fee_recipient_balance = fee_recipient_account_info.lamports();
+        let recipient_balance = recipient_account_info.lamports();
+        
+        let new_fee_recipient_balance = fee_recipient_balance.checked_sub(amount)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        let new_recipient_balance = recipient_balance.checked_add(amount)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+            
+        **fee_recipient_account_info.try_borrow_mut_lamports()? = new_fee_recipient_balance;
+        **recipient_account_info.try_borrow_mut_lamports()? = new_recipient_balance;
 
         msg!("Withdrew {} lamports from fee recipient to {}", amount, ctx.accounts.recipient.key());
         Ok(())
@@ -130,8 +132,16 @@ pub mod zkcash {
             let ext_amount_abs = -ext_amount as u64;
             require!(tree_token_account_info.lamports() >= ext_amount_abs, ErrorCode::InsufficientFundsForWithdrawal);
 
-            **tree_token_account_info.try_borrow_mut_lamports()? -= ext_amount_abs;
-            **recipient_account_info.try_borrow_mut_lamports()? += ext_amount_abs;
+            let tree_token_balance = tree_token_account_info.lamports();
+            let recipient_balance = recipient_account_info.lamports();
+            
+            let new_tree_token_balance = tree_token_balance.checked_sub(ext_amount_abs)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            let new_recipient_balance = recipient_balance.checked_add(ext_amount_abs)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+                
+            **tree_token_account_info.try_borrow_mut_lamports()? = new_tree_token_balance;
+            **recipient_account_info.try_borrow_mut_lamports()? = new_recipient_balance;
         }
         
         if fee > 0 {
@@ -140,8 +150,16 @@ pub mod zkcash {
 
             require!(tree_token_account_info.lamports() >= fee, ErrorCode::InsufficientFundsForFee);
 
-            **tree_token_account_info.try_borrow_mut_lamports()? -= fee;
-            **fee_recipient_account_info.try_borrow_mut_lamports()? += fee;
+            let tree_token_balance = tree_token_account_info.lamports();
+            let fee_recipient_balance = fee_recipient_account_info.lamports();
+            
+            let new_tree_token_balance = tree_token_balance.checked_sub(fee)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            let new_fee_recipient_balance = fee_recipient_balance.checked_add(fee)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+                
+            **tree_token_account_info.try_borrow_mut_lamports()? = new_tree_token_balance;
+            **fee_recipient_account_info.try_borrow_mut_lamports()? = new_fee_recipient_balance;
         }
 
         let next_index_to_insert = tree_account.next_index;
@@ -158,7 +176,6 @@ pub mod zkcash {
         ctx.accounts.commitment1.index = next_index_to_insert + 1;
         ctx.accounts.commitment1.bump = ctx.bumps.commitment1;
         
-        msg!("Transaction completed successfully");
         Ok(())
     }
 }
@@ -388,4 +405,6 @@ pub enum ErrorCode {
     PublicAmountCalculationError,
     #[msg("Insufficient funds to maintain rent exemption")]
     InsufficientFundsToMaintainRentExemption,
+    #[msg("Arithmetic overflow/underflow occurred")]
+    ArithmeticOverflow,
 }

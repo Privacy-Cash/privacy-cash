@@ -15,7 +15,7 @@ zkcash = "8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "./deploy-keypair.json"
 
 [scripts]
