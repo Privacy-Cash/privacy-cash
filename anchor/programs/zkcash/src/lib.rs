@@ -129,7 +129,10 @@ pub mod zkcash {
             let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
             let recipient_account_info = ctx.accounts.recipient.to_account_info();
 
-            let ext_amount_abs = -ext_amount as u64;
+            let ext_amount_abs = ext_amount.checked_neg()
+                .ok_or(ErrorCode::ArithmeticOverflow)?
+                .try_into()
+                .map_err(|_| ErrorCode::InvalidExtAmount)?;
             require!(tree_token_account_info.lamports() >= ext_amount_abs, ErrorCode::InsufficientFundsForWithdrawal);
 
             let tree_token_balance = tree_token_account_info.lamports();
