@@ -1557,6 +1557,9 @@ describe("zkcash", () => {
     
     // 3. Random user should have lost at least the fee amount plus some tx fees
     expect(randomUserTotalDiff).to.be.lessThan(-depositFee.toNumber());
+
+    const treeTokenAccountBalanceDiffFromBeforeDeposit = treeTokenAccountBalanceBefore - finalTreeTokenBalance;
+    expect(treeTokenAccountBalanceDiffFromBeforeDeposit).to.be.equals(0);
   });
 
   it("Fails to execute deposit when wallet has insufficient balance", async () => {
