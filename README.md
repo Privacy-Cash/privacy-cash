@@ -41,6 +41,13 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
    ```bash
    ./buildCircuit_prod_solana.sh 2
    ```
+   Notice for production, one should use trusted setup (zkey) ceremony,
+   using tools like potion (https://ceremony.pse.dev/)
+   As long as at least one of the ceremony contributor delete the 0zkey file,
+   the setup is secure.
+
+   For local dev, it suffice to run buildCircuit_prod_solana.sh script to compile
+   the circuit. If you delete your 0zkey, then the setup is safe.
 4. Generate verifying keys
    ```bash
    cd artifacts/circuits

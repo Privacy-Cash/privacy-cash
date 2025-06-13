@@ -2,6 +2,7 @@
 program/target/
 scripts/node_modules/
 artifacts/circuits/powersOfTau28_hez_final_18.ptau
+artifacts/circuits/transaction2_0.zkey
 anchor/.anchor
 anchor/.DS_Store
 anchor/target
