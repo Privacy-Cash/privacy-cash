@@ -1,3 +1,4 @@
+// Adapted from https://github.com/Lightprotocol/light-protocol/blob/b2a236409bb7797615d217fbf4fff498c852d25e/sparse-merkle-tree/src/merkle_tree.rs
 use light_hasher::Hasher;
 use crate::{MerkleTreeAccount, ErrorCode};
 use anchor_lang::prelude::*;
