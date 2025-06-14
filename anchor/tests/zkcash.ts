@@ -2439,6 +2439,452 @@ describe("zkcash", () => {
     expect(treeTokenAccountBalanceDiffFromBeforeDeposit).to.be.equals(0);
   });
 
+  it("Can execute both deposit and withdraw instruction with 0 deposit fee and positive withdraw fee, after withdrawing full amount", async () => {
+    const depositFee = new anchor.BN(0)
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: new anchor.BN(200), // Positive ext amount (deposit)
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee, // Fee
+    };
+
+    // Create the merkle tree with the pre-initialized poseidon hash
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
+
+    // Create inputs for the first deposit
+    const inputs = [
+      new Utxo({ lightWasm }),
+      new Utxo({ lightWasm })
+    ];
+
+    const outputAmount = '200';
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount }), // Combined amount minus fee
+      new Utxo({ lightWasm, amount: '0' }) // Empty UTXO
+    ];
+
+    // Create mock Merkle path data (normally built from the tree)
+    const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    
+    // inputMerklePathElements won't be checked for empty utxos. so we need to create a sample full path
+    // Create the Merkle paths for each input
+    const inputMerklePathElements = inputs.map(() => {
+      // Return an array of zero elements as the path for each input
+      // Create a copy of the zeroElements array to avoid modifying the original
+      return [...new Array(tree.levels).fill(0)];
+    });
+
+    // Resolve all async operations before creating the input object
+    // Await nullifiers and commitments to get actual values instead of Promise objects
+    const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+    const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+
+    // Use the properly calculated Merkle tree root
+    const root = tree.root();
+
+    // Calculate the hash correctly using our utility
+    const calculatedExtDataHash = getExtDataHash(extData);
+    const publicAmountNumber = new anchor.BN(200);
+
+    const input = {
+      // Common transaction data
+      root: root,
+      inputNullifier: inputNullifiers, // Use resolved values instead of Promise objects
+      outputCommitment: outputCommitments, // Use resolved values instead of Promise objects
+      publicAmount: publicAmountNumber.toString(),
+      extDataHash: calculatedExtDataHash,
+      
+      // Input UTXO data (UTXOs being spent) - ensure all values are in decimal format
+      inAmount: inputs.map(x => x.amount.toString(10)),
+      inPrivateKey: inputs.map(x => x.keypair.privkey),
+      inBlinding: inputs.map(x => x.blinding.toString(10)),
+      inPathIndices: inputMerklePathIndices,
+      inPathElements: inputMerklePathElements,
+      
+      // Output UTXO data (UTXOs being created) - ensure all values are in decimal format
+      outAmount: outputs.map(x => x.amount.toString(10)),
+      outBlinding: outputs.map(x => x.blinding.toString(10)),
+      outPubkey: outputs.map(x => x.keypair.pubkey),
+    };
+
+    // Path to the proving key files (wasm and zkey)
+    // Try with both circuits to see which one works
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof, publicSignals} = await prove(input, keyBasePath);
+
+    publicSignals.forEach((signal, index) => {
+      const signalStr = signal.toString();
+      let matchedKey = 'unknown';
+      
+      // Try to identify which input this signal matches
+      for (const [key, value] of Object.entries(input)) {
+        if (Array.isArray(value)) {
+          if (value.some(v => v.toString() === signalStr)) {
+            matchedKey = key;
+            break;
+          }
+        } else if (value.toString() === signalStr) {
+          matchedKey = key;
+          break;
+        }
+      }
+    });
+    
+
+    const proofInBytes = parseProofToBytesArray(proof);
+    const inputsInBytes = parseToBytesArray(publicSignals);
+    
+    // Create a Proof object with the correctly calculated hash
+    const proofToSubmit = {
+      proofA: proofInBytes.proofA, // 64-byte array for proofA
+      proofB: proofInBytes.proofB.flat(), // 128-byte array for proofB  
+      proofC: proofInBytes.proofC, // 64-byte array for proofC
+      root: inputsInBytes[0],
+      publicAmount: inputsInBytes[1],
+      extDataHash: inputsInBytes[2],
+      inputNullifiers: [
+        inputsInBytes[3],
+        inputsInBytes[4]
+      ],
+      outputCommitments: [
+        inputsInBytes[5],
+        inputsInBytes[6]
+      ],
+    };
+
+    // Derive nullifier PDAs
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+
+    // Derive commitment PDAs
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+
+    // Get balances before transaction
+    const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceBefore = await provider.connection.getBalance(feeRecipient.publicKey);
+    const recipientBalanceBefore = await provider.connection.getBalance(recipient.publicKey);
+    const randomUserBalanceBefore = await provider.connection.getBalance(randomUser.publicKey);
+
+    // Execute the transaction without pre-instructions
+    const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    const tx = await program.methods
+      .transact(proofToSubmit, extData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: nullifier0PDA,
+        nullifier1: nullifier1PDA,
+        commitment0: commitment0PDA,
+        commitment1: commitment1PDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipient.publicKey,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey, // Use random user as signer
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser]) // Random user signs the transaction
+      .preInstructions([modifyComputeUnits]) // Add compute budget instruction as pre-instruction
+      .transaction();
+    
+    // Create v0 transaction to allow larger size
+    const latestBlockhash = await provider.connection.getLatestBlockhash();
+    const messageLegacy = new anchor.web3.TransactionMessage({
+      payerKey: randomUser.publicKey,
+      recentBlockhash: latestBlockhash.blockhash,
+      instructions: tx.instructions,
+    }).compileToLegacyMessage();
+    
+    // Create a versioned transaction
+    const transactionV0 = new anchor.web3.VersionedTransaction(messageLegacy);
+    
+    // Sign the transaction
+    transactionV0.sign([randomUser]);
+    
+    // Send and confirm transaction
+    const txSig = await provider.connection.sendTransaction(transactionV0, {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+    
+    await provider.connection.confirmTransaction({
+      blockhash: latestBlockhash.blockhash,
+      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      signature: txSig,
+    });
+    
+    expect(txSig).to.be.a('string');
+
+    // Verify commitment PDAs have correct data
+    const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
+    const commitment1Account = await provider.connection.getAccountInfo(commitment1PDA);
+    
+    // Check that the commitment accounts exist
+    expect(commitment0Account).to.not.be.null;
+    expect(commitment1Account).to.not.be.null;
+    
+    // Deserialize the commitment accounts
+    const commitment0Data = program.coder.accounts.decode(
+      'commitmentAccount',
+      commitment0Account.data
+    );
+    const commitment1Data = program.coder.accounts.decode(
+      'commitmentAccount',
+      commitment1Account.data
+    );
+    
+    // Verify the commitment values match
+    expect(Buffer.from(commitment0Data.commitment).equals(Buffer.from(proofToSubmit.outputCommitments[0]))).to.be.true;
+    expect(Buffer.from(commitment1Data.commitment).equals(Buffer.from(proofToSubmit.outputCommitments[1]))).to.be.true;
+    
+    // Verify the encrypted outputs match
+    expect(Buffer.from(commitment0Data.encryptedOutput).equals(extData.encryptedOutput1)).to.be.true;
+    expect(Buffer.from(commitment1Data.encryptedOutput).equals(extData.encryptedOutput2)).to.be.true;
+
+    // Get balances after transaction
+    const treeTokenAccountBalanceAfter = await provider.connection.getBalance(treeTokenAccountPDA);
+    const feeRecipientBalanceAfter = await provider.connection.getBalance(feeRecipient.publicKey);
+    const recipientBalanceAfter = await provider.connection.getBalance(recipient.publicKey);
+    const randomUserBalanceAfter = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // Calculate differences
+    const treeTokenAccountDiff = treeTokenAccountBalanceAfter - treeTokenAccountBalanceBefore;
+    const feeRecipientDiff = feeRecipientBalanceAfter - feeRecipientBalanceBefore;
+    const recipientDiff = recipientBalanceAfter - recipientBalanceBefore;
+    const randomUserDiff = randomUserBalanceAfter - randomUserBalanceBefore;
+
+    expect(treeTokenAccountDiff).to.be.equals(publicAmountNumber.toNumber());
+    expect(feeRecipientDiff).to.be.equals(0);
+    expect(recipientDiff).to.be.equals(0);
+    // accounts for the transaction fee
+    expect(randomUserDiff).to.be.lessThan(-extData.extAmount.toNumber());
+
+    // Create mock input UTXOs for withdrawal
+    // First input is a real UTXO that we created in deposit
+    const withdrawInputs = [
+      outputs[0], // Use the first output directly
+      new Utxo({ lightWasm }) // Second input is empty
+    ];
+    const withdrawOutputs = [
+      new Utxo({ lightWasm, amount: '0' }), // Some remaining amount
+      new Utxo({ lightWasm, amount: '0' }) // Empty UTXO
+    ];
+    const withdrawFee = new anchor.BN(20)
+
+    const withdrawInputsSum = withdrawInputs.reduce((sum, x) => sum.add(x.amount), new BN(0))
+    const withdrawOutputsSum = withdrawOutputs.reduce((sum, x) => sum.add(x.amount), new BN(0))
+    const extAmount = new BN(withdrawFee)
+      .add(withdrawOutputsSum)
+      .sub(withdrawInputsSum)
+    
+    // For circom, we need field modular arithmetic to handle negative numbers
+    const withdrawPublicAmount = new BN(extAmount).sub(new BN(withdrawFee)).add(FIELD_SIZE).mod(FIELD_SIZE).toString()
+    
+    // Create a sample ExtData object for withdrawal
+    const withdrawExtData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount, // Use the calculated extAmount value instead of hardcoded -100
+      encryptedOutput1: Buffer.from("withdrawEncryptedOutput1"),
+      encryptedOutput2: Buffer.from("withdrawEncryptedOutput2"),
+      fee: withdrawFee, // Use the same fee variable we used in calculations
+    };
+
+    // Calculate the hash for withdrawal
+    const withdrawExtDataHash = getExtDataHash(withdrawExtData);
+
+    // Create a new tree and insert the deposit output commitments
+    for (const commitment of outputCommitments) {
+      tree.insert(commitment);
+    }
+
+    const oldRoot = tree.root();
+
+    // Get nullifiers and commitments for withdrawal
+    const withdrawInputNullifiers = await Promise.all(withdrawInputs.map(x => x.getNullifier()));
+    const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
+
+    // Calculate Merkle paths for withdrawal inputs properly
+    const withdrawalInputMerklePathIndices = []
+    const withdrawalInputMerklePathElements = []
+    for (let i = 0; i < withdrawInputs.length; i++) {
+      const withdrawInput = withdrawInputs[i]
+      if (withdrawInput.amount.gt(new BN(0))) {
+        const commitment = outputCommitments[i]
+        withdrawInput.index = tree.indexOf(commitment)
+        if (withdrawInput.index < 0) {
+          throw new Error(`Input commitment ${commitment} was not found`)
+        }
+        withdrawalInputMerklePathIndices.push(withdrawInput.index)
+        withdrawalInputMerklePathElements.push(tree.path(withdrawInput.index).pathElements)
+      } else {
+        withdrawalInputMerklePathIndices.push(0)
+        withdrawalInputMerklePathElements.push(new Array(tree.levels).fill(0))
+      }
+    }
+
+    // Create input for withdrawal proof generation
+    const withdrawInput = {
+      // Common transaction data
+      root: oldRoot,
+      inputNullifier: withdrawInputNullifiers,
+      outputCommitment: withdrawOutputCommitments,
+      publicAmount: withdrawPublicAmount.toString(),
+      extDataHash: withdrawExtDataHash,
+      
+      // Input UTXO data (UTXOs being spent)
+      inAmount: withdrawInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
+      inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+      inPathIndices: withdrawalInputMerklePathIndices,
+      inPathElements: withdrawalInputMerklePathElements,
+      
+      // Output UTXO data (UTXOs being created)
+      outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
+      outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+    };
+
+    // Generate proof for withdrawal
+    const withdrawProofResult = await prove(withdrawInput, keyBasePath);
+    const withdrawProofInBytes = parseProofToBytesArray(withdrawProofResult.proof);
+    const withdrawInputsInBytes = parseToBytesArray(withdrawProofResult.publicSignals);
+    
+    // Create the final withdrawal proof object
+    const withdrawProofToSubmit = {
+      proofA: withdrawProofInBytes.proofA,
+      proofB: withdrawProofInBytes.proofB.flat(),
+      proofC: withdrawProofInBytes.proofC,
+      root: withdrawInputsInBytes[0],
+      publicAmount: withdrawInputsInBytes[1],
+      extDataHash: withdrawInputsInBytes[2],
+      inputNullifiers: [
+        withdrawInputsInBytes[3],
+        withdrawInputsInBytes[4]
+      ],
+      outputCommitments: [
+        withdrawInputsInBytes[5],
+        withdrawInputsInBytes[6]
+      ],
+    };
+
+    // Derive PDAs for withdrawal nullifiers
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    
+    // Derive PDAs for withdrawal commitments
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+
+    // Execute the withdrawal transaction
+    const withdrawTx = await program.methods
+      .transact(withdrawProofToSubmit, withdrawExtData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: withdrawNullifiers.nullifier0PDA,
+        nullifier1: withdrawNullifiers.nullifier1PDA,
+        commitment0: withdrawCommitments.commitment0PDA,
+        commitment1: withdrawCommitments.commitment1PDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipient.publicKey,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .transaction();
+      
+    // Add compute budget instruction
+    withdrawTx.add(modifyComputeUnits);
+    
+    // Create v0 transaction to allow larger size
+    const withdrawLatestBlockhash = await provider.connection.getLatestBlockhash();
+    const withdrawMessageLegacy = new anchor.web3.TransactionMessage({
+      payerKey: randomUser.publicKey,
+      recentBlockhash: withdrawLatestBlockhash.blockhash,
+      instructions: withdrawTx.instructions,
+    }).compileToLegacyMessage();
+    
+    // Create a versioned transaction
+    const withdrawTransactionV0 = new anchor.web3.VersionedTransaction(withdrawMessageLegacy);
+    
+    // Sign the transaction
+    withdrawTransactionV0.sign([randomUser]);
+    
+    // Send and confirm transaction
+    const withdrawTxSig = await provider.connection.sendTransaction(withdrawTransactionV0, {
+      skipPreflight: false, 
+      preflightCommitment: 'confirmed',
+    });
+    
+    await provider.connection.confirmTransaction({
+      blockhash: withdrawLatestBlockhash.blockhash,
+      lastValidBlockHeight: withdrawLatestBlockhash.lastValidBlockHeight,
+      signature: withdrawTxSig,
+    });
+    
+    expect(withdrawTxSig).to.be.a('string');
+
+    // Verify withdrawal commitment PDAs have correct data
+    const withdrawCommitment0Account = await provider.connection.getAccountInfo(withdrawCommitments.commitment0PDA);
+    const withdrawCommitment1Account = await provider.connection.getAccountInfo(withdrawCommitments.commitment1PDA);
+    
+    // Check that the commitment accounts exist
+    expect(withdrawCommitment0Account).to.not.be.null;
+    expect(withdrawCommitment1Account).to.not.be.null;
+    
+    // Deserialize the commitment accounts
+    const withdrawCommitment0Data = program.coder.accounts.decode(
+      'commitmentAccount',
+      withdrawCommitment0Account.data
+    );
+    const withdrawCommitment1Data = program.coder.accounts.decode(
+      'commitmentAccount',
+      withdrawCommitment1Account.data
+    );
+    
+    // Verify the commitment values match
+    expect(Buffer.from(withdrawCommitment0Data.commitment).equals(Buffer.from(withdrawProofToSubmit.outputCommitments[0]))).to.be.true;
+    expect(Buffer.from(withdrawCommitment1Data.commitment).equals(Buffer.from(withdrawProofToSubmit.outputCommitments[1]))).to.be.true;
+    
+    // Verify the encrypted outputs match
+    expect(Buffer.from(withdrawCommitment0Data.encryptedOutput).equals(withdrawExtData.encryptedOutput1)).to.be.true;
+    expect(Buffer.from(withdrawCommitment1Data.encryptedOutput).equals(withdrawExtData.encryptedOutput2)).to.be.true;
+
+    // Get final balances after both transactions
+    const finalTreeTokenBalance = await provider.connection.getBalance(treeTokenAccountPDA);
+    const finalFeeRecipientBalance = await provider.connection.getBalance(feeRecipient.publicKey);
+    const finalRandomUserBalance = await provider.connection.getBalance(randomUser.publicKey);
+    
+    // Calculate the withdrawal diffs specifically
+    const treeTokenWithdrawDiff = finalTreeTokenBalance - treeTokenAccountBalanceAfter;
+    const feeRecipientWithdrawDiff = finalFeeRecipientBalance - feeRecipientBalanceAfter;
+    const randomUserWithdrawDiff = finalRandomUserBalance - randomUserBalanceAfter;
+    
+    // Verify withdrawal logic worked correctly
+    expect(treeTokenWithdrawDiff).to.be.equals(extAmount.toNumber() - withdrawFee.toNumber()); // Tree decreases by withdraw amount
+    expect(feeRecipientWithdrawDiff).to.be.equals(withdrawFee.toNumber()); // Fee recipient unchanged
+    expect(randomUserWithdrawDiff).to.be.lessThan(-extAmount.toNumber()); // User gets withdraw amount minus tx fee
+
+    // Calculate overall diffs for the full cycle
+    const treeTokenTotalDiff = finalTreeTokenBalance - treeTokenAccountBalanceBefore;
+    const feeRecipientTotalDiff = finalFeeRecipientBalance - feeRecipientBalanceBefore;
+    const randomUserTotalDiff = finalRandomUserBalance - randomUserBalanceBefore;
+    
+    // Verify final balances
+    // 1. Tree token account should be back to original amount (excluding the fee)
+    expect(treeTokenTotalDiff).to.be.equals(withdrawOutputsSum.toNumber());
+    
+    // 2. Fee recipient keeps the fees... deposit fee is 0, so it's just the withdraw fee
+    expect(feeRecipientTotalDiff).to.be.equals(withdrawFee.toNumber());
+    
+    // 3. Random user should have lost at least the fee amount plus some tx fees
+    expect(randomUserTotalDiff).to.be.lessThan(-depositFee.toNumber());
+
+    const treeTokenAccountBalanceDiffFromBeforeDeposit = treeTokenAccountBalanceBefore - finalTreeTokenBalance;
+    expect(treeTokenAccountBalanceDiffFromBeforeDeposit).to.be.equals(0);
+  });
+
   it("Fails to execute deposit when wallet has insufficient balance", async () => {
     const depositFee = new anchor.BN(50);
     const depositAmount = new anchor.BN(200); // Positive ext amount (deposit)
