@@ -19,7 +19,7 @@ const utils = ffjavascript.utils as any;
 const { unstringifyBigInts, leInt2Buff } = utils;
 
 // Program ID for the zkcash program - same as in deposit_devnet.ts
-const PROGRAM_ID = new PublicKey('8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF');
+const PROGRAM_ID = new PublicKey('AW7zH2XvbZZuXtF7tcfCRzuny7L89GGqB3z3deGpejWQ');
 
 /**
  * Interface for the UTXO data returned from the API
@@ -334,13 +334,17 @@ async function main() {
     
     console.log(`\nTotal UTXOs found: ${myUtxos.length}`);
     
-    // Calculate and display total balance
-    const totalBalance = myUtxos.reduce((sum, utxo) => sum.add(utxo.amount), new BN(0));
-    const LAMPORTS_PER_SOL = new BN(1000000000); // 1 billion lamports = 1 SOL
+    // Determine spendable (unspent) balance only
+    const spentFlags = await Promise.all(myUtxos.map(u => isUtxoSpent(connection, u)));
+    const unspentUtxos = myUtxos.filter((_, idx) => !spentFlags[idx]);
+    const totalBalance = unspentUtxos.reduce((sum, utxo) => sum.add(utxo.amount), new BN(0));
+
+    const LAMPORTS_PER_SOL = new BN(1_000_000_000);
     const balanceInSol = totalBalance.div(LAMPORTS_PER_SOL);
     const remainderLamports = totalBalance.mod(LAMPORTS_PER_SOL);
-    const balanceInSolWithDecimals = balanceInSol.toNumber() + remainderLamports.toNumber() / 1000000000;
-    console.log(`Total balance: ${balanceInSolWithDecimals.toFixed(9)} SOL`);
+    const balanceInSolWithDecimals = balanceInSol.toNumber() + remainderLamports.toNumber() / 1_000_000_000;
+
+    console.log(`Unspent balance: ${balanceInSolWithDecimals.toFixed(9)} SOL (${unspentUtxos.length} UTXOs)`);
   } catch (error: any) {
     console.error('Error in main function:', error.message);
   }

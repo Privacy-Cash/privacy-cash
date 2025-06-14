@@ -4,13 +4,13 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 // Program ID for the zkcash program
-const PROGRAM_ID = new PublicKey('8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF');
+const PROGRAM_ID = new PublicKey('AW7zH2XvbZZuXtF7tcfCRzuny7L89GGqB3z3deGpejWQ');
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
 // Hardcoded deployer/authority public key
-const DEPLOYER = new PublicKey('2rDPKjjxMteR4vHFgFnZiZ6KzSLeUnH7nVEdnCQCVu52');
+const DEPLOYER = new PublicKey('Fj2iBWFwfejrNEVusU4LEXUYVp2R3AVVWG9srFAs2isH');
 
 async function checkFeesBalance() {
   try {

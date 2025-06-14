@@ -5,7 +5,7 @@ use anchor_lang::solana_program::sysvar::rent::Rent;
 use ark_ff::PrimeField;
 use ark_bn254::Fr;
 
-declare_id!("8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF");
+declare_id!("AW7zH2XvbZZuXtF7tcfCRzuny7L89GGqB3z3deGpejWQ");
 
 pub mod merkle_tree;
 pub mod utils;
@@ -27,10 +27,6 @@ pub mod zkcash {
         tree_account.root_index = 0;
         tree_account.bump = ctx.bumps.tree_account;
 
-        let fee_recipient = &mut ctx.accounts.fee_recipient_account;
-        fee_recipient.authority = ctx.accounts.authority.key();
-        fee_recipient.bump = ctx.bumps.fee_recipient_account;
-
         MerkleTree::initialize::<Poseidon>(tree_account);
         
         let token_account = &mut ctx.accounts.tree_token_account;
@@ -38,38 +34,6 @@ pub mod zkcash {
         token_account.bump = ctx.bumps.tree_token_account;
         
         msg!("Sparse Merkle Tree initialized successfully");
-        Ok(())
-    }
-
-    pub fn withdraw_fees(ctx: Context<WithdrawFees>, amount: u64) -> Result<()> {
-        let fee_recipient_account_info = ctx.accounts.fee_recipient_account.to_account_info();
-        let recipient_account_info = ctx.accounts.recipient.to_account_info();
-
-        // Calculate minimum rent exemption for the fee recipient account
-        let rent = Rent::get()?;
-        let fee_recipient_account_size = 8 + std::mem::size_of::<FeeRecipientAccount>(); // 8 bytes for discriminator + account size
-        let min_rent_exempt_balance = rent.minimum_balance(fee_recipient_account_size);
-        
-        // Check that after withdrawal, the fee recipient account will still be rent-exempt
-        let remaining_balance = fee_recipient_account_info.lamports().saturating_sub(amount);
-        require!(
-            remaining_balance >= min_rent_exempt_balance,
-            ErrorCode::InsufficientFundsToMaintainRentExemption
-        );
-
-        // Transfer the specified amount from fee recipient to recipient using checked arithmetic
-        let fee_recipient_balance = fee_recipient_account_info.lamports();
-        let recipient_balance = recipient_account_info.lamports();
-        
-        let new_fee_recipient_balance = fee_recipient_balance.checked_sub(amount)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-        let new_recipient_balance = recipient_balance.checked_add(amount)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-            
-        **fee_recipient_account_info.try_borrow_mut_lamports()? = new_fee_recipient_balance;
-        **recipient_account_info.try_borrow_mut_lamports()? = new_recipient_balance;
-
-        msg!("Withdrew {} lamports from fee recipient to {}", amount, ctx.accounts.recipient.key());
         Ok(())
     }
 
@@ -85,7 +49,6 @@ pub mod zkcash {
         let authority_key = ctx.accounts.authority.key();
         require!(
             authority_key == tree_account.authority.key() &&
-            authority_key == ctx.accounts.fee_recipient_account.authority.key() &&
             authority_key == ctx.accounts.tree_token_account.authority.key(),
             ErrorCode::Unauthorized
         );
@@ -277,13 +240,8 @@ pub struct Transact<'info> {
     #[account(mut)]
     pub recipient: SystemAccount<'info>,
     
-    #[account(
-        mut,
-        seeds = [b"fee_recipient", authority.key().as_ref()],
-        bump = fee_recipient_account.bump,
-        has_one = authority @ ErrorCode::Unauthorized
-    )]
-    pub fee_recipient_account: Account<'info, FeeRecipientAccount>,
+    #[account(mut)]
+    pub fee_recipient_account: SystemAccount<'info>,
     
     /// The authority account is the account that created the tree and fee recipient PDAs
     pub authority: SystemAccount<'info>,
@@ -309,15 +267,6 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + std::mem::size_of::<FeeRecipientAccount>(),
-        seeds = [b"fee_recipient", authority.key().as_ref()],
-        bump
-    )]
-    pub fee_recipient_account: Account<'info, FeeRecipientAccount>,
-    
-    #[account(
-        init,
-        payer = authority,
         space = 8 + std::mem::size_of::<TreeTokenAccount>(),
         seeds = [b"tree_token", authority.key().as_ref()],
         bump
@@ -328,31 +277,6 @@ pub struct Initialize<'info> {
     pub authority: Signer<'info>,
     
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct WithdrawFees<'info> {
-    #[account(
-        mut,
-        seeds = [b"fee_recipient", authority.key().as_ref()],
-        bump = fee_recipient_account.bump,
-        has_one = authority @ ErrorCode::Unauthorized
-    )]
-    pub fee_recipient_account: Account<'info, FeeRecipientAccount>,
-    
-    /// The recipient account where fees will be withdrawn to
-    #[account(mut)]
-    pub recipient: SystemAccount<'info>,
-    
-    pub authority: Signer<'info>,
-    
-    pub system_program: Program<'info, System>,
-}
-
-#[account]
-pub struct FeeRecipientAccount {
-    pub authority: Pubkey,
-    pub bump: u8,
 }
 
 #[account]
@@ -412,8 +336,6 @@ pub enum ErrorCode {
     InvalidExtAmount,
     #[msg("Public amount calculation resulted in an overflow/underflow.")]
     PublicAmountCalculationError,
-    #[msg("Insufficient funds to maintain rent exemption")]
-    InsufficientFundsToMaintainRentExemption,
     #[msg("Arithmetic overflow/underflow occurred")]
     ArithmeticOverflow,
 }

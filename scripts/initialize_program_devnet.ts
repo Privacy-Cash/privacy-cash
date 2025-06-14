@@ -1,4 +1,4 @@
-import { Connection, Keypair, PublicKey, sendAndConfirmTransaction, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, sendAndConfirmTransaction, SystemProgram, Transaction, TransactionInstruction, SendTransactionError } from '@solana/web3.js';
 import { readFileSync } from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
@@ -10,7 +10,7 @@ const idl = JSON.parse(readFileSync(idlPath, 'utf-8'));
 dotenv.config();
 
 // Program ID for the zkcash program
-const PROGRAM_ID = new PublicKey('8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF');
+const PROGRAM_ID = new PublicKey('AW7zH2XvbZZuXtF7tcfCRzuny7L89GGqB3z3deGpejWQ');
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -20,13 +20,13 @@ const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 const INITIALIZE_IX_DISCRIMINATOR = Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]);
 
 /**
+ * Example output:
  * Generated PDAs:
-Tree Account: 2R6iQwfvX2ixi21MFnm3KSDBfFrCAWv7qpw2cE9ygqt5
-Fee Recipient Account: 86686mBgYyxW3S2Aa5TxWVDvCb9zsNfJiiWrARsoq6mh
-Tree Token Account: FwQAFcHJqDWNBLKoa5qncZhP8fceV2E46HtBWzW4KRFn
-Initialization successful!
-Transaction signature: 3h95C7aZNeowpZhsBXFbYkjYaKGEhpDqcaTBzzTiXxwPNUCNJhgxntVpwtjMK5NBqwZk3kaE4D9nkFyANTbKbNiP
-Transaction link: https://explorer.solana.com/tx/3h95C7aZNeowpZhsBXFbYkjYaKGEhpDqcaTBzzTiXxwPNUCNJhgxntVpwtjMK5NBqwZk3kaE4D9nkFyANTbKbNiP?cluster=devnet
+ * Tree Account: 2R6iQwfvX2ixi21MFnm3KSDBfFrCAWv7qpw2cE9ygqt5
+ * Tree Token Account: FwQAFcHJqDWNBLKoa5qncZhP8fceV2E46HtBWzW4KRFn
+ * Initialization successful!
+ * Transaction signature: 3h95C7aZNeowpZhsBXFbYkjYaKGEhpDqcaTBzzTiXxwPNUCNJhgxntVpwtjMK5NBqwZk3kaE4D9nkFyANTbKbNiP
+ * Transaction link: https://explorer.solana.com/tx/3h95C7aZNeowpZhsBXFbYkjYaKGEhpDqcaTBzzTiXxwPNUCNJhgxntVpwtjMK5NBqwZk3kaE4D9nkFyANTbKbNiP?cluster=devnet
  */
 async function initialize() {
   try {
@@ -62,11 +62,6 @@ async function initialize() {
       PROGRAM_ID
     );
 
-    const [feeRecipientAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('fee_recipient'), payer.publicKey.toBuffer()],
-      PROGRAM_ID
-    );
-
     const [treeTokenAccount] = PublicKey.findProgramAddressSync(
       [Buffer.from('tree_token'), payer.publicKey.toBuffer()],
       PROGRAM_ID
@@ -74,7 +69,6 @@ async function initialize() {
 
     console.log('Generated PDAs:');
     console.log(`Tree Account: ${treeAccount.toString()}`);
-    console.log(`Fee Recipient Account: ${feeRecipientAccount.toString()}`);
     console.log(`Tree Token Account: ${treeTokenAccount.toString()}`);
 
     // Create instruction data - just the discriminator for initialize
@@ -85,7 +79,6 @@ async function initialize() {
       programId: PROGRAM_ID,
       keys: [
         { pubkey: treeAccount, isSigner: false, isWritable: true },
-        { pubkey: feeRecipientAccount, isSigner: false, isWritable: true },
         { pubkey: treeTokenAccount, isSigner: false, isWritable: true },
         { pubkey: payer.publicKey, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -110,4 +103,4 @@ async function initialize() {
 }
 
 // Run the initialize function
-initialize(); 
+initialize();

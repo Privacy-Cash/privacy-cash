@@ -7,11 +7,10 @@ import { prove, parseProofToBytesArray, parseToBytesArray } from './utils/prover
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { WasmFactory } from '@lightprotocol/hasher.rs';
-import { MerkleTree } from './utils/merkle_tree';
 import { EncryptionService } from './utils/encryption';
 import { Keypair as UtxoKeypair } from './models/keypair';
 import { getMyUtxos, isUtxoSpent } from './fetch_user_utxos';
-import { FIELD_SIZE } from './utils/constants';
+import { FIELD_SIZE, FEE_RECIPIENT_ACCOUNT } from './utils/constants';
 
 dotenv.config();
 
@@ -21,7 +20,7 @@ const FEE_AMOUNT = 10_000; // 0.00001 SOL in lamports
 const TRANSACT_IX_DISCRIMINATOR = Buffer.from([217, 149, 130, 143, 221, 52, 252, 119]);
 const CIRCUIT_PATH = path.resolve(__dirname, '../artifacts/circuits/transaction2');
 // Recipient address for withdrawal
-const RECIPIENT_ADDRESS = new PublicKey('2rDPKjjxMteR4vHFgFnZiZ6KzSLeUnH7nVEdnCQCVu52');
+const RECIPIENT_ADDRESS = new PublicKey('Fj2iBWFwfejrNEVusU4LEXUYVp2R3AVVWG9srFAs2isH');
 
 // Indexer API endpoint
 const INDEXER_API_URL = 'https://api.privacycash.org/';
@@ -31,7 +30,7 @@ const userKeypairJson = JSON.parse(readFileSync(path.join(__dirname, 'script_key
 const user = Keypair.fromSecretKey(Uint8Array.from(userKeypairJson));
 
 // Program ID for the zkcash program
-const PROGRAM_ID = new PublicKey('8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF');
+const PROGRAM_ID = new PublicKey('AW7zH2XvbZZuXtF7tcfCRzuny7L89GGqB3z3deGpejWQ');
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -236,7 +235,7 @@ async function main() {
     const encryptionService = new EncryptionService();
     
     // Use hardcoded deployer public key
-    const deployer = new PublicKey('2rDPKjjxMteR4vHFgFnZiZ6KzSLeUnH7nVEdnCQCVu52');
+    const deployer = new PublicKey('Fj2iBWFwfejrNEVusU4LEXUYVp2R3AVVWG9srFAs2isH');
     console.log('Using hardcoded deployer public key');
     
     // Generate encryption key from the user keypair
@@ -252,20 +251,18 @@ async function main() {
       PROGRAM_ID
     );
 
-    const [feeRecipientAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('fee_recipient'), deployer.toBuffer()],
-      PROGRAM_ID
-    );
-
     const [treeTokenAccount] = PublicKey.findProgramAddressSync(
       [Buffer.from('tree_token'), deployer.toBuffer()],
       PROGRAM_ID
     );
 
+    // Fee recipient is now a specific account for receiving fees
+    const feeRecipientAccount = FEE_RECIPIENT_ACCOUNT;
+
     console.log('Using PDAs:');
     console.log(`Tree Account: ${treeAccount.toString()}`);
-    console.log(`Fee Recipient Account: ${feeRecipientAccount.toString()}`);
     console.log(`Tree Token Account: ${treeTokenAccount.toString()}`);
+    console.log(`Fee Recipient Account (regular account): ${feeRecipientAccount.toString()}`);
 
     // Get all relevant balances before transaction
     const treeTokenAccountBalanceBefore = await connection.getBalance(treeTokenAccount);
@@ -276,7 +273,8 @@ async function main() {
       recipient: `${recipientBalanceBefore / 1e9} SOL`,
     }, null, 2));
 
-    const MERKLE_TREE_DEPTH = 20;
+    // Depth must align with DEFAULT_HEIGHT used on-chain (26).
+    const MERKLE_TREE_DEPTH = 26;
 
     // Get current tree state
     const { root, nextIndex: currentNextIndex } = await queryRemoteTreeState();

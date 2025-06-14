@@ -11,7 +11,7 @@ import { MerkleTree } from './utils/merkle_tree';
 import { EncryptionService } from './utils/encryption';
 import { Keypair as UtxoKeypair } from './models/keypair';
 import { getMyUtxos, isUtxoSpent } from './fetch_user_utxos';
-import { FIELD_SIZE } from './utils/constants';
+import { FIELD_SIZE, FEE_RECIPIENT_ACCOUNT } from './utils/constants';
 
 dotenv.config();
 
@@ -26,7 +26,7 @@ const userKeypairJson = JSON.parse(readFileSync(path.join(__dirname, 'script_key
 const user = Keypair.fromSecretKey(Uint8Array.from(userKeypairJson));
 
 // Program ID for the zkcash program
-const PROGRAM_ID = new PublicKey('8atDWMCWZ6TpWivwKtiSKospNFaGt8envvWs63q9XjVF');
+const PROGRAM_ID = new PublicKey('AW7zH2XvbZZuXtF7tcfCRzuny7L89GGqB3z3deGpejWQ');
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -130,9 +130,10 @@ async function main() {
     // Initialize the encryption service
     const encryptionService = new EncryptionService();
     
-    // Use hardcoded deployer public key
-    const deployer = new PublicKey('2rDPKjjxMteR4vHFgFnZiZ6KzSLeUnH7nVEdnCQCVu52');
-    console.log('Using hardcoded deployer public key');
+    // Deployer (authority) public key must match the one used during Initialize.
+    // Updated to the new deployer keypair (deploy-keypair.json).
+    const deployer = new PublicKey('Fj2iBWFwfejrNEVusU4LEXUYVp2R3AVVWG9srFAs2isH');
+    console.log('Using deployer public key that matches the initialized tree');
     
     // Generate encryption key from the user keypair
     encryptionService.deriveEncryptionKeyFromWallet(user);
@@ -156,20 +157,18 @@ async function main() {
       PROGRAM_ID
     );
 
-    const [feeRecipientAccount] = PublicKey.findProgramAddressSync(
-      [Buffer.from('fee_recipient'), deployer.toBuffer()],
-      PROGRAM_ID
-    );
-
     const [treeTokenAccount] = PublicKey.findProgramAddressSync(
       [Buffer.from('tree_token'), deployer.toBuffer()],
       PROGRAM_ID
     );
 
+    // Fee recipient is now a specific account for receiving fees
+    const feeRecipientAccount = FEE_RECIPIENT_ACCOUNT;
+
     console.log('Using PDAs:');
     console.log(`Tree Account: ${treeAccount.toString()}`);
-    console.log(`Fee Recipient Account: ${feeRecipientAccount.toString()}`);
     console.log(`Tree Token Account: ${treeTokenAccount.toString()}`);
+    console.log(`Fee Recipient Account (regular account): ${feeRecipientAccount.toString()}`);
 
     // Create the merkle tree with the pre-initialized poseidon hash
     const tree = new MerkleTree(26, lightWasm);
