@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Mint, Transfer};
 use light_hasher::Poseidon;
 use anchor_lang::solana_program::hash::{hash};
 use anchor_lang::solana_program::sysvar::rent::Rent;
@@ -20,7 +21,6 @@ pub mod zkcash {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        // TODO: support SPL tokens.
         let tree_account = &mut ctx.accounts.tree_account.load_init()?;
         tree_account.authority = ctx.accounts.authority.key();
         tree_account.next_index = 0;
@@ -31,9 +31,10 @@ pub mod zkcash {
         
         let token_account = &mut ctx.accounts.tree_token_account;
         token_account.authority = ctx.accounts.authority.key();
+        token_account.mint = ctx.accounts.mint.key();
         token_account.bump = ctx.bumps.tree_token_account;
         
-        msg!("Sparse Merkle Tree initialized successfully");
+        msg!("Sparse Merkle Tree initialized successfully for mint: {}", ctx.accounts.mint.key());
         Ok(())
     }
 
@@ -51,6 +52,20 @@ pub mod zkcash {
             authority_key == tree_account.authority.key() &&
             authority_key == ctx.accounts.tree_token_account.authority.key(),
             ErrorCode::Unauthorized
+        );
+
+        // Validate all token accounts use the same mint
+        let reference_mint = ctx.accounts.mint.key();
+        let all_mints = [
+            ctx.accounts.signer_token_account.mint,
+            ctx.accounts.tree_token_vault.mint,
+            ctx.accounts.recipient_token_account.mint,
+            ctx.accounts.fee_recipient_token_account.mint,
+            ctx.accounts.tree_token_account.mint,
+        ];
+        require!(
+            all_mints.iter().all(|&mint| mint == reference_mint),
+            ErrorCode::InvalidMint
         );
 
         // check if proof.root is in the tree_account's proof history
@@ -81,56 +96,70 @@ pub mod zkcash {
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
         if ext_amount > 0 {
-            // If it's a deposit, transfer the SOL to the tree token account.
-            anchor_lang::system_program::transfer(
+            // SPL token deposit: transfer tokens from signer to tree token vault
+            token::transfer(
                 CpiContext::new(
-                    ctx.accounts.system_program.to_account_info(),
-                    anchor_lang::system_program::Transfer {
-                        from: ctx.accounts.signer.to_account_info(),
-                        to: ctx.accounts.tree_token_account.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.signer_token_account.to_account_info(),
+                        to: ctx.accounts.tree_token_vault.to_account_info(),
+                        authority: ctx.accounts.signer.to_account_info(),
                     },
                 ),
                 ext_amount as u64,
             )?;
         } else if ext_amount < 0 {
-            // PDA can't directly sign transactions, so we need to transfer SOL via try_borrow_mut_lamports
-            let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
-            let recipient_account_info = ctx.accounts.recipient.to_account_info();
-
+            // SPL token withdrawal: transfer tokens from vault to recipient
             let ext_amount_abs = ext_amount.checked_neg()
                 .ok_or(ErrorCode::ArithmeticOverflow)?
                 .try_into()
                 .map_err(|_| ErrorCode::InvalidExtAmount)?;
-            require!(tree_token_account_info.lamports() >= ext_amount_abs, ErrorCode::InsufficientFundsForWithdrawal);
-
-            let tree_token_balance = tree_token_account_info.lamports();
-            let recipient_balance = recipient_account_info.lamports();
             
-            let new_tree_token_balance = tree_token_balance.checked_sub(ext_amount_abs)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-            let new_recipient_balance = recipient_balance.checked_add(ext_amount_abs)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-                
-            **tree_token_account_info.try_borrow_mut_lamports()? = new_tree_token_balance;
-            **recipient_account_info.try_borrow_mut_lamports()? = new_recipient_balance;
+            // Create PDA signer seeds for the token transfer
+            let authority_key = ctx.accounts.authority.key();
+            let seeds = &[
+                b"tree_token",
+                authority_key.as_ref(),
+                &[ctx.accounts.tree_token_account.bump]
+            ];
+            let signer_seeds = &[&seeds[..]];
+            
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.tree_token_vault.to_account_info(),
+                        to: ctx.accounts.recipient_token_account.to_account_info(),
+                        authority: ctx.accounts.tree_token_account.to_account_info(),
+                    },
+                    signer_seeds,
+                ),
+                ext_amount_abs,
+            )?;
         }
         
         if fee > 0 {
-            let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
-            let fee_recipient_account_info = ctx.accounts.fee_recipient_account.to_account_info();
-
-            require!(tree_token_account_info.lamports() >= fee, ErrorCode::InsufficientFundsForFee);
-
-            let tree_token_balance = tree_token_account_info.lamports();
-            let fee_recipient_balance = fee_recipient_account_info.lamports();
+            // SPL token fee: transfer tokens from vault to fee recipient token account
+            let authority_key = ctx.accounts.authority.key();
+            let seeds = &[
+                b"tree_token",
+                authority_key.as_ref(),
+                &[ctx.accounts.tree_token_account.bump]
+            ];
+            let signer_seeds = &[&seeds[..]];
             
-            let new_tree_token_balance = tree_token_balance.checked_sub(fee)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-            let new_fee_recipient_balance = fee_recipient_balance.checked_add(fee)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-                
-            **tree_token_account_info.try_borrow_mut_lamports()? = new_tree_token_balance;
-            **fee_recipient_account_info.try_borrow_mut_lamports()? = new_fee_recipient_balance;
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.tree_token_vault.to_account_info(),
+                        to: ctx.accounts.fee_recipient_token_account.to_account_info(),
+                        authority: ctx.accounts.tree_token_account.to_account_info(),
+                    },
+                    signer_seeds,
+                ),
+                fee,
+            )?;
         }
 
         let next_index_to_insert = tree_account.next_index;
@@ -237,11 +266,30 @@ pub struct Transact<'info> {
     )]
     pub tree_token_account: Account<'info, TreeTokenAccount>,
     
-    #[account(mut)]
-    pub recipient: SystemAccount<'info>,
+    /// Token mint account
+    pub mint: Account<'info, Mint>,
     
+    /// Token program
+    pub token_program: Program<'info, Token>,
+    
+    /// Signer's token account
     #[account(mut)]
-    pub fee_recipient_account: SystemAccount<'info>,
+    pub signer_token_account: Account<'info, TokenAccount>,
+    
+    /// Tree token vault that holds the tokens
+    #[account(
+        mut,
+        constraint = tree_token_vault.owner == tree_token_account.key() @ ErrorCode::Unauthorized
+    )]
+    pub tree_token_vault: Account<'info, TokenAccount>,
+    
+    /// Recipient's token account for withdrawals
+    #[account(mut)]
+    pub recipient_token_account: Account<'info, TokenAccount>,
+    
+    /// Fee recipient's token account
+    #[account(mut)]
+    pub fee_recipient_token_account: Account<'info, TokenAccount>,
     
     /// The authority account is the account that created the tree and fee recipient PDAs
     pub authority: SystemAccount<'info>,
@@ -273,6 +321,12 @@ pub struct Initialize<'info> {
     )]
     pub tree_token_account: Account<'info, TreeTokenAccount>,
     
+    /// Token mint account
+    pub mint: Account<'info, Mint>,
+    
+    /// Token program
+    pub token_program: Program<'info, Token>,
+    
     #[account(mut)]
     pub authority: Signer<'info>,
     
@@ -282,6 +336,7 @@ pub struct Initialize<'info> {
 #[account]
 pub struct TreeTokenAccount {
     pub authority: Pubkey,
+    pub mint: Pubkey,
     pub bump: u8,
 }
 
@@ -338,4 +393,6 @@ pub enum ErrorCode {
     PublicAmountCalculationError,
     #[msg("Arithmetic overflow/underflow occurred")]
     ArithmeticOverflow,
+    #[msg("Invalid mint - does not match expected mint")]
+    InvalidMint,
 }

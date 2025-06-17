@@ -2,6 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Zkcash } from "../target/types/zkcash";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, NATIVE_MINT } from "@solana/spl-token";
 import { expect } from "chai";
 import { DEFAULT_HEIGHT, FIELD_SIZE, ROOT_HISTORY_SIZE, ZERO_BYTES } from "./lib/constants";
 import { getExtDataHash } from "../../scripts/utils/utils";
@@ -169,10 +170,12 @@ describe("zkcash", () => {
       await program.methods
         .initialize()
         .accounts({
-          treeAccount: treeAccountPDA,
-          treeTokenAccount: treeTokenAccountPDA,
+          tree_account: treeAccountPDA,
+          tree_token_account: treeTokenAccountPDA,
+          mint: NATIVE_MINT,
+          token_program: TOKEN_PROGRAM_ID,
           authority: authority.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId
+          system_program: anchor.web3.SystemProgram.programId
         })
         .signers([authority]) // Only authority is a signer
         .rpc();

@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.0",
+    "@solana/spl-token": "^0.4.13",
     "circomlib": "^2.0.5",
     "ffjavascript": "^0.3.1"
   },
