@@ -13,6 +13,16 @@ import { parseProofToBytesArray, parseToBytesArray, prove, verify } from "./lib/
 import { utils } from 'ffjavascript';
 import { LightWasm, WasmFactory } from "@lightprotocol/hasher.rs";
 import { BN } from 'bn.js';
+import { 
+  TOKEN_PROGRAM_ID, 
+  NATIVE_MINT, 
+  createSyncNativeInstruction,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  getAccount,
+  createAccount,
+  getOrCreateAssociatedTokenAccount
+} from "@solana/spl-token";
 
 // Utility function to generate random 32-byte arrays for nullifiers
 function generateRandomNullifier(): Uint8Array {
@@ -28,30 +38,30 @@ export function bnToBytes(bn: anchor.BN): number[] {
 
 import { MerkleTree } from "./lib/merkle_tree";
 
-// Find nullifier PDAs for the given proof
-function findNullifierPDAs(program: anchor.Program<any>, proof: any) {
+// Find nullifier PDAs for the given proof and token mint
+function findNullifierPDAs(program: anchor.Program<any>, proof: any, tokenMint: PublicKey) {
   const [nullifier0PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("nullifier0"), Buffer.from(proof.inputNullifiers[0])],
+    [Buffer.from("nullifier"), tokenMint.toBuffer(), Buffer.from(proof.inputNullifiers[0])],
     program.programId
   );
   
   const [nullifier1PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("nullifier1"), Buffer.from(proof.inputNullifiers[1])],
+    [Buffer.from("nullifier"), tokenMint.toBuffer(), Buffer.from(proof.inputNullifiers[1])],
     program.programId
   );
   
   return { nullifier0PDA, nullifier1PDA };
 }
 
-// Find commitment PDAs for the given proof
-function findCommitmentPDAs(program: anchor.Program<any>, proof: any) {
+// Find commitment PDAs for the given proof and token mint
+function findCommitmentPDAs(program: anchor.Program<any>, proof: any, tokenMint: PublicKey) {
   const [commitment0PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("commitment0"), Buffer.from(proof.outputCommitments[0])],
+    [Buffer.from("commitment"), tokenMint.toBuffer(), Buffer.from(proof.outputCommitments[0])],
     program.programId
   );
   
   const [commitment1PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("commitment1"), Buffer.from(proof.outputCommitments[1])],
+    [Buffer.from("commitment"), tokenMint.toBuffer(), Buffer.from(proof.outputCommitments[1])],
     program.programId
   );
   
@@ -78,6 +88,15 @@ describe("zkcash", () => {
   // Initialize variables for tree token account
   let treeTokenAccountPDA: PublicKey;
   let treeTokenBump: number;
+
+  // Token mint (using WSOL for SOL support)  
+  const tokenMint = NATIVE_MINT; // WSOL mint address (So11111111111111111111111111111111111112)
+  
+  // Token accounts
+  let vaultAta: PublicKey;
+  let userTokenAccount: PublicKey;
+  let recipientTokenAccount: PublicKey;
+  let feeRecipientTokenAccount: PublicKey;
 
   // --- Funding a wallet to use for paying transaction fees ---
   before(async () => {
@@ -148,59 +167,99 @@ describe("zkcash", () => {
       signature: feeRecipientAirdropSignature,
     });
     
-    // Calculate the PDA for the tree account with the new authority
+    // Calculate the PDA for the tree account with the new authority and token mint
     const [treePda, pdaBump] = await PublicKey.findProgramAddressSync(
-      [Buffer.from("merkle_tree"), authority.publicKey.toBuffer()],
+      [Buffer.from("merkle_tree"), tokenMint.toBuffer(), authority.publicKey.toBuffer()],
       program.programId
     );
     treeAccountPDA = treePda;
     treeBump = pdaBump;
     
-    // Calculate the PDA for the tree token account with the new authority
+    // Calculate the PDA for the tree token account with the new authority and token mint
     const [treeTokenPda, treeTokenPdaBump] = await PublicKey.findProgramAddressSync(
-      [Buffer.from("tree_token"), authority.publicKey.toBuffer()],
+      [Buffer.from("tree_token"), tokenMint.toBuffer(), authority.publicKey.toBuffer()],
       program.programId
     );
     treeTokenAccountPDA = treeTokenPda;
     treeTokenBump = treeTokenPdaBump;
     
+    // Generate a random user for signing transactions
+    randomUser = anchor.web3.Keypair.generate();
+    
+    // Fund the random user with SOL
+    const randomUserAirdropSignature = await provider.connection.requestAirdrop(randomUser.publicKey, 1 * LAMPORTS_PER_SOL);
+    const latestBlockHash4 = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction({
+      blockhash: latestBlockHash4.blockhash,
+      lastValidBlockHeight: latestBlockHash4.lastValidBlockHeight,
+      signature: randomUserAirdropSignature,
+    });
+
+    // Create associated token accounts for all parties
+    vaultAta = await getAssociatedTokenAddress(tokenMint, treeTokenAccountPDA, true);
+    userTokenAccount = await getAssociatedTokenAddress(tokenMint, randomUser.publicKey);
+    recipientTokenAccount = await getAssociatedTokenAddress(tokenMint, recipient.publicKey);
+    feeRecipientTokenAccount = await getAssociatedTokenAddress(tokenMint, feeRecipient.publicKey);
+
+    // Create the vault ATA (owned by the tree token PDA)
+    const createVaultAtaIx = createAssociatedTokenAccountInstruction(
+      authority.publicKey, // payer
+      vaultAta, // ata
+      treeTokenAccountPDA, // owner (PDA)
+      tokenMint // mint
+    );
+
+    // Create user's WSOL account
+    const createUserAtaIx = createAssociatedTokenAccountInstruction(
+      randomUser.publicKey, // payer
+      userTokenAccount, // ata
+      randomUser.publicKey, // owner
+      tokenMint // mint
+    );
+
+    // Create recipient's WSOL account
+    const createRecipientAtaIx = createAssociatedTokenAccountInstruction(
+      recipient.publicKey, // payer
+      recipientTokenAccount, // ata
+      recipient.publicKey, // owner
+      tokenMint // mint
+    );
+
+    // Create fee recipient's WSOL account
+    const createFeeRecipientAtaIx = createAssociatedTokenAccountInstruction(
+      feeRecipient.publicKey, // payer
+      feeRecipientTokenAccount, // ata
+      feeRecipient.publicKey, // owner
+      tokenMint // mint
+    );
+
+    // Execute all ATA creation transactions
+    const createAtaTx = new anchor.web3.Transaction()
+      .add(createVaultAtaIx)
+      .add(createUserAtaIx)
+      .add(createRecipientAtaIx)
+      .add(createFeeRecipientAtaIx);
+
+    await provider.connection.sendTransaction(createAtaTx, [authority, randomUser, recipient, feeRecipient]);
+    
     // Initialize a fresh tree account for each test
     try {
       await program.methods
-        .initialize()
+        .initializeTree(tokenMint)
         .accounts({
           treeAccount: treeAccountPDA,
           treeTokenAccount: treeTokenAccountPDA,
+          vaultAta: vaultAta,
           authority: authority.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([authority]) // Only authority is a signer
         .rpc();
-        
-      // Fund the treeTokenAccount with SOL (do this after initialization)
-      const treeTokenAirdropSignature = await provider.connection.requestAirdrop(treeTokenAccountPDA, 2 * LAMPORTS_PER_SOL);
-      const latestBlockHash2 = await provider.connection.getLatestBlockhash();
-      await provider.connection.confirmTransaction({
-        blockhash: latestBlockHash2.blockhash,
-        lastValidBlockHeight: latestBlockHash2.lastValidBlockHeight,
-        signature: treeTokenAirdropSignature,
-      });
-      
-      // Generate a random user for signing transactions
-      randomUser = anchor.web3.Keypair.generate();
-      
-      // Fund the random user with SOL
-      const randomUserAirdropSignature = await provider.connection.requestAirdrop(randomUser.publicKey, 1 * LAMPORTS_PER_SOL);
-      const latestBlockHash4 = await provider.connection.getLatestBlockhash();
-      await provider.connection.confirmTransaction({
-        blockhash: latestBlockHash4.blockhash,
-        lastValidBlockHeight: latestBlockHash4.lastValidBlockHeight,
-        signature: randomUserAirdropSignature,
-      });
       
       // Verify the initialization was successful
       const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
       expect(merkleTreeAccount.authority.equals(authority.publicKey)).to.be.true;
+      expect(merkleTreeAccount.tokenMint.equals(tokenMint)).to.be.true;
       expect(merkleTreeAccount.nextIndex.toString()).to.equal("0");
       expect(merkleTreeAccount.rootIndex.toString()).to.equal("0");
       expect(merkleTreeAccount.rootHistory.length).to.equal(ROOT_HISTORY_SIZE);
@@ -330,10 +389,10 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
 
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     // Get balances before transaction
     const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
@@ -354,11 +413,14 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         commitment0: commitment0PDA,
         commitment1: commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey, // Use random user as signer
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser]) // Random user signs the transaction
@@ -546,10 +608,10 @@ describe("zkcash", () => {
     };
 
     // Derive PDAs for withdrawal nullifiers
-    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit, tokenMint);
     
     // Derive PDAs for withdrawal commitments
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
 
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
@@ -560,11 +622,14 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         commitment0: withdrawCommitments.commitment0PDA,
         commitment1: withdrawCommitments.commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -773,10 +838,10 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
 
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     // Get balances before transaction
     const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
@@ -797,11 +862,14 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         commitment0: commitment0PDA,
         commitment1: commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey, // Use random user as signer
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser]) // Random user signs the transaction
@@ -989,10 +1057,10 @@ describe("zkcash", () => {
     };
 
     // Derive PDAs for withdrawal nullifiers
-    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit, tokenMint);
     
     // Derive PDAs for withdrawal commitments
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
 
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
@@ -1003,11 +1071,14 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         commitment0: withdrawCommitments.commitment0PDA,
         commitment1: withdrawCommitments.commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -1216,10 +1287,10 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
 
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     // Get balances before transaction
     const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
@@ -1240,11 +1311,14 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         commitment0: commitment0PDA,
         commitment1: commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey, // Use random user as signer
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser]) // Random user signs the transaction
@@ -1432,10 +1506,10 @@ describe("zkcash", () => {
     };
 
     // Derive PDAs for withdrawal nullifiers
-    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit, tokenMint);
     
     // Derive PDAs for withdrawal commitments
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
 
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
@@ -1446,11 +1520,14 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         commitment0: withdrawCommitments.commitment0PDA,
         commitment1: withdrawCommitments.commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -1662,10 +1739,10 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
 
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     // Get balances before transaction
     const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
@@ -1686,11 +1763,14 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         commitment0: commitment0PDA,
         commitment1: commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey, // Use random user as signer
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser]) // Random user signs the transaction
@@ -1878,10 +1958,10 @@ describe("zkcash", () => {
     };
 
     // Derive PDAs for withdrawal nullifiers
-    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit, tokenMint);
     
     // Derive PDAs for withdrawal commitments
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
 
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
@@ -1892,11 +1972,14 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         commitment0: withdrawCommitments.commitment0PDA,
         commitment1: withdrawCommitments.commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -2108,10 +2191,10 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
 
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     // Get balances before transaction
     const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
@@ -2132,11 +2215,14 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         commitment0: commitment0PDA,
         commitment1: commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey, // Use random user as signer
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser]) // Random user signs the transaction
@@ -2324,10 +2410,10 @@ describe("zkcash", () => {
     };
 
     // Derive PDAs for withdrawal nullifiers
-    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit, tokenMint);
     
     // Derive PDAs for withdrawal commitments
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
 
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
@@ -2338,11 +2424,14 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         commitment0: withdrawCommitments.commitment0PDA,
         commitment1: withdrawCommitments.commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -2554,10 +2643,10 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
 
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     // Get balances before transaction
     const treeTokenAccountBalanceBefore = await provider.connection.getBalance(treeTokenAccountPDA);
@@ -2578,11 +2667,14 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         commitment0: commitment0PDA,
         commitment1: commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey, // Use random user as signer
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser]) // Random user signs the transaction
@@ -2770,10 +2862,10 @@ describe("zkcash", () => {
     };
 
     // Derive PDAs for withdrawal nullifiers
-    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit, tokenMint);
     
     // Derive PDAs for withdrawal commitments
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
 
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
@@ -2784,11 +2876,14 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         commitment0: withdrawCommitments.commitment0PDA,
         commitment1: withdrawCommitments.commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -3016,10 +3111,10 @@ describe("zkcash", () => {
     };
     
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
     
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
     
     // Set compute budget for the transaction
     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
@@ -3036,11 +3131,14 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           commitment0: commitment0PDA,
           commitment1: commitment1PDA,
-          recipient: recipient.publicKey,
-          feeRecipientAccount: feeRecipient.publicKey,
           treeTokenAccount: treeTokenAccountPDA,
+          tokenMint: tokenMint,
+          vaultAta: vaultAta,
+          userTokenAccount: userTokenAccount,
+          feeRecipientTokenAccount: feeRecipientTokenAccount,
           authority: authority.publicKey,
           signer: insufficientUser.publicKey, // Use our insufficient balance user
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([insufficientUser]) // User with insufficient balance signs the transaction
@@ -3204,10 +3302,10 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
     
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
       units: 1_000_000 
@@ -3222,11 +3320,14 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         commitment0: commitment0PDA,
         commitment1: commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey, // Use random user as signer
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser]) // Random user signs the transaction
@@ -3370,10 +3471,10 @@ describe("zkcash", () => {
     };
 
     // Derive PDAs for withdrawal nullifiers
-    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit, tokenMint);
     
     // Derive PDAs for withdrawal commitments
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
 
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
@@ -3384,11 +3485,14 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         commitment0: withdrawCommitments.commitment0PDA,
         commitment1: withdrawCommitments.commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -3429,7 +3533,7 @@ describe("zkcash", () => {
     try {
       // Need to derive the commitment PDAs before transaction
       // We're using the same proof and trying to reuse nullifiers, which should fail
-      const secondWithdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+      const secondWithdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
       
       // Create the compute units instruction
       const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
@@ -3450,6 +3554,7 @@ describe("zkcash", () => {
           treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
           signer: randomUser.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
@@ -3534,10 +3639,10 @@ describe("zkcash", () => {
     };
 
     // Get nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof, tokenMint);
     
     // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof, tokenMint);
 
     try {
       // Create the compute units instruction
@@ -3554,11 +3659,14 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           commitment0: commitment0PDA,
           commitment1: commitment1PDA,
-          recipient: recipient.publicKey,
-          feeRecipientAccount: feeRecipient.publicKey,
           treeTokenAccount: treeTokenAccountPDA,
+          tokenMint: tokenMint,
+          vaultAta: vaultAta,
+          userTokenAccount: userTokenAccount,
+          feeRecipientTokenAccount: feeRecipientTokenAccount,
           authority: authority.publicKey,
           signer: randomUser.publicKey, // Use random user as signer
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser]) // Random user signs the transaction
@@ -3629,10 +3737,10 @@ describe("zkcash", () => {
     };
 
     // Get nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof, tokenMint);
     
     // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof, tokenMint);
 
     try {
       // Create the compute units instruction
@@ -3649,11 +3757,14 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           commitment0: commitment0PDA,
           commitment1: commitment1PDA,
-          recipient: recipient.publicKey,
-          feeRecipientAccount: feeRecipient.publicKey,
           treeTokenAccount: treeTokenAccountPDA,
+          tokenMint: tokenMint,
+          vaultAta: vaultAta,
+          userTokenAccount: userTokenAccount,
+          feeRecipientTokenAccount: feeRecipientTokenAccount,
           authority: authority.publicKey,
           signer: randomUser.publicKey, // Use random user as signer
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser]) // Random user signs the transaction
@@ -3728,10 +3839,10 @@ describe("zkcash", () => {
     };
 
     // Get nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof, tokenMint);
     
     // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof, tokenMint);
 
     try {
       // Create the compute units instruction
@@ -3748,11 +3859,14 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           commitment0: commitment0PDA,
           commitment1: commitment1PDA,
-          recipient: recipient.publicKey,
-          feeRecipientAccount: feeRecipient.publicKey,
           treeTokenAccount: treeTokenAccountPDA,
+          tokenMint: tokenMint,
+          vaultAta: vaultAta,
+          userTokenAccount: userTokenAccount,
+          feeRecipientTokenAccount: feeRecipientTokenAccount,
           authority: authority.publicKey,
           signer: randomUser.publicKey, // Use random user as signer
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser]) // Random user signs the transaction
@@ -3906,10 +4020,10 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
     
     // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     try {
       // Create the compute units instruction
@@ -3926,11 +4040,14 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           commitment0: commitment0PDA,
           commitment1: commitment1PDA,
-          recipient: recipient.publicKey,
-          feeRecipientAccount: feeRecipient.publicKey,
           treeTokenAccount: treeTokenAccountPDA,
+          tokenMint: tokenMint,
+          vaultAta: vaultAta,
+          userTokenAccount: userTokenAccount,
+          feeRecipientTokenAccount: feeRecipientTokenAccount,
           authority: authority.publicKey,
           signer: randomUser.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
@@ -4012,10 +4129,10 @@ describe("zkcash", () => {
     };
 
     // Find nullifier PDAs
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, validProof);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, validProof, tokenMint);
     
     // Find commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, validProof);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, validProof, tokenMint);
     
     try {
       // Create the compute units instruction
@@ -4033,11 +4150,14 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           commitment0: commitment0PDA,
           commitment1: commitment1PDA,
-          recipient: recipient.publicKey,
-          feeRecipientAccount: feeRecipient.publicKey,
           treeTokenAccount: treeTokenAccountPDA,
+          tokenMint: tokenMint,
+          vaultAta: vaultAta,
+          userTokenAccount: userTokenAccount,
+          feeRecipientTokenAccount: feeRecipientTokenAccount,
           authority: wrongAuthority.publicKey,
           signer: randomUser.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
@@ -4271,8 +4391,8 @@ describe("zkcash", () => {
     };
 
     // Derive nullifier and commitment PDAs for deposit
-    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit, tokenMint);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit, tokenMint);
 
     // Execute the deposit transaction
     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
@@ -4287,11 +4407,14 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         commitment0: commitment0PDA,
         commitment1: commitment1PDA,
-        recipient: recipient.publicKey,
-        feeRecipientAccount: feeRecipient.publicKey,
         treeTokenAccount: treeTokenAccountPDA,
+        tokenMint: tokenMint,
+        vaultAta: vaultAta,
+        userTokenAccount: userTokenAccount,
+        feeRecipientTokenAccount: feeRecipientTokenAccount,
         authority: authority.publicKey,
         signer: randomUser.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -4408,10 +4531,10 @@ describe("zkcash", () => {
     };
 
     // Derive PDAs for withdrawal nullifiers
-    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit, tokenMint);
     
     // Derive PDAs for withdrawal commitments
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit, tokenMint);
 
     // Execute the withdrawal transaction - this should succeed and demonstrate arithmetic protection is in place
     try {
@@ -4428,6 +4551,7 @@ describe("zkcash", () => {
           treeTokenAccount: treeTokenAccountPDA,
           authority: authority.publicKey,
           signer: randomUser.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])

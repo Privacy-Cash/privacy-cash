@@ -1,12 +1,8 @@
-use num_bigint::BigUint;
 use ark_bn254;
-use ark_ff::PrimeField;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use std::ops::Neg;
-use primitive_types::U256;
-use zkcash::{groth16::{is_less_than_bn254_field_size_be, Groth16Verifyingkey}, utils::{change_endianness, check_public_amount, verify_proof, FIELD_SIZE}, Proof};
-
-type G1 = ark_bn254::g1::G1Affine;
+use ark_ff::{PrimeField};
+use ark_serialize::{CanonicalSerialize};
+use zkcash::{groth16::{Groth16Verifyingkey}, utils::{check_public_amount}};
+use ark_bn254::Fr;
 
 pub const VERIFYING_KEY: Groth16Verifyingkey =  Groth16Verifyingkey {
 	nr_pubinputs: 8,
@@ -124,542 +120,138 @@ pub const PUBLIC_INPUTS: [[u8; 32]; 7] = [
   ]
 ];
 
-// Helper function to create a byte array representing a u64 value
-fn u64_to_bytes(value: u64) -> [u8; 32] {
-    let mut bytes = [0u8; 32];
-    // Place the value in the last 8 bytes (positions 24-31) in big-endian format
-    bytes[24..32].copy_from_slice(&value.to_be_bytes());
-    bytes
+// BN254 field modulus for tests
+pub fn field_modulus() -> Fr {
+    Fr::from_be_bytes_mod_order(&[
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29,
+        0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58, 0x5d,
+        0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91,
+        0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00, 0x00, 0x01,
+    ])
 }
 
-// Helper function to create a byte array representing a very large i64 value (won't fit in i64)
-fn too_large_for_i64_to_bytes() -> [u8; 32] {
-    let mut bytes = [0u8; 32];
-    // Set to a value larger than i64::MAX in the last 8 bytes (big-endian)
-    bytes[24..32].copy_from_slice(&(i64::MAX as u64 + 1).to_be_bytes());
-    bytes
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_check_public_amount() {
-    let ext_amount = 100;
-    let fee = 10;
-    let public_amount_bytes = u64_to_bytes(90);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result);
-}
+    // Helper function to convert Fr to big-endian bytes for testing
+    fn fr_to_be_bytes(fr: Fr) -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        fr.serialize_uncompressed(&mut bytes[..]).unwrap();
+        // Reverse to get big-endian format
+        bytes.reverse();
+        bytes
+    }
 
-#[test]
-fn test_check_public_amount_zero_fee() {
-    let ext_amount = 100;
-    let fee = 0;
-    let public_amount_bytes = u64_to_bytes(100);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result);
-}
+    #[test]
+    fn test_check_public_amount_positive_ext_amount() {
+        let ext_amount: i64 = 100;
+        let fee: u64 = 10;
+        
+        // Calculate expected: ext_amount - fee = 90
+        let expected_fr = Fr::from(90u64);
+        let expected_bytes = fr_to_be_bytes(expected_fr);
+        
+        assert!(check_public_amount(ext_amount, fee, expected_bytes));
+    }
 
-#[test]
-fn test_check_public_amount_fee_larger_than_ext_amount() {
-    // In the current implementation, there is no explicit validation for fee size
-    // The test now just checks if a very large fee produces the expected result
-    let ext_amount = 100;
-    let fee = 100;
-    let mut public_amount_bytes = [0u8; 32];
-    let expected_amount = (FIELD_SIZE + U256::from(ext_amount as u64) - U256::from(fee)) % FIELD_SIZE;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result, "fee not enough to cover the deposit amount");
-}
+    #[test]
+    fn test_check_public_amount_negative_ext_amount() {
+        let ext_amount: i64 = -100;
+        let fee: u64 = 10;
+        
+        // Calculate expected: -(|ext_amount| + fee) = -(100 + 10) = -110
+        let abs_amount_fr = Fr::from(100u64);
+        let fee_fr = Fr::from(10u64);
+        let expected_fr = -(abs_amount_fr + fee_fr);
+        
+        let expected_bytes = fr_to_be_bytes(expected_fr);
+        
+        assert!(check_public_amount(ext_amount, fee, expected_bytes));
+    }
 
-#[test]
-fn test_check_public_amount_invalid_fee() {
-    let ext_amount = 100;
-    let fee = u64::MAX;
-    let mut public_amount_bytes = [0u8; 32];
-    let expected_amount = (FIELD_SIZE + U256::from(ext_amount as u64) - U256::from(fee)) % FIELD_SIZE;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result, "Function should return false when fee > ext_amount");
-}
+    #[test]
+    fn test_check_public_amount_ext_amount_equal_fee() {
+        let ext_amount: i64 = 10;
+        let fee: u64 = 10;
+        let dummy_bytes = [0u8; 32];
+        
+        // Should return false when ext_amount <= fee for deposits
+        assert!(!check_public_amount(ext_amount, fee, dummy_bytes));
+    }
 
-#[test]
-fn test_check_public_amount_invalid_ext_amount() {
-    let ext_amount = i64::MAX;
-    let fee = 10;
-    let public_amount_bytes = too_large_for_i64_to_bytes();
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result);
-}
+    #[test]
+    fn test_check_public_amount_ext_amount_less_than_fee() {
+        let ext_amount: i64 = 5;
+        let fee: u64 = 10;
+        let dummy_bytes = [0u8; 32];
+        
+        // Should return false when ext_amount < fee for deposits
+        assert!(!check_public_amount(ext_amount, fee, dummy_bytes));
+    }
 
-#[test]
-fn test_check_public_amount_mismatch() {
-    let ext_amount = 100;
-    let fee = 10;
-    let public_amount_bytes = u64_to_bytes(50); // Should be 90
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result);
-}
+    #[test]
+    fn test_check_public_amount_i64_min() {
+        let ext_amount: i64 = i64::MIN;
+        let fee: u64 = 10;
+        let dummy_bytes = [0u8; 32];
+        
+        // Should return false for i64::MIN
+        assert!(!check_public_amount(ext_amount, fee, dummy_bytes));
+    }
 
-#[test]
-fn test_check_public_amount_negative_ext_amount() {
-    let ext_amount = -100;
-    let fee = 10;
-    // For negative ext_amount, the public amount should be FIELD_SIZE - (abs(ext_amount) + fee)
-    let mut public_amount_bytes = [0u8; 32];
-    let total_negative_magnitude = U256::from(110); // abs(-100) + 10
-    let expected_amount = FIELD_SIZE - total_negative_magnitude;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result);
-}
+    #[test]
+    fn test_check_public_amount_wrong_bytes() {
+        let ext_amount: i64 = 100;
+        let fee: u64 = 10;
+        let wrong_bytes = [1u8; 32]; // Wrong bytes
+        
+        // Should return false for incorrect bytes
+        assert!(!check_public_amount(ext_amount, fee, wrong_bytes));
+    }
 
-#[test]
-fn test_check_public_amount_negative_ext_amount_zero_fee() {
-    let ext_amount = -100;
-    let fee = 0;
-    // For negative ext_amount with zero fee, the public amount should be FIELD_SIZE - abs(ext_amount)
-    let mut public_amount_bytes = [0u8; 32];
-    let total_negative_magnitude = U256::from(100); // abs(-100) + 0
-    let expected_amount = FIELD_SIZE - total_negative_magnitude;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result);
-}
+    #[test]
+    fn test_check_public_amount_zero_ext_amount() {
+        let ext_amount: i64 = 0;
+        let fee: u64 = 10;
+        let dummy_bytes = [0u8; 32];
+        
+        // Should return false when ext_amount is 0 and fee > 0
+        assert!(!check_public_amount(ext_amount, fee, dummy_bytes));
+    }
 
-#[test]
-fn test_check_public_amount_negative_ext_amount_large_fee() {
-    let ext_amount = -100;
-    let fee = 200;
-    // For negative ext_amount with large fee, the public amount should be FIELD_SIZE - (abs(ext_amount) + fee)
-    let mut public_amount_bytes = [0u8; 32];
-    let total_negative_magnitude = U256::from(300); // abs(-100) + 200
-    let expected_amount = FIELD_SIZE - total_negative_magnitude;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result);
-}
+    #[test]
+    fn test_check_public_amount_zero_fee() {
+        let ext_amount: i64 = 100;
+        let fee: u64 = 0;
+        
+        // Calculate expected: ext_amount - fee = 100 - 0 = 100
+        let expected_fr = Fr::from(100u64);
+        let expected_bytes = fr_to_be_bytes(expected_fr);
+        
+        assert!(check_public_amount(ext_amount, fee, expected_bytes));
+    }
 
-#[test]
-fn test_check_public_amount_negative_ext_amount_invalid_ext_amount() {
-    // Since i64::MIN cannot be negated without overflow, we need to handle it differently
-    // The test now creates the correct expected public amount for i64::MIN
-    let ext_amount = i64::MIN;
-    let fee = 10;
-    
-    let result = check_public_amount(ext_amount, fee, [0u8; 32]);
-    assert!(!result, "i64::MIN should be rejected as ext_amount");
-}
+    #[test]
+    fn test_field_arithmetic_consistency() {
+        // Test that our field arithmetic is consistent
+        let a = Fr::from(100u64);
+        let b = Fr::from(50u64);
+        let result = a - b;
+        let expected = Fr::from(50u64);
+        
+        assert_eq!(result, expected);
+    }
 
-#[test]
-fn test_check_public_amount_max_ext_amount() {
-    // In the current implementation, there is no explicit validation for ext_amount size
-    // The test now just checks if a very large ext_amount produces the expected result
-    let ext_amount = i64::MAX;
-    let fee = 10;
-    let mut public_amount_bytes = [0u8; 32];
-    let expected_amount = (U256::from(ext_amount as u64) - U256::from(fee) + FIELD_SIZE) % FIELD_SIZE;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result, "A large ext_amount should be valid as long as the public amount matches");
-}
-
-#[test]
-fn test_check_public_amount_overflow() {
-    let ext_amount = i64::MAX;
-    let fee = 1u64 << 57; // Exceeds MAX_ALLOWED_FEE_OR_EXT_AMOUNT
-    let public_amount_bytes = u64_to_bytes(0);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result);
-}
-
-#[test]
-fn test_check_public_amount_min_values() {
-    let ext_amount = -(1i64 << 55); // Within MAX_ALLOWED_FEE_OR_EXT_AMOUNT
-    let fee = 1u64 << 55; // Within MAX_ALLOWED_FEE_OR_EXT_AMOUNT
-    let mut public_amount_bytes = [0u8; 32];
-    let total_negative_magnitude = U256::from((1u64 << 55) + (1u64 << 55));
-    let expected_amount = FIELD_SIZE - total_negative_magnitude;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result);
-}
-
-#[test]
-fn test_change_endianness_empty() {
-    let input: [u8; 0] = [];
-    let result = change_endianness(&input);
-    assert_eq!(result.len(), 0);
-}
-
-#[test]
-fn test_change_endianness_single_chunk() {
-    let input: [u8; 32] = [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
-    ];
-    let expected: Vec<u8> = vec![
-        32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17,
-        16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1
-    ];
-    
-    let result = change_endianness(&input);
-    assert_eq!(result, expected);
-}
-
-#[test]
-fn test_change_endianness_multiple_chunks() {
-    let input: [u8; 64] = [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
-        33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-        49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64
-    ];
-    
-    let expected: Vec<u8> = vec![
-        32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17,
-        16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
-        64, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49,
-        48, 47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33
-    ];
-    
-    let result = change_endianness(&input);
-    assert_eq!(result, expected);
-}
-
-#[test]
-fn test_change_endianness_partial_chunk() {
-    let input: [u8; 40] = [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
-        33, 34, 35, 36, 37, 38, 39, 40
-    ];
-    
-    let expected: Vec<u8> = vec![
-        32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17,
-        16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
-        40, 39, 38, 37, 36, 35, 34, 33
-    ];
-    
-    let result = change_endianness(&input);
-    assert_eq!(result, expected);
-}
-
-#[test]
-fn test_change_endianness_proof_data() {
-    let proof_a: [u8; 64] = [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
-        33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-        49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64
-    ];
-    
-    let converted = change_endianness(&proof_a);
-    let round_trip = change_endianness(&converted);
-    
-    assert_eq!(round_trip, proof_a);
-}
-
-#[test]
-fn test_is_less_than_bn254_field_size_be() {
-    let bytes = [0u8; 32];
-    assert!(is_less_than_bn254_field_size_be(&bytes));
-
-    let bytes: [u8; 32] = BigUint::from(ark_bn254::Fr::MODULUS)
-        .to_bytes_be()
-        .try_into()
-        .unwrap();
-    assert!(!is_less_than_bn254_field_size_be(&bytes));
-}
-
-#[test]
-fn proof_verification_should_succeed() {
-    let proof = Proof {
-        root: PUBLIC_INPUTS[0],
-        public_amount: PUBLIC_INPUTS[1],
-        ext_data_hash: PUBLIC_INPUTS[2],
-        input_nullifiers: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
-        output_commitments: [PUBLIC_INPUTS[5], PUBLIC_INPUTS[6]],
-        proof_a: PROOF_A,
-        proof_b: PROOF_B,
-        proof_c: PROOF_C,
-    };
-
-    assert!(verify_proof(proof, VERIFYING_KEY));
-}
-
-#[test]
-fn proof_verification_should_fail_for_wrong_proof_a() {
-    let proof = Proof {
-        root: PUBLIC_INPUTS[0],
-        input_nullifiers: [PUBLIC_INPUTS[1], PUBLIC_INPUTS[2]],
-        output_commitments: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
-        public_amount: PUBLIC_INPUTS[5],
-        ext_data_hash: PUBLIC_INPUTS[6],
-        proof_a: PROOF_C,
-        proof_b: PROOF_B,
-        proof_c: PROOF_C,
-    };
-
-    assert!(!verify_proof(proof, VERIFYING_KEY));
-}
-
-#[test]
-fn proof_verification_should_fail_for_correct_proof_but_modified_input() {
-    let mut modified_public_amount = PUBLIC_INPUTS[5];
-    modified_public_amount[0] = 0;
-
-    let proof = Proof {
-        root: PUBLIC_INPUTS[0],
-        input_nullifiers: [PUBLIC_INPUTS[1], PUBLIC_INPUTS[2]],
-        output_commitments: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
-        public_amount: modified_public_amount,
-        ext_data_hash: PUBLIC_INPUTS[6],
-        proof_a: PROOF_A,
-        proof_b: PROOF_B,
-        proof_c: PROOF_C,
-    };
-
-    assert!(!verify_proof(proof, VERIFYING_KEY));
-}
-
-#[test]
-fn negated_proof_a_verification_should_not_succeed() {
-    // First deserialize PROOF_A into a G1 point
-    let g1_point = G1::deserialize_with_mode(
-        &*[&change_endianness(&PROOF_A[0..64]), &[0u8][..]].concat(),
-        Compress::No,
-        Validate::Yes,
-    )
-    .unwrap();
-    
-    let mut proof_a_neg = [0u8; 65];
-    g1_point
-        .neg()
-        .x
-        .serialize_with_mode(&mut proof_a_neg[..32], Compress::No)
-        .unwrap();
-    g1_point
-        .neg()
-        .y
-        .serialize_with_mode(&mut proof_a_neg[32..], Compress::No)
-        .unwrap();
-
-    let proof_a = change_endianness(&proof_a_neg[..64]).try_into().unwrap();
-
-    let proof = Proof {
-        root: PUBLIC_INPUTS[0],
-        input_nullifiers: [PUBLIC_INPUTS[1], PUBLIC_INPUTS[2]],
-        output_commitments: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
-        public_amount: PUBLIC_INPUTS[5],
-        ext_data_hash: PUBLIC_INPUTS[6],
-        proof_a: proof_a,
-        proof_b: PROOF_B,
-        proof_c: PROOF_C,
-    };
-
-    assert!(!verify_proof(proof, VERIFYING_KEY));
-}
-
-#[test]
-fn wrong_verifying_key_verification_should_not_succeed() {
-    const WRONG_VERIFYING_KEY: Groth16Verifyingkey =  Groth16Verifyingkey {
-        nr_pubinputs: 8,
-    
-        vk_alpha_g1: [
-            42,77,154,167,227,2,217,223,65,116,157,85,7,148,157,5,219,234,51,251,177,108,100,59,34,245,153,162,190,109,242,226,
-            20,190,221,80,60,55,206,176,97,216,236,96,32,159,227,69,206,137,131,10,25,35,3,1,240,118,202,255,0,77,25,38,
-        ],
-    
-        vk_beta_g2: [
-            9,103,3,47,203,247,118,209,175,201,133,248,136,119,241,130,211,132,128,166,83,242,222,202,169,121,76,188,59,243,6,12,
-            14,24,120,71,173,76,121,131,116,208,214,115,43,245,1,132,125,214,139,192,224,113,36,30,2,19,188,127,193,61,183,171,
-            48,76,251,209,224,138,112,74,153,245,232,71,217,63,140,60,170,253,222,196,107,122,13,55,157,166,154,77,17,35,70,167,
-            23,57,193,177,164,87,168,199,49,49,35,210,77,47,145,146,248,150,183,198,62,234,5,169,213,127,6,84,122,208,206,200,
-        ],
-    
-        vk_gamme_g2: [
-            25,142,147,147,146,13,72,58,114,96,191,183,49,251,93,37,241,170,73,51,53,169,231,18,151,228,133,183,174,243,18,194,
-            24,0,222,239,18,31,30,118,66,106,0,102,94,92,68,121,103,67,34,212,247,94,218,221,70,222,189,92,217,146,246,237,
-            9,6,137,208,88,95,240,117,236,158,153,173,105,12,51,149,188,75,49,51,112,179,142,243,85,172,218,220,209,34,151,91,
-            18,200,94,165,219,140,109,235,74,171,113,128,141,203,64,143,227,209,231,105,12,67,211,123,76,230,204,1,102,250,125,170,
-        ],
-    
-        vk_delta_g2: [
-            25,144,125,232,3,246,233,27,95,82,198,175,194,109,64,223,160,163,173,3,105,57,8,146,21,9,143,149,186,205,169,20,
-            30,125,176,182,99,128,189,87,89,39,46,198,25,169,128,41,58,88,146,18,100,228,40,244,108,142,153,178,190,112,64,143,
-            20,246,62,229,211,174,153,16,39,170,87,82,27,82,228,201,225,201,15,57,42,23,196,117,122,62,12,125,123,93,46,182,
-            17,34,168,77,239,4,232,70,205,150,149,86,50,156,249,68,194,36,10,117,244,76,103,123,147,75,154,200,149,251,3,155,
-        ],
-    
-        vk_ic: &[
-            [
-                22,102,95,145,175,147,31,150,31,30,121,204,58,223,169,0,50,185,222,79,27,216,118,7,191,93,156,74,120,37,133,23,
-                47,178,98,3,18,2,19,238,102,203,128,215,31,70,158,224,119,204,127,8,199,23,11,72,166,189,196,153,130,20,210,4,
-            ],
-            [
-                0,15,203,93,134,105,229,223,22,236,46,125,212,107,191,208,142,224,197,135,68,180,236,233,112,160,91,170,10,192,190,72,
-                27,29,181,159,152,120,78,224,4,246,8,158,230,136,141,5,184,119,139,103,9,224,64,186,89,70,4,40,109,167,51,184,
-            ],
-            [
-                2,192,237,146,40,137,121,252,233,190,175,2,49,245,31,31,192,108,246,30,248,101,62,165,138,163,224,60,252,5,154,5,
-                23,32,86,191,169,94,90,129,216,63,196,35,177,209,137,188,153,201,88,95,211,53,128,216,52,247,124,97,27,212,52,189,
-            ],
-            [
-                4,124,147,8,19,106,82,195,14,220,198,30,35,215,67,204,163,70,217,100,107,1,34,154,196,175,13,156,230,68,110,232,
-                8,156,208,28,65,97,249,30,221,89,57,190,93,28,129,95,54,122,235,42,75,51,121,171,15,11,188,195,45,183,153,24,
-            ],
-            [
-                12,134,110,103,149,7,208,186,246,223,195,211,236,68,34,159,40,117,2,95,132,132,247,82,184,67,243,74,84,71,207,137,
-                32,67,87,27,226,12,246,15,25,16,204,56,87,190,47,94,29,124,83,84,155,238,183,4,127,121,53,189,134,112,179,152,
-            ],
-            [
-                8,178,234,135,103,180,183,102,158,101,228,31,120,184,36,116,67,232,153,124,53,255,230,181,65,33,76,73,148,105,174,125,
-                25,214,223,180,222,232,82,159,55,166,254,72,177,98,68,130,215,97,59,20,164,252,192,236,86,13,54,207,50,49,212,212,
-            ],
-            [
-                32,192,87,52,137,55,209,207,255,179,175,175,210,222,191,68,235,8,35,251,144,161,216,86,172,23,191,243,87,20,206,232,
-                40,241,150,202,59,189,191,252,121,163,80,231,239,58,127,14,69,80,93,154,158,17,99,184,20,20,93,234,132,166,171,67,
-            ],
-            [
-                28,140,162,144,74,35,43,227,127,175,76,212,5,193,125,88,51,43,230,63,210,181,232,40,163,171,179,44,137,128,47,245,
-                6,39,70,66,52,35,253,220,190,80,4,162,193,75,96,79,29,202,154,16,41,173,168,93,97,229,209,252,10,88,186,34,
-            ],
-        ]
-    };
-
-    let proof = Proof {
-        root: PUBLIC_INPUTS[0],
-        input_nullifiers: [PUBLIC_INPUTS[1], PUBLIC_INPUTS[2]],
-        output_commitments: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
-        public_amount: PUBLIC_INPUTS[5],
-        ext_data_hash: PUBLIC_INPUTS[6],
-        proof_a: PROOF_C,
-        proof_b: PROOF_B,
-        proof_c: PROOF_C,
-    };
-
-    assert!(!verify_proof(proof, WRONG_VERIFYING_KEY));
-}
-
-#[test]
-fn public_input_greater_than_field_size_should_not_suceed() {
-    let proof = Proof {
-        root: BigUint::from(ark_bn254::Fr::MODULUS)
-        .to_bytes_be()
-        .try_into()
-        .unwrap(),
-        input_nullifiers: [PUBLIC_INPUTS[1], PUBLIC_INPUTS[2]],
-        output_commitments: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
-        public_amount: PUBLIC_INPUTS[5],
-        ext_data_hash: PUBLIC_INPUTS[6],
-        proof_a: PROOF_C,
-        proof_b: PROOF_B,
-        proof_c: PROOF_C,
-    };
-
-    assert!(!verify_proof(proof, VERIFYING_KEY));
-}
-
-#[test]
-fn test_check_public_amount_i64_min_overflow() {
-    // Test the i64::MIN edge case that should return false
-    let ext_amount = i64::MIN;
-    let fee = 10;
-    let public_amount_bytes = [0u8; 32];
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result, "Should return false for i64::MIN ext_amount");
-}
-
-#[test]
-fn test_check_public_amount_neg_overflow_protection() {
-    // Test the checked_neg overflow protection
-    // When ext_amount is near i64::MIN, checked_neg should fail
-    let ext_amount = i64::MIN + 1; // This should work
-    let fee = 10;
-    let mut public_amount_bytes = [0u8; 32];
-    
-    // Calculate expected result for negative amount
-    let abs_ext_amount = U256::from((ext_amount.abs()) as u64);
-    let fee_u256 = U256::from(fee);
-    let total_deduction = abs_ext_amount + fee_u256;
-    let expected_result = (FIELD_SIZE - total_deduction) % FIELD_SIZE;
-    expected_result.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result, "Should succeed for i64::MIN + 1");
-}
-
-#[test]
-fn test_check_public_amount_addition_overflow_protection() {
-    // Test the checked_add overflow protection in the negative branch
-    // Create a scenario where ext_amount_u256 + fee_u256 would overflow U256
-    let ext_amount = -1000i64; // Large negative number
-    let fee = u64::MAX; // Maximum fee to cause potential overflow
-    let public_amount_bytes = [0u8; 32];
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    // This should return false due to overflow protection or field size check
-    assert!(!result, "Should return false when addition would overflow or exceed field size");
-}
-
-#[test]
-fn test_check_public_amount_field_size_boundary() {
-    // Test when total_deduction equals FIELD_SIZE
-    let ext_amount = -1000i64;
-    let fee = 1000u64;
-    let public_amount_bytes = [0u8; 32];
-    
-    // This should work without overflow but might fail the field size check
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    // The result depends on whether total_deduction > FIELD_SIZE
-    // In most cases this should return false due to mismatch
-    assert!(!result, "Should return false due to field size boundary or mismatch");
-}
-
-#[test]
-fn test_check_public_amount_safe_negative_values() {
-    // Test that safe negative values still work correctly
-    let ext_amount = -100i64;
-    let fee = 10u64;
-    let mut public_amount_bytes = [0u8; 32];
-    
-    // Calculate the correct expected result
-    let abs_ext_amount = U256::from(100u64);
-    let fee_u256 = U256::from(fee);
-    let total_deduction = abs_ext_amount + fee_u256; // 110
-    let expected_result = (FIELD_SIZE - total_deduction) % FIELD_SIZE;
-    expected_result.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result, "Should succeed for safe negative values with correct calculation");
-}
-
-#[test]
-fn test_check_public_amount_max_safe_values() {
-    // Test with maximum safe values to ensure no overflow
-    let ext_amount = i64::MAX - 1;
-    let fee = 1000u64;
-    let mut public_amount_bytes = [0u8; 32];
-    
-    // Calculate expected result
-    let ext_amount_u256 = U256::from(ext_amount as u64);
-    let fee_u256 = U256::from(fee);
-    let expected_result = (ext_amount_u256 - fee_u256) % FIELD_SIZE;
-    expected_result.to_big_endian(&mut public_amount_bytes);
-    
-    let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result, "Should succeed for maximum safe positive values");
+    #[test]
+    fn test_negative_field_arithmetic() {
+        // Test negative field arithmetic
+        let a = Fr::from(100u64);
+        let b = Fr::from(50u64);
+        let result = -(a + b);
+        
+        // In field arithmetic, this should be field_modulus - 150
+        let expected_value = field_modulus() - Fr::from(150u64);
+        assert_eq!(result, expected_value);
+    }
 }

@@ -3,17 +3,24 @@ use crate::groth16::{Groth16Verifier, Groth16Verifyingkey};
 use ark_bn254;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use std::ops::Neg;
-use primitive_types::U256;
+use ark_bn254::Fr;
+use ark_ff::PrimeField;
 use anchor_lang::prelude::*;
 
 type G1 = ark_bn254::g1::G1Affine;
 
-pub const FIELD_SIZE: U256 = U256([
-    0x43E1F593F0000001u64, 
-    0x2833E84879B97091u64, 
-    0xB85045B68181585Du64, 
-    0x30644E72E131A029u64,
-]);
+// BN254 field modulus as arkworks Fr field element
+// This replaces the U256 FIELD_SIZE constant
+pub fn field_modulus() -> Fr {
+    // This is the BN254 scalar field modulus
+    // 21888242871839275222246405745257275088548364400416034343698204186575808495617
+    Fr::from_be_bytes_mod_order(&[
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29,
+        0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58, 0x5d,
+        0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91,
+        0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00, 0x00, 0x01,
+    ])
+}
 
 pub const VERIFYING_KEY: Groth16Verifyingkey =  Groth16Verifyingkey {
 	nr_pubinputs: 8,
@@ -82,7 +89,7 @@ pub const VERIFYING_KEY: Groth16Verifyingkey =  Groth16Verifyingkey {
 
 /**
  * Calculates the expected public amount from ext_amount and fee, then verifies if it matches
- * the provided public_amount_bytes.
+ * the provided public_amount_bytes using arkworks Fr field arithmetic.
  *
  * @param ext_amount The external amount (can be positive or negative), as i64.
  * @param fee The fee (non-negative), as u64.
@@ -97,44 +104,39 @@ pub fn check_public_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 
         return false;
     }
 
-    let fee_u256 = U256::from(fee);
-    let ext_amount_u256 = if ext_amount >= 0 {
-        U256::from(ext_amount as u64)
-    } else {
-        let abs_ext_amount = match ext_amount.checked_neg() {
-            Some(val) => val,
-            None => return false,
-        };
-        U256::from(abs_ext_amount as u64)
-    };
-
-    // return false if the deposit amount is barely enough to cover the fee
-    if ext_amount >= 0 && ext_amount_u256 <= fee_u256 {
-        return false;
-    }
-
-    let result_public_amount = if ext_amount >= 0 {
-        // Safe: we already checked ext_amount_u256 > fee_u256
-        (ext_amount_u256 - fee_u256) % FIELD_SIZE
-    } else {
-        // Check for overflow before performing the operations
-        let total_deduction = match ext_amount_u256.checked_add(fee_u256) {
-            Some(val) => val,
-            None => return false,
-        };
+    // Convert fee to field element
+    let fee_fr = Fr::from(fee);
+    
+    // Calculate expected public amount using field arithmetic
+    let expected_public_amount = if ext_amount >= 0 {
+        let ext_amount_u64 = ext_amount as u64;
+        let ext_amount_fr = Fr::from(ext_amount_u64);
         
-        if total_deduction > FIELD_SIZE {
+        // For deposits: ensure ext_amount > fee
+        if ext_amount_u64 <= fee {
             return false;
         }
         
-        (FIELD_SIZE - total_deduction) % FIELD_SIZE
+        // public_amount = ext_amount - fee (in field arithmetic)
+        ext_amount_fr - fee_fr
+    } else {
+        // For withdrawals: ext_amount is negative
+        let abs_ext_amount = ext_amount.unsigned_abs();
+        let abs_ext_amount_fr = Fr::from(abs_ext_amount);
+        
+        // public_amount = -(|ext_amount| + fee) (in field arithmetic)
+        // This automatically handles modular arithmetic
+        -(abs_ext_amount_fr + fee_fr)
     };
 
-    let provided_amount = U256::from_big_endian(&public_amount_bytes);
-    result_public_amount == provided_amount
+    // Convert provided bytes to field element
+    let provided_public_amount = Fr::from_be_bytes_mod_order(&public_amount_bytes);
+    
+    // Compare field elements
+    expected_public_amount == provided_public_amount
 }
 
-pub fn verify_proof(proof: Proof, verifying_key: Groth16Verifyingkey) -> bool {
+pub fn verify_proof(proof: Proof, verifying_key: &Groth16Verifyingkey) -> bool {
     let mut public_inputs_vec: [[u8; 32]; 7] = [[0u8; 32]; 7];
 
     public_inputs_vec[0] = proof.root;
@@ -172,7 +174,7 @@ pub fn verify_proof(proof: Proof, verifying_key: Groth16Verifyingkey) -> bool {
         &proof.proof_b,
         &proof.proof_c,
         &public_inputs_vec,
-        &verifying_key
+        verifying_key
     ).unwrap();
 
     verifier.verify().unwrap_or(false)
