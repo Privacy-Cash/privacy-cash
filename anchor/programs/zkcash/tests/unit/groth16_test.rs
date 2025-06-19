@@ -280,12 +280,9 @@ fn ext_data_hash_should_match() {
     let computed_hash = [114, 47, 77, 7, 112, 57, 94, 210, 93, 75, 192, 50, 183, 228, 5, 111, 228, 58, 178, 60, 144, 169, 10, 46, 109, 93, 171, 65, 192, 33, 201, 204];
     let provided_proof_hash = [11, 55, 231, 244, 188, 228, 220, 198, 76, 201, 146, 182, 54, 172, 217, 111, 206, 54, 67, 149, 75, 218, 137, 24, 194, 214, 99, 32, 71, 77, 47, 110];
 
-    let mut reversed_computed_hash: Fr = PrimeField::from_le_bytes_mod_order(&computed_hash);
-    let mut reversed_proof_hash: Fr = PrimeField::from_be_bytes_mod_order(&provided_proof_hash);
-
-    msg!("!!!!!!!!!!");
-    msg!("!!!!!!!!!!reversed_computed_hash: {:?}", reversed_computed_hash);
-    msg!("!!!!!!!!!!reversed_proof_hash: {:?}", reversed_proof_hash);
+    let computed_hash_fr: Fr = Fr::from_le_bytes_mod_order(&computed_hash);
+    let provided_proof_hash_fr: Fr = Fr::from_be_bytes_mod_order(&provided_proof_hash);
     
-    // assert_eq!(reversed_hash, provided_proof_hash);
+    // Compare field elements with field elements
+    assert_eq!(computed_hash_fr, provided_proof_hash_fr);
 }
