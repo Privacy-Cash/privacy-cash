@@ -3,17 +3,11 @@ use crate::groth16::{Groth16Verifier, Groth16Verifyingkey};
 use ark_bn254;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use std::ops::Neg;
-use primitive_types::U256;
+use ark_bn254::Fr;
+use ark_ff::PrimeField;
 use anchor_lang::prelude::*;
 
 type G1 = ark_bn254::g1::G1Affine;
-
-pub const FIELD_SIZE: U256 = U256([
-    0x43E1F593F0000001u64, 
-    0x2833E84879B97091u64, 
-    0xB85045B68181585Du64, 
-    0x30644E72E131A029u64,
-]);
 
 pub const VERIFYING_KEY: Groth16Verifyingkey =  Groth16Verifyingkey {
 	nr_pubinputs: 8,
@@ -97,40 +91,35 @@ pub fn check_public_amount(ext_amount: i64, fee: u64, public_amount_bytes: [u8; 
         return false;
     }
 
-    let fee_u256 = U256::from(fee);
-    let ext_amount_u256 = if ext_amount >= 0 {
-        U256::from(ext_amount as u64)
+    // Convert to field elements for proper BN254 arithmetic
+    let fee_fr = Fr::from(fee);
+    let ext_amount_fr = if ext_amount >= 0 {
+        Fr::from(ext_amount as u64)
     } else {
         let abs_ext_amount = match ext_amount.checked_neg() {
             Some(val) => val,
             None => return false,
         };
-        U256::from(abs_ext_amount as u64)
+        Fr::from(abs_ext_amount as u64)
     };
 
     // return false if the deposit amount is barely enough to cover the fee
-    if ext_amount >= 0 && ext_amount_u256 <= fee_u256 {
+    if ext_amount >= 0 && ext_amount_fr <= fee_fr {
         return false;
     }
 
     let result_public_amount = if ext_amount >= 0 {
-        // Safe: we already checked ext_amount_u256 > fee_u256
-        (ext_amount_u256 - fee_u256) % FIELD_SIZE
+        // For positive amounts: public_amount = ext_amount - fee
+        ext_amount_fr - fee_fr
     } else {
-        // Check for overflow before performing the operations
-        let total_deduction = match ext_amount_u256.checked_add(fee_u256) {
-            Some(val) => val,
-            None => return false,
-        };
-        
-        if total_deduction > FIELD_SIZE {
-            return false;
-        }
-        
-        (FIELD_SIZE - total_deduction) % FIELD_SIZE
+        // For negative amounts: public_amount = -abs(ext_amount) - fee
+        // In field arithmetic, this becomes: FIELD_SIZE - (abs(ext_amount) + fee)
+        -(ext_amount_fr + fee_fr)
     };
 
-    let provided_amount = U256::from_big_endian(&public_amount_bytes);
+    // Convert provided bytes to field element for comparison
+    let provided_amount = Fr::from_be_bytes_mod_order(&public_amount_bytes);
+    
     result_public_amount == provided_amount
 }
 

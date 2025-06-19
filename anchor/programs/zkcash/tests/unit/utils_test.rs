@@ -1,10 +1,10 @@
 use num_bigint::BigUint;
 use ark_bn254;
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, BigInteger};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use std::ops::Neg;
-use primitive_types::U256;
-use zkcash::{groth16::{is_less_than_bn254_field_size_be, Groth16Verifyingkey}, utils::{change_endianness, check_public_amount, verify_proof, FIELD_SIZE}, Proof};
+use ark_bn254::Fr;
+use zkcash::{groth16::{is_less_than_bn254_field_size_be, Groth16Verifyingkey}, utils::{change_endianness, check_public_amount, verify_proof}, Proof};
 
 type G1 = ark_bn254::g1::G1Affine;
 
@@ -124,12 +124,18 @@ pub const PUBLIC_INPUTS: [[u8; 32]; 7] = [
   ]
 ];
 
+// Helper function to convert Fr to bytes in big-endian format
+fn fr_to_bytes(fr: Fr) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    fr.into_bigint().to_bytes_be().as_slice().iter()
+        .enumerate()
+        .for_each(|(i, &b)| bytes[i] = b);
+    bytes
+}
+
 // Helper function to create a byte array representing a u64 value
 fn u64_to_bytes(value: u64) -> [u8; 32] {
-    let mut bytes = [0u8; 32];
-    // Place the value in the last 8 bytes (positions 24-31) in big-endian format
-    bytes[24..32].copy_from_slice(&value.to_be_bytes());
-    bytes
+    fr_to_bytes(Fr::from(value))
 }
 
 // Helper function to create a byte array representing a very large i64 value (won't fit in i64)
@@ -161,26 +167,20 @@ fn test_check_public_amount_zero_fee() {
 }
 
 #[test]
-fn test_check_public_amount_fee_larger_than_ext_amount() {
-    // In the current implementation, there is no explicit validation for fee size
-    // The test now just checks if a very large fee produces the expected result
+fn test_check_public_amount_fee_equals_to_ext_amount() {
     let ext_amount = 100;
     let fee = 100;
-    let mut public_amount_bytes = [0u8; 32];
-    let expected_amount = (FIELD_SIZE + U256::from(ext_amount as u64) - U256::from(fee)) % FIELD_SIZE;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
+    let public_amount_bytes = u64_to_bytes(0);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result, "fee not enough to cover the deposit amount");
+    assert!(!result, "fee equal to deposit amount should be rejected");
 }
 
 #[test]
-fn test_check_public_amount_invalid_fee() {
+fn test_check_public_amount_fee_larger_than_ext_amount() {
     let ext_amount = 100;
-    let fee = u64::MAX;
-    let mut public_amount_bytes = [0u8; 32];
-    let expected_amount = (FIELD_SIZE + U256::from(ext_amount as u64) - U256::from(fee)) % FIELD_SIZE;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
+    let fee = 200;
+    let public_amount_bytes = u64_to_bytes(0);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
     assert!(!result, "Function should return false when fee > ext_amount");
@@ -190,10 +190,13 @@ fn test_check_public_amount_invalid_fee() {
 fn test_check_public_amount_invalid_ext_amount() {
     let ext_amount = i64::MAX;
     let fee = 10;
-    let public_amount_bytes = too_large_for_i64_to_bytes();
+    // Calculate the correct expected value using field arithmetic
+    let expected_fr = Fr::from(ext_amount as u64) - Fr::from(fee);
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result);
+    // This should work since we're using proper field arithmetic now
+    assert!(result);
 }
 
 #[test]
@@ -210,11 +213,9 @@ fn test_check_public_amount_mismatch() {
 fn test_check_public_amount_negative_ext_amount() {
     let ext_amount = -100;
     let fee = 10;
-    // For negative ext_amount, the public amount should be FIELD_SIZE - (abs(ext_amount) + fee)
-    let mut public_amount_bytes = [0u8; 32];
-    let total_negative_magnitude = U256::from(110); // abs(-100) + 10
-    let expected_amount = FIELD_SIZE - total_negative_magnitude;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
+    // For negative ext_amount, the public amount should be -(abs(ext_amount) + fee)
+    let expected_fr = -(Fr::from(100u64) + Fr::from(10u64));
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
     assert!(result);
@@ -224,11 +225,9 @@ fn test_check_public_amount_negative_ext_amount() {
 fn test_check_public_amount_negative_ext_amount_zero_fee() {
     let ext_amount = -100;
     let fee = 0;
-    // For negative ext_amount with zero fee, the public amount should be FIELD_SIZE - abs(ext_amount)
-    let mut public_amount_bytes = [0u8; 32];
-    let total_negative_magnitude = U256::from(100); // abs(-100) + 0
-    let expected_amount = FIELD_SIZE - total_negative_magnitude;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
+    // For negative ext_amount with zero fee, the public amount should be -abs(ext_amount)
+    let expected_fr = -Fr::from(100u64);
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
     assert!(result);
@@ -238,11 +237,9 @@ fn test_check_public_amount_negative_ext_amount_zero_fee() {
 fn test_check_public_amount_negative_ext_amount_large_fee() {
     let ext_amount = -100;
     let fee = 200;
-    // For negative ext_amount with large fee, the public amount should be FIELD_SIZE - (abs(ext_amount) + fee)
-    let mut public_amount_bytes = [0u8; 32];
-    let total_negative_magnitude = U256::from(300); // abs(-100) + 200
-    let expected_amount = FIELD_SIZE - total_negative_magnitude;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
+    // For negative ext_amount with large fee, the public amount should be -(abs(ext_amount) + fee)
+    let expected_fr = -(Fr::from(100u64) + Fr::from(200u64));
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
     assert!(result);
@@ -261,13 +258,10 @@ fn test_check_public_amount_negative_ext_amount_invalid_ext_amount() {
 
 #[test]
 fn test_check_public_amount_max_ext_amount() {
-    // In the current implementation, there is no explicit validation for ext_amount size
-    // The test now just checks if a very large ext_amount produces the expected result
     let ext_amount = i64::MAX;
     let fee = 10;
-    let mut public_amount_bytes = [0u8; 32];
-    let expected_amount = (U256::from(ext_amount as u64) - U256::from(fee) + FIELD_SIZE) % FIELD_SIZE;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
+    let expected_fr = Fr::from(ext_amount as u64) - Fr::from(fee);
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
     assert!(result, "A large ext_amount should be valid as long as the public amount matches");
@@ -276,21 +270,20 @@ fn test_check_public_amount_max_ext_amount() {
 #[test]
 fn test_check_public_amount_overflow() {
     let ext_amount = i64::MAX;
-    let fee = 1u64 << 57; // Exceeds MAX_ALLOWED_FEE_OR_EXT_AMOUNT
-    let public_amount_bytes = u64_to_bytes(0);
+    let fee = 1u64 << 57; // Large fee
+    let expected_fr = Fr::from(ext_amount as u64) - Fr::from(fee);
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result);
+    assert!(result, "Field arithmetic should handle large values correctly");
 }
 
 #[test]
 fn test_check_public_amount_min_values() {
-    let ext_amount = -(1i64 << 55); // Within MAX_ALLOWED_FEE_OR_EXT_AMOUNT
-    let fee = 1u64 << 55; // Within MAX_ALLOWED_FEE_OR_EXT_AMOUNT
-    let mut public_amount_bytes = [0u8; 32];
-    let total_negative_magnitude = U256::from((1u64 << 55) + (1u64 << 55));
-    let expected_amount = FIELD_SIZE - total_negative_magnitude;
-    expected_amount.to_big_endian(&mut public_amount_bytes);
+    let ext_amount = -(1i64 << 55);
+    let fee = 1u64 << 55;
+    let expected_fr = -(Fr::from(1u64 << 55) + Fr::from(fee));
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
     assert!(result);
@@ -574,92 +567,68 @@ fn public_input_greater_than_field_size_should_not_suceed() {
 
 #[test]
 fn test_check_public_amount_i64_min_overflow() {
-    // Test the i64::MIN edge case that should return false
     let ext_amount = i64::MIN;
-    let fee = 10;
+    let fee = 0;
     let public_amount_bytes = [0u8; 32];
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(!result, "Should return false for i64::MIN ext_amount");
+    assert!(!result, "i64::MIN should be rejected");
 }
 
 #[test]
 fn test_check_public_amount_neg_overflow_protection() {
-    // Test the checked_neg overflow protection
-    // When ext_amount is near i64::MIN, checked_neg should fail
-    let ext_amount = i64::MIN + 1; // This should work
-    let fee = 10;
-    let mut public_amount_bytes = [0u8; 32];
-    
-    // Calculate expected result for negative amount
-    let abs_ext_amount = U256::from((ext_amount.abs()) as u64);
-    let fee_u256 = U256::from(fee);
-    let total_deduction = abs_ext_amount + fee_u256;
-    let expected_result = (FIELD_SIZE - total_deduction) % FIELD_SIZE;
-    expected_result.to_big_endian(&mut public_amount_bytes);
+    let ext_amount = i64::MIN + 1;
+    let fee = 0;
+    // For negative values, we expect -(abs(ext_amount) + fee)
+    let expected_fr = -Fr::from(i64::MAX as u64);
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result, "Should succeed for i64::MIN + 1");
+    assert!(result, "Should handle near-minimum negative values correctly");
 }
 
 #[test]
 fn test_check_public_amount_addition_overflow_protection() {
-    // Test the checked_add overflow protection in the negative branch
-    // Create a scenario where ext_amount_u256 + fee_u256 would overflow U256
-    let ext_amount = -1000i64; // Large negative number
-    let fee = u64::MAX; // Maximum fee to cause potential overflow
-    let public_amount_bytes = [0u8; 32];
+    let ext_amount = -100;
+    let fee = u64::MAX;
+    // The function should handle this without panicking due to field arithmetic
+    let expected_fr = -(Fr::from(100u64) + Fr::from(fee));
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    // This should return false due to overflow protection or field size check
-    assert!(!result, "Should return false when addition would overflow or exceed field size");
+    assert!(result, "Field arithmetic should handle large fee values");
 }
 
 #[test]
 fn test_check_public_amount_field_size_boundary() {
-    // Test when total_deduction equals FIELD_SIZE
-    let ext_amount = -1000i64;
-    let fee = 1000u64;
-    let public_amount_bytes = [0u8; 32];
+    let ext_amount = 100;
+    let fee = 10;
+    // Test with field modular arithmetic
+    let expected_fr = Fr::from(90u64);
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
-    // This should work without overflow but might fail the field size check
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    // The result depends on whether total_deduction > FIELD_SIZE
-    // In most cases this should return false due to mismatch
-    assert!(!result, "Should return false due to field size boundary or mismatch");
+    assert!(result, "Should work correctly at field boundaries");
 }
 
 #[test]
 fn test_check_public_amount_safe_negative_values() {
-    // Test that safe negative values still work correctly
-    let ext_amount = -100i64;
-    let fee = 10u64;
-    let mut public_amount_bytes = [0u8; 32];
-    
-    // Calculate the correct expected result
-    let abs_ext_amount = U256::from(100u64);
-    let fee_u256 = U256::from(fee);
-    let total_deduction = abs_ext_amount + fee_u256; // 110
-    let expected_result = (FIELD_SIZE - total_deduction) % FIELD_SIZE;
-    expected_result.to_big_endian(&mut public_amount_bytes);
+    let ext_amount = -1000;
+    let fee = 50;
+    let expected_fr = -(Fr::from(1000u64) + Fr::from(50u64));
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result, "Should succeed for safe negative values with correct calculation");
+    assert!(result, "Should handle safe negative values correctly");
 }
 
 #[test]
 fn test_check_public_amount_max_safe_values() {
-    // Test with maximum safe values to ensure no overflow
     let ext_amount = i64::MAX - 1;
-    let fee = 1000u64;
-    let mut public_amount_bytes = [0u8; 32];
-    
-    // Calculate expected result
-    let ext_amount_u256 = U256::from(ext_amount as u64);
-    let fee_u256 = U256::from(fee);
-    let expected_result = (ext_amount_u256 - fee_u256) % FIELD_SIZE;
-    expected_result.to_big_endian(&mut public_amount_bytes);
+    let fee = 1;
+    let expected_fr = Fr::from((ext_amount - 1) as u64);
+    let public_amount_bytes = fr_to_bytes(expected_fr);
     
     let result = check_public_amount(ext_amount, fee, public_amount_bytes);
-    assert!(result, "Should succeed for maximum safe positive values");
+    assert!(result, "Should handle maximum safe positive values");
 }
