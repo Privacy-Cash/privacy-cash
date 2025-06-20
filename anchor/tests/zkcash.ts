@@ -4181,6 +4181,526 @@ describe("zkcash", () => {
     }
   });
 
+  it("Fails to deposit when exceeding the default deposit limit", async () => {
+    const depositFee = new anchor.BN(0);
+    const depositAmount = new anchor.BN(1_500_000_000); // 1.5 SOL - exceeds 1 SOL limit
+    
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: depositAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee,
+    };
+
+    // Create the merkle tree
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
+
+    // Create inputs for the deposit
+    const inputs = [
+      new Utxo({ lightWasm }),
+      new Utxo({ lightWasm })
+    ];
+
+    const publicAmountNumber = extData.extAmount.sub(depositFee);
+    const outputAmount = publicAmountNumber.toString();
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount }),
+      new Utxo({ lightWasm, amount: '0' })
+    ];
+
+    // Create mock Merkle path data
+    const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    const inputMerklePathElements = inputs.map(() => {
+      return [...new Array(tree.levels).fill(0)];
+    });
+
+    // Resolve async operations
+    const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+    const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+    const root = tree.root();
+    const calculatedExtDataHash = getExtDataHash(extData);
+
+    const input = {
+      root: root,
+      inputNullifier: inputNullifiers,
+      outputCommitment: outputCommitments,
+      publicAmount: outputAmount.toString(),
+      extDataHash: calculatedExtDataHash,
+      inAmount: inputs.map(x => x.amount.toString(10)),
+      inPrivateKey: inputs.map(x => x.keypair.privkey),
+      inBlinding: inputs.map(x => x.blinding.toString(10)),
+      inPathIndices: inputMerklePathIndices,
+      inPathElements: inputMerklePathElements,
+      outAmount: outputs.map(x => x.amount.toString(10)),
+      outBlinding: outputs.map(x => x.blinding.toString(10)),
+      outPubkey: outputs.map(x => x.keypair.pubkey),
+    };
+
+    // Generate proof
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof, publicSignals} = await prove(input, keyBasePath);
+
+    const proofInBytes = parseProofToBytesArray(proof);
+    const inputsInBytes = parseToBytesArray(publicSignals);
+    
+    const proofToSubmit = {
+      proofA: proofInBytes.proofA,
+      proofB: proofInBytes.proofB.flat(),
+      proofC: proofInBytes.proofC,
+      root: inputsInBytes[0],
+      publicAmount: inputsInBytes[1],
+      extDataHash: inputsInBytes[2],
+      inputNullifiers: [inputsInBytes[3], inputsInBytes[4]],
+      outputCommitments: [inputsInBytes[5], inputsInBytes[6]],
+    };
+
+    // Derive PDAs
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+
+    try {
+      // Execute the transaction - should fail
+      const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+        units: 1_000_000 
+      });
+      
+      await program.methods
+        .transact(proofToSubmit, extData)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          commitment0: commitment0PDA,
+          commitment1: commitment1PDA,
+          recipient: recipient.publicKey,
+          feeRecipientAccount: feeRecipient.publicKey,
+          treeTokenAccount: treeTokenAccountPDA,
+          authority: authority.publicKey,
+          signer: randomUser.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .preInstructions([modifyComputeUnits])
+        .rpc();
+
+      expect.fail("Transaction should have failed due to deposit limit exceeded");
+    } catch (error) {
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x177c") || 
+        errorString.includes("DepositLimitExceeded")
+      ).to.be.true;
+    }
+  });
+
+  it("Authority can update deposit limit", async () => {
+    const newLimit = new anchor.BN(2_000_000_000); // 2 SOL
+    
+    const txSig = await program.methods
+      .updateDepositLimit(newLimit)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        authority: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+
+    expect(txSig).to.be.a('string');
+
+    // Verify the limit was updated
+    const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(treeAccountPDA);
+    expect(merkleTreeAccount.maxDepositAmount.toString()).to.equal(newLimit.toString());
+  });
+
+  it("Non-authority cannot update deposit limit", async () => {
+    const newLimit = new anchor.BN(3_000_000_000); // 3 SOL
+    const nonAuthority = anchor.web3.Keypair.generate();
+    
+    // Fund the non-authority account
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: nonAuthority.publicKey,
+        lamports: 0.5 * LAMPORTS_PER_SOL,
+      })
+    );
+    
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+
+    try {
+      await program.methods
+        .updateDepositLimit(newLimit)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          authority: nonAuthority.publicKey,
+        })
+        .signers([nonAuthority])
+        .rpc();
+
+      expect.fail("Transaction should have failed due to unauthorized access");
+    } catch (error) {
+      const errorString = error.toString();
+      expect(
+        errorString.includes("ConstraintSeeds") ||
+        errorString.includes("0x7d6") ||
+        errorString.includes("constraint was violated") ||
+        errorString.includes("seeds constraint was violated")
+      ).to.be.true;
+    }
+  });
+
+  it("Can deposit after increasing limit", async () => {
+    // First, update the limit to 2 SOL
+    const newLimit = new anchor.BN(2_000_000_000); // 2 SOL
+    
+    await program.methods
+      .updateDepositLimit(newLimit)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        authority: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+
+    // Fund randomUser with enough SOL for the large deposit
+    const largeFundingTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: randomUser.publicKey,
+        lamports: 1 * LAMPORTS_PER_SOL, // Add 1 more SOL
+      })
+    );
+    const largeFundingSignature = await provider.connection.sendTransaction(largeFundingTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(largeFundingSignature);
+
+    // Now try to deposit 1.5 SOL (which should now be allowed)
+    const depositFee = new anchor.BN(0);
+    const depositAmount = new anchor.BN(1_500_000_000); // 1.5 SOL
+    
+    const extData = {
+      recipient: recipient.publicKey,
+      extAmount: depositAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee,
+    };
+
+    // Create the merkle tree
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
+
+    // Create inputs for the deposit
+    const inputs = [
+      new Utxo({ lightWasm }),
+      new Utxo({ lightWasm })
+    ];
+
+    const publicAmountNumber = extData.extAmount.sub(depositFee);
+    const outputAmount = publicAmountNumber.toString();
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount }),
+      new Utxo({ lightWasm, amount: '0' })
+    ];
+
+    // Create mock Merkle path data
+    const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    const inputMerklePathElements = inputs.map(() => {
+      return [...new Array(tree.levels).fill(0)];
+    });
+
+    // Resolve async operations
+    const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+    const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+    const root = tree.root();
+    const calculatedExtDataHash = getExtDataHash(extData);
+
+    const input = {
+      root: root,
+      inputNullifier: inputNullifiers,
+      outputCommitment: outputCommitments,
+      publicAmount: outputAmount.toString(),
+      extDataHash: calculatedExtDataHash,
+      inAmount: inputs.map(x => x.amount.toString(10)),
+      inPrivateKey: inputs.map(x => x.keypair.privkey),
+      inBlinding: inputs.map(x => x.blinding.toString(10)),
+      inPathIndices: inputMerklePathIndices,
+      inPathElements: inputMerklePathElements,
+      outAmount: outputs.map(x => x.amount.toString(10)),
+      outBlinding: outputs.map(x => x.blinding.toString(10)),
+      outPubkey: outputs.map(x => x.keypair.pubkey),
+    };
+
+    // Generate proof
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof, publicSignals} = await prove(input, keyBasePath);
+
+    const proofInBytes = parseProofToBytesArray(proof);
+    const inputsInBytes = parseToBytesArray(publicSignals);
+    
+    const proofToSubmit = {
+      proofA: proofInBytes.proofA,
+      proofB: proofInBytes.proofB.flat(),
+      proofC: proofInBytes.proofC,
+      root: inputsInBytes[0],
+      publicAmount: inputsInBytes[1],
+      extDataHash: inputsInBytes[2],
+      inputNullifiers: [inputsInBytes[3], inputsInBytes[4]],
+      outputCommitments: [inputsInBytes[5], inputsInBytes[6]],
+    };
+
+    // Derive PDAs
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+
+    // Execute the transaction - should now succeed
+    const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    const txSig = await program.methods
+      .transact(proofToSubmit, extData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: nullifier0PDA,
+        nullifier1: nullifier1PDA,
+        commitment0: commitment0PDA,
+        commitment1: commitment1PDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipient.publicKey,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnits])
+      .rpc();
+
+    expect(txSig).to.be.a('string');
+  });
+
+  it("Withdrawal has no limit (can withdraw any amount)", async () => {
+    // Fund randomUser with enough SOL for the deposit
+    const withdrawalTestFundingTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: randomUser.publicKey,
+        lamports: 0.5 * LAMPORTS_PER_SOL, // Add 0.5 more SOL to cover deposit + fees
+      })
+    );
+    const withdrawalTestFundingSignature = await provider.connection.sendTransaction(withdrawalTestFundingTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(withdrawalTestFundingSignature);
+
+    // First do a deposit to have funds for withdrawal
+    const depositFee = new anchor.BN(0);
+    const depositAmount = new anchor.BN(1_000_000_000); // 1 SOL
+    
+    const depositExtData = {
+      recipient: recipient.publicKey,
+      extAmount: depositAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee,
+    };
+
+    // Create the merkle tree
+    const tree: MerkleTree = new MerkleTree(DEFAULT_HEIGHT, lightWasm);
+
+    // Create inputs for the deposit
+    const depositInputs = [
+      new Utxo({ lightWasm }),
+      new Utxo({ lightWasm })
+    ];
+
+    const publicAmountNumber = depositExtData.extAmount.sub(depositFee);
+    const outputAmount = publicAmountNumber.toString();
+    const depositOutputs = [
+      new Utxo({ lightWasm, amount: outputAmount }),
+      new Utxo({ lightWasm, amount: '0' })
+    ];
+
+    // Generate deposit proof and execute
+    const depositInputMerklePathIndices = depositInputs.map(() => 0);
+    const depositInputMerklePathElements = depositInputs.map(() => {
+      return [...new Array(tree.levels).fill(0)];
+    });
+
+    const depositInputNullifiers = await Promise.all(depositInputs.map(x => x.getNullifier()));
+    const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
+    const depositRoot = tree.root();
+    const depositExtDataHash = getExtDataHash(depositExtData);
+
+    const depositInput = {
+      root: depositRoot,
+      inputNullifier: depositInputNullifiers,
+      outputCommitment: depositOutputCommitments,
+      publicAmount: outputAmount.toString(),
+      extDataHash: depositExtDataHash,
+      inAmount: depositInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: depositInputs.map(x => x.keypair.privkey),
+      inBlinding: depositInputs.map(x => x.blinding.toString(10)),
+      inPathIndices: depositInputMerklePathIndices,
+      inPathElements: depositInputMerklePathElements,
+      outAmount: depositOutputs.map(x => x.amount.toString(10)),
+      outBlinding: depositOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: depositOutputs.map(x => x.keypair.pubkey),
+    };
+
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const depositProofResult = await prove(depositInput, keyBasePath);
+    const depositProofInBytes = parseProofToBytesArray(depositProofResult.proof);
+    const depositInputsInBytes = parseToBytesArray(depositProofResult.publicSignals);
+    
+    const depositProofToSubmit = {
+      proofA: depositProofInBytes.proofA,
+      proofB: depositProofInBytes.proofB.flat(),
+      proofC: depositProofInBytes.proofC,
+      root: depositInputsInBytes[0],
+      publicAmount: depositInputsInBytes[1],
+      extDataHash: depositInputsInBytes[2],
+      inputNullifiers: [depositInputsInBytes[3], depositInputsInBytes[4]],
+      outputCommitments: [depositInputsInBytes[5], depositInputsInBytes[6]],
+    };
+
+    const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
+    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
+
+    const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    // Execute deposit
+    await program.methods
+      .transact(depositProofToSubmit, depositExtData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: depositNullifiers.nullifier0PDA,
+        nullifier1: depositNullifiers.nullifier1PDA,
+        commitment0: depositCommitments.commitment0PDA,
+        commitment1: depositCommitments.commitment1PDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipient.publicKey,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnits])
+      .rpc();
+
+    // Now test withdrawal (no limit should apply)
+    const withdrawInputs = [
+      depositOutputs[0], // Use the deposit output
+      new Utxo({ lightWasm })
+    ];
+    const withdrawOutputs = [
+      new Utxo({ lightWasm, amount: '0' }),
+      new Utxo({ lightWasm, amount: '0' })
+    ];
+    const withdrawFee = new anchor.BN(0);
+
+    const withdrawInputsSum = withdrawInputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
+    const withdrawOutputsSum = withdrawOutputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
+    const extAmount = new BN(withdrawFee)
+      .add(withdrawOutputsSum)
+      .sub(withdrawInputsSum);
+    
+    const withdrawPublicAmount = new BN(extAmount).sub(new BN(withdrawFee)).add(FIELD_SIZE).mod(FIELD_SIZE).toString();
+    
+    const withdrawExtData = {
+      recipient: recipient.publicKey,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("withdrawEncryptedOutput1"),
+      encryptedOutput2: Buffer.from("withdrawEncryptedOutput2"),
+      fee: withdrawFee,
+    };
+
+    // Insert commitments to tree
+    for (const commitment of depositOutputCommitments) {
+      tree.insert(commitment);
+    }
+
+    const oldRoot = tree.root();
+    const withdrawInputNullifiers = await Promise.all(withdrawInputs.map(x => x.getNullifier()));
+    const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
+
+    // Calculate paths for withdrawal
+    const withdrawalInputMerklePathIndices = [];
+    const withdrawalInputMerklePathElements = [];
+    for (let i = 0; i < withdrawInputs.length; i++) {
+      const withdrawInput = withdrawInputs[i];
+      if (withdrawInput.amount.gt(new BN(0))) {
+        const commitment = depositOutputCommitments[i];
+        withdrawInput.index = tree.indexOf(commitment);
+        withdrawalInputMerklePathIndices.push(withdrawInput.index);
+        withdrawalInputMerklePathElements.push(tree.path(withdrawInput.index).pathElements);
+      } else {
+        withdrawalInputMerklePathIndices.push(0);
+        withdrawalInputMerklePathElements.push(new Array(tree.levels).fill(0));
+      }
+    }
+
+    const withdrawExtDataHash = getExtDataHash(withdrawExtData);
+
+    const withdrawInput = {
+      root: oldRoot,
+      inputNullifier: withdrawInputNullifiers,
+      outputCommitment: withdrawOutputCommitments,
+      publicAmount: withdrawPublicAmount.toString(),
+      extDataHash: withdrawExtDataHash,
+      inAmount: withdrawInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
+      inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+      inPathIndices: withdrawalInputMerklePathIndices,
+      inPathElements: withdrawalInputMerklePathElements,
+      outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
+      outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+    };
+
+    const withdrawProofResult = await prove(withdrawInput, keyBasePath);
+    const withdrawProofInBytes = parseProofToBytesArray(withdrawProofResult.proof);
+    const withdrawInputsInBytes = parseToBytesArray(withdrawProofResult.publicSignals);
+    
+    const withdrawProofToSubmit = {
+      proofA: withdrawProofInBytes.proofA,
+      proofB: withdrawProofInBytes.proofB.flat(),
+      proofC: withdrawProofInBytes.proofC,
+      root: withdrawInputsInBytes[0],
+      publicAmount: withdrawInputsInBytes[1],
+      extDataHash: withdrawInputsInBytes[2],
+      inputNullifiers: [withdrawInputsInBytes[3], withdrawInputsInBytes[4]],
+      outputCommitments: [withdrawInputsInBytes[5], withdrawInputsInBytes[6]],
+    };
+
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+
+    // Execute withdrawal - should succeed regardless of deposit limit
+    const withdrawTxSig = await program.methods
+      .transact(withdrawProofToSubmit, withdrawExtData)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: withdrawNullifiers.nullifier0PDA,
+        nullifier1: withdrawNullifiers.nullifier1PDA,
+        commitment0: withdrawCommitments.commitment0PDA,
+        commitment1: withdrawCommitments.commitment1PDA,
+        recipient: recipient.publicKey,
+        feeRecipientAccount: feeRecipient.publicKey,
+        treeTokenAccount: treeTokenAccountPDA,
+        authority: authority.publicKey,
+        signer: randomUser.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnits])
+      .rpc();
+
+    expect(withdrawTxSig).to.be.a('string');
+  });
+
   it("Tests arithmetic overflow protection in transact() with edge case balances", async () => {
     // First do a normal deposit to set up the scenario
     const depositFee = new anchor.BN(0)

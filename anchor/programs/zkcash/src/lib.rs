@@ -26,6 +26,7 @@ pub mod zkcash {
         tree_account.next_index = 0;
         tree_account.root_index = 0;
         tree_account.bump = ctx.bumps.tree_account;
+        tree_account.max_deposit_amount = 1_000_000_000; // 1 SOL default limit
 
         MerkleTree::initialize::<Poseidon>(tree_account);
         
@@ -33,7 +34,25 @@ pub mod zkcash {
         token_account.authority = ctx.accounts.authority.key();
         token_account.bump = ctx.bumps.tree_token_account;
         
-        msg!("Sparse Merkle Tree initialized successfully");
+        msg!("Sparse Merkle Tree initialized successfully with deposit limit: {} lamports", tree_account.max_deposit_amount);
+        Ok(())
+    }
+
+    /**
+     * Update the maximum deposit amount limit. Only the authority can call this.
+     */
+    pub fn update_deposit_limit(ctx: Context<UpdateDepositLimit>, new_limit: u64) -> Result<()> {
+        let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
+        
+        // Verify the authority
+        require!(
+            ctx.accounts.authority.key() == tree_account.authority,
+            ErrorCode::Unauthorized
+        );
+        
+        tree_account.max_deposit_amount = new_limit;
+        
+        msg!("Deposit limit updated to: {} lamports", new_limit);
         Ok(())
     }
 
@@ -81,6 +100,13 @@ pub mod zkcash {
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
         if ext_amount > 0 {
+            // Check deposit limit for deposits
+            let deposit_amount = ext_amount as u64;
+            require!(
+                deposit_amount <= tree_account.max_deposit_amount,
+                ErrorCode::DepositLimitExceeded
+            );
+            
             // If it's a deposit, transfer the SOL to the tree token account.
             anchor_lang::system_program::transfer(
                 CpiContext::new(
@@ -94,6 +120,7 @@ pub mod zkcash {
             )?;
         } else if ext_amount < 0 {
             // PDA can't directly sign transactions, so we need to transfer SOL via try_borrow_mut_lamports
+            // No limit on withdrawals
             let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
             let recipient_account_info = ctx.accounts.recipient.to_account_info();
 
@@ -279,6 +306,20 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct UpdateDepositLimit<'info> {
+    #[account(
+        mut,
+        seeds = [b"merkle_tree", authority.key().as_ref()],
+        bump = tree_account.load()?.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
+    
+    /// The authority account that can update the deposit limit
+    pub authority: Signer<'info>,
+}
+
 #[account]
 pub struct TreeTokenAccount {
     pub authority: Pubkey,
@@ -308,9 +349,9 @@ pub struct MerkleTreeAccount {
     pub root: [u8; 32],
     pub root_history: [[u8; 32]; ROOT_HISTORY_SIZE],
     pub root_index: u64,
+    pub max_deposit_amount: u64,
     pub bump: u8,
     // The pub _padding: [u8; 7] is needed because of the #[account(zero_copy)] attribute.
-    // This attribute enables zero-copy deserialization for optimized performance but requires structs to have specific memory alignments.
     pub _padding: [u8; 7],
 }
 
@@ -338,4 +379,6 @@ pub enum ErrorCode {
     PublicAmountCalculationError,
     #[msg("Arithmetic overflow/underflow occurred")]
     ArithmeticOverflow,
+    #[msg("Deposit limit exceeded")]
+    DepositLimitExceeded,
 }
