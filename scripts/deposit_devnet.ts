@@ -1,4 +1,4 @@
-import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, SystemProgram, sendAndConfirmTransaction, ComputeBudgetProgram } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, SystemProgram, sendAndConfirmTransaction, ComputeBudgetProgram, SendTransactionError } from '@solana/web3.js';
 import BN from 'bn.js';
 import { readFileSync } from 'fs';
 import { Utxo } from './models/utxo';
@@ -26,7 +26,7 @@ const userKeypairJson = JSON.parse(readFileSync(path.join(__dirname, 'script_key
 const user = Keypair.fromSecretKey(Uint8Array.from(userKeypairJson));
 
 // Program ID for the zkcash program
-const PROGRAM_ID = new PublicKey('AW7zH2XvbZZuXtF7tcfCRzuny7L89GGqB3z3deGpejWQ');
+const PROGRAM_ID = new PublicKey('6JFJ27mebUcPSw1X5z5X6yKePQmuwQkusS7xNpE9kuUr');
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -132,7 +132,7 @@ async function main() {
     
     // Deployer (authority) public key must match the one used during Initialize.
     // Updated to the new deployer keypair (deploy-keypair.json).
-    const deployer = new PublicKey('Fj2iBWFwfejrNEVusU4LEXUYVp2R3AVVWG9srFAs2isH');
+    const deployer = new PublicKey('FrhAUwGkoVD6TC8xGnYp5g5nNkuZiG7sXCyofZEuQ7hC');
     console.log('Using deployer public key that matches the initialized tree');
     
     // Generate encryption key from the user keypair
@@ -406,6 +406,7 @@ async function main() {
         inAmount: inputs.map(x => x.amount.toString(10)),
         inPrivateKey: inputs.map(x => x.keypair.privkey),
         inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
         inPathIndices: inputMerklePathIndices,
         inPathElements: inputMerklePathElements,
         
@@ -413,6 +414,7 @@ async function main() {
         outAmount: outputs.map(x => x.amount.toString(10)),
         outBlinding: outputs.map(x => x.blinding.toString(10)),
         outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     console.log('Generating proof... (this may take a minute)');

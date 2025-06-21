@@ -7,7 +7,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 // Program ID for the zkcash program
-const PROGRAM_ID = new PublicKey('AW7zH2XvbZZuXtF7tcfCRzuny7L89GGqB3z3deGpejWQ');
+const PROGRAM_ID = new PublicKey('6JFJ27mebUcPSw1X5z5X6yKePQmuwQkusS7xNpE9kuUr');
 
 // Configure connection to Solana devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');

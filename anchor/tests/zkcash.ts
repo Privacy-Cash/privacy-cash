@@ -275,6 +275,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -282,6 +283,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -513,6 +515,7 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       
@@ -520,6 +523,7 @@ describe("zkcash", () => {
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     // Generate proof for withdrawal
@@ -718,6 +722,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -725,6 +730,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -956,6 +962,7 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       
@@ -963,6 +970,7 @@ describe("zkcash", () => {
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     // Generate proof for withdrawal
@@ -1161,6 +1169,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -1168,6 +1177,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -1399,6 +1409,7 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       
@@ -1406,6 +1417,7 @@ describe("zkcash", () => {
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     // Generate proof for withdrawal
@@ -1607,6 +1619,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -1614,6 +1627,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -1845,6 +1859,7 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       
@@ -1852,6 +1867,7 @@ describe("zkcash", () => {
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     // Generate proof for withdrawal
@@ -2053,6 +2069,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -2060,6 +2077,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -2291,6 +2309,7 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       
@@ -2298,6 +2317,7 @@ describe("zkcash", () => {
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     // Generate proof for withdrawal
@@ -2499,6 +2519,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -2506,6 +2527,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -2737,6 +2759,7 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       
@@ -2744,6 +2767,7 @@ describe("zkcash", () => {
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     // Generate proof for withdrawal
@@ -2981,6 +3005,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -2988,6 +3013,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
     
     // Path to the proving key files
@@ -3149,6 +3175,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -3156,6 +3183,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -3337,6 +3365,7 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       
@@ -3344,6 +3373,7 @@ describe("zkcash", () => {
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     // Generate proof for withdrawal
@@ -3851,6 +3881,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -3858,6 +3889,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -4136,6 +4168,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -4143,6 +4176,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Path to the proving key files (wasm and zkey)
@@ -4230,11 +4264,13 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Generate proof
@@ -4424,11 +4460,13 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Generate proof
@@ -4540,11 +4578,13 @@ describe("zkcash", () => {
       inAmount: depositInputs.map(x => x.amount.toString(10)),
       inPrivateKey: depositInputs.map(x => x.keypair.privkey),
       inBlinding: depositInputs.map(x => x.blinding.toString(10)),
+      inMintAddress: depositInputs.map(x => x.mintAddress),
       inPathIndices: depositInputMerklePathIndices,
       inPathElements: depositInputMerklePathElements,
       outAmount: depositOutputs.map(x => x.amount.toString(10)),
       outBlinding: depositOutputs.map(x => x.blinding.toString(10)),
       outPubkey: depositOutputs.map(x => x.keypair.pubkey),
+      outMintAddress: depositOutputs.map(x => x.mintAddress),
     };
 
     const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
@@ -4653,11 +4693,13 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     const withdrawProofResult = await prove(withdrawInput, keyBasePath);
@@ -4756,6 +4798,7 @@ describe("zkcash", () => {
       inAmount: inputs.map(x => x.amount.toString(10)),
       inPrivateKey: inputs.map(x => x.keypair.privkey),
       inBlinding: inputs.map(x => x.blinding.toString(10)),
+        inMintAddress: inputs.map(x => x.mintAddress),
       inPathIndices: inputMerklePathIndices,
       inPathElements: inputMerklePathElements,
       
@@ -4763,6 +4806,7 @@ describe("zkcash", () => {
       outAmount: outputs.map(x => x.amount.toString(10)),
       outBlinding: outputs.map(x => x.blinding.toString(10)),
       outPubkey: outputs.map(x => x.keypair.pubkey),
+        outMintAddress: outputs.map(x => x.mintAddress),
     };
 
     // Generate proof for deposit
@@ -4895,6 +4939,7 @@ describe("zkcash", () => {
       inAmount: withdrawInputs.map(x => x.amount.toString(10)),
       inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
       inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+        inMintAddress: withdrawInputs.map(x => x.mintAddress),
       inPathIndices: withdrawalInputMerklePathIndices,
       inPathElements: withdrawalInputMerklePathElements,
       
@@ -4902,6 +4947,7 @@ describe("zkcash", () => {
       outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
       outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
       outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+        outMintAddress: withdrawOutputs.map(x => x.mintAddress),
     };
 
     // Generate proof for withdrawal

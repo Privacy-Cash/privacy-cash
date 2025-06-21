@@ -19,6 +19,7 @@ export class Utxo {
   blinding: BN;
   keypair: Keypair;
   index: number;
+  mintAddress: string;
   private lightWasm: LightWasm;
 
   constructor({ 
@@ -34,23 +35,26 @@ export class Utxo {
      */
     keypair, 
     blinding = new BN(Math.floor(Math.random() * 1000000000)), // Use fixed value for consistency instead of randomBN()
-    index = 0 
+    index = 0,
+    mintAddress = '11111111111111111111111111111112' // Default to Solana native SOL mint address
   }: { 
     lightWasm: LightWasm,
     amount?: BN | number | string, 
     keypair?: Keypair, 
     blinding?: BN | number | string, 
-    index?: number 
+    index?: number,
+    mintAddress?: string
   }) {
     this.amount = new BN(amount.toString());
     this.blinding = new BN(blinding.toString());
     this.lightWasm = lightWasm;
     this.keypair = keypair || new Keypair(ethers.Wallet.createRandom().privateKey, lightWasm);
     this.index = index;
+    this.mintAddress = mintAddress;
   }
 
   async getCommitment(): Promise<string> {
-    return this.lightWasm.poseidonHashString([this.amount.toString(), this.keypair.pubkey.toString(), this.blinding.toString()]);
+    return this.lightWasm.poseidonHashString([this.amount.toString(), this.keypair.pubkey.toString(), this.blinding.toString(), this.mintAddress]);
   }
 
   async getNullifier(): Promise<string> {
@@ -70,6 +74,7 @@ export class Utxo {
       amount: this.amount.toString(),
       blinding: this.blinding.toString(),
       index: this.index,
+      mintAddress: this.mintAddress,
       keypair: {
         pubkey: this.keypair.pubkey.toString()
       }

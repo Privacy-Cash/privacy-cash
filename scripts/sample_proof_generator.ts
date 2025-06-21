@@ -133,6 +133,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
     inAmount: inputs.map(x => x.amount.toString(10)),
     inPrivateKey: inputs.map(x => typeof x.keypair.privkey === 'string' ? x.keypair.privkey : x.keypair.privkey.toString()),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
+    inMintAddress: inputs.map(x => x.mintAddress),
     inPathIndices: inputMerklePathIndices.map(idx => idx.toString()),
     inPathElements: inputMerklePathElements.map(path => path.map(el => el.toString())),
     
@@ -140,6 +141,7 @@ async function generateSampleProofForFirstDeposit(): Promise<{
     outAmount: outputs.map(x => x.amount.toString(10)),
     outBlinding: outputs.map(x => x.blinding.toString(10)),
     outPubkey: outputs.map(x => typeof x.keypair.pubkey === 'string' ? x.keypair.pubkey : x.keypair.pubkey.toString()),
+    outMintAddress: outputs.map(x => x.mintAddress),
   };
 
   // Log the input object structure for debugging after string conversion
@@ -360,6 +362,7 @@ async function generateSampleProofForWithdraw(): Promise<{
     inAmount: inputs.map(x => x.amount.toString(10)),
     inPrivateKey: inputs.map(x => typeof x.keypair.privkey === 'string' ? x.keypair.privkey : x.keypair.privkey.toString()),
     inBlinding: inputs.map(x => x.blinding.toString(10)),
+    inMintAddress: inputs.map(x => x.mintAddress),
     inPathIndices: inputMerklePathIndices.map(idx => idx.toString()),
     inPathElements: inputMerklePathElements.map(path => path.map(el => el.toString())),
     
@@ -367,6 +370,7 @@ async function generateSampleProofForWithdraw(): Promise<{
     outAmount: outputs.map(x => x.amount.toString(10)),
     outBlinding: outputs.map(x => x.blinding.toString(10)),
     outPubkey: outputs.map(x => typeof x.keypair.pubkey === 'string' ? x.keypair.pubkey : x.keypair.pubkey.toString()),
+    outMintAddress: outputs.map(x => x.mintAddress),
   };
 
   // Log the input object structure for debugging after string conversion
