@@ -34,7 +34,6 @@ function calculateWithdrawalFee(amount: number): number {
   return calculateFee(amount, WITHDRAW_FEE_RATE);
 }
 
-
 export function bnToBytes(bn: anchor.BN): number[] {
   // Cast the result to number[] since we know the output is a byte array
   return Array.from(
