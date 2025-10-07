@@ -3,12 +3,14 @@ import { Program } from "@coral-xyz/anchor";
 import { Zkcash } from "../target/types/zkcash";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
-import { DEFAULT_HEIGHT, DEPOSIT_FEE_RATE, FEE_RECIPIENT_ACCOUNT, FIELD_SIZE, ROOT_HISTORY_SIZE, WITHDRAW_FEE_RATE, ZERO_BYTES } from "./lib/constants";
+import { DEFAULT_HEIGHT, FIELD_SIZE, ROOT_HISTORY_SIZE, ZERO_BYTES } from "./lib/constants";
+import { getExtDataHash } from "../../scripts/utils/utils";
+import { DEPOSIT_FEE_RATE, WITHDRAW_FEE_RATE, FEE_RECIPIENT_ACCOUNT } from "../../scripts/utils/constants";
 
 import * as crypto from "crypto";
 import * as path from 'path';
 import { Utxo } from "./lib/utxo";
-import { parseProofToBytesArray, parseToBytesArray, prove } from "./lib/prover";
+import { parseProofToBytesArray, parseToBytesArray, prove, verify } from "./lib/prover";
 import { utils } from 'ffjavascript';
 import { LightWasm, WasmFactory } from "@lightprotocol/hasher.rs";
 import { BN } from 'bn.js';
@@ -42,7 +44,6 @@ export function bnToBytes(bn: anchor.BN): number[] {
 
 import { MerkleTree } from "./lib/merkle_tree";
 import { createGlobalTestALT, getTestProtocolAddresses, createVersionedTransactionWithALT, sendAndConfirmVersionedTransaction } from "./lib/test_alt";
-import { getExtDataHash } from "./lib/utils";
 
 // Find nullifier PDAs for the given proof
 function findNullifierPDAs(program: anchor.Program<any>, proof: any) {
@@ -887,6 +888,83 @@ describe("zkcash", () => {
     
     expect(txSig).to.be.a('string');
 
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
+
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
     const commitment1Account = await provider.connection.getAccountInfo(commitment1PDA);
@@ -1355,6 +1433,83 @@ describe("zkcash", () => {
     );
     
     expect(txSig).to.be.a('string');
+
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
 
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
@@ -1831,6 +1986,83 @@ describe("zkcash", () => {
     
     expect(txSig).to.be.a('string');
 
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
+
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
     const commitment1Account = await provider.connection.getAccountInfo(commitment1PDA);
@@ -2285,6 +2517,83 @@ describe("zkcash", () => {
     
     expect(txSig).to.be.a('string');
 
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
+
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
     const commitment1Account = await provider.connection.getAccountInfo(commitment1PDA);
@@ -2729,6 +3038,83 @@ describe("zkcash", () => {
     
     expect(txSig).to.be.a('string');
 
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
+
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
     const commitment1Account = await provider.connection.getAccountInfo(commitment1PDA);
@@ -3124,6 +3510,83 @@ describe("zkcash", () => {
     );
     
     expect(txSig).to.be.a('string');
+
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
 
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
@@ -3569,6 +4032,83 @@ describe("zkcash", () => {
     );
     
     expect(txSig).to.be.a('string');
+
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
 
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
@@ -4021,6 +4561,83 @@ describe("zkcash", () => {
     
     expect(txSig).to.be.a('string');
 
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
+
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);
     const commitment1Account = await provider.connection.getAccountInfo(commitment1PDA);
@@ -4467,6 +5084,83 @@ describe("zkcash", () => {
     );
     
     expect(txSig).to.be.a('string');
+
+    // Check commitment logs for transaction (only if transaction succeeded)
+    const transaction = await provider.connection.getTransaction(txSig, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (transaction && transaction.meta && transaction.meta.logMessages) {
+      const logs = transaction.meta.logMessages;
+      const commitmentLogs = logs.filter(log => log.startsWith('Program log: COMMITMENT_DATA:'));
+      
+      if (commitmentLogs.length > 0) {
+        expect(commitmentLogs).to.have.length(2);
+
+        // Parse and verify first commitment log
+        const firstCommitmentLog = commitmentLogs[0];
+        expect(firstCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const firstLogParts = firstCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(firstLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const firstIndex = parseInt(firstLogParts[0]);
+        const firstCommitment = firstLogParts[1];
+        const firstEncryptedOutput = firstLogParts[2];
+        
+        expect(firstIndex).to.be.a('number');
+        expect(firstCommitment).to.be.a('string');
+        expect(firstEncryptedOutput).to.be.a('string');
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(firstCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(firstEncryptedOutput, 'base64')).to.not.throw();
+
+        // Parse and verify second commitment log
+        const secondCommitmentLog = commitmentLogs[1];
+        expect(secondCommitmentLog).to.include('COMMITMENT_DATA:');
+        
+        const secondLogParts = secondCommitmentLog.split('COMMITMENT_DATA:')[1].split(':');
+        expect(secondLogParts).to.have.length(3); // index:commitment:encrypted_output
+        
+        const secondIndex = parseInt(secondLogParts[0]);
+        const secondCommitment = secondLogParts[1];
+        const secondEncryptedOutput = secondLogParts[2];
+        
+        expect(secondIndex).to.be.a('number');
+        expect(secondCommitment).to.be.a('string');
+        expect(secondEncryptedOutput).to.be.a('string');
+        
+        // Verify second index is first index + 1
+        expect(secondIndex).to.equal(firstIndex + 1);
+        
+        // Verify commitment is base64 encoded
+        expect(() => Buffer.from(secondCommitment, 'base64')).to.not.throw();
+        
+        // Verify encrypted output is base64 encoded
+        expect(() => Buffer.from(secondEncryptedOutput, 'base64')).to.not.throw();
+
+        // Verify the logged commitments match the actual output commitments
+        const firstLoggedCommitment = Buffer.from(firstCommitment, 'base64');
+        const secondLoggedCommitment = Buffer.from(secondCommitment, 'base64');
+        
+        // Convert to string for comparison - compare against proof output commitments
+        // The program logs proof.output_commitments, not the UTXO commitments
+        const proofOutputCommitments = proofToSubmit.outputCommitments;
+        expect(firstLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[0]).toString('hex'));
+        expect(secondLoggedCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
+
+        // Verify the logged encrypted outputs match the actual encrypted outputs
+        const firstLoggedEncryptedOutput = Buffer.from(firstEncryptedOutput, 'base64');
+        const secondLoggedEncryptedOutput = Buffer.from(secondEncryptedOutput, 'base64');
+        
+        expect(firstLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
+        expect(secondLoggedEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      }
+    }
 
     // Verify commitment PDAs have correct data
     const commitment0Account = await provider.connection.getAccountInfo(commitment0PDA);

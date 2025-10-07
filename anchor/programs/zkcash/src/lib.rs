@@ -3,6 +3,7 @@ use light_hasher::Poseidon;
 use anchor_lang::solana_program::sysvar::rent::Rent;
 use ark_ff::PrimeField;
 use ark_bn254::Fr;
+use base64::{Engine as _, engine::general_purpose};
 
 declare_id!("9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD");
 
@@ -248,6 +249,22 @@ pub mod zkcash {
         MerkleTree::append::<Poseidon>(proof.output_commitments[0], tree_account)?;
         MerkleTree::append::<Poseidon>(proof.output_commitments[1], tree_account)?;
 
+        let second_index = next_index_to_insert.checked_add(1)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+        // Log commitment data for future PDA removal
+        msg!("COMMITMENT_DATA:{}:{}:{}",
+             next_index_to_insert,
+             general_purpose::STANDARD.encode(proof.output_commitments[0]),
+             general_purpose::STANDARD.encode(&encrypted_output1)
+        );
+        
+        msg!("COMMITMENT_DATA:{}:{}:{}",
+             second_index,
+             general_purpose::STANDARD.encode(proof.output_commitments[1]),
+             general_purpose::STANDARD.encode(&encrypted_output2)
+        );
+
         ctx.accounts.commitment0.commitment = proof.output_commitments[0];
         ctx.accounts.commitment0.encrypted_output = encrypted_output1;
         ctx.accounts.commitment0.index = next_index_to_insert;
@@ -255,8 +272,7 @@ pub mod zkcash {
         
         ctx.accounts.commitment1.commitment = proof.output_commitments[1];
         ctx.accounts.commitment1.encrypted_output = encrypted_output2;
-        ctx.accounts.commitment1.index = next_index_to_insert.checked_add(1)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        ctx.accounts.commitment1.index = second_index;
         ctx.accounts.commitment1.bump = ctx.bumps.commitment1;
         
         Ok(())
