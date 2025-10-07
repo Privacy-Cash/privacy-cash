@@ -3,14 +3,13 @@ import { Program } from "@coral-xyz/anchor";
 import { Zkcash } from "../target/types/zkcash";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
-import { DEFAULT_HEIGHT, FIELD_SIZE, ROOT_HISTORY_SIZE, ZERO_BYTES } from "./lib/constants";
-import { getExtDataHash } from "../../scripts/utils/utils";
-import { DEPOSIT_FEE_RATE, WITHDRAW_FEE_RATE, FEE_RECIPIENT_ACCOUNT } from "../../scripts/utils/constants";
+import { getExtDataHash } from "./lib/utils";
+import { DEFAULT_HEIGHT, FIELD_SIZE, ROOT_HISTORY_SIZE, ZERO_BYTES, DEPOSIT_FEE_RATE, WITHDRAW_FEE_RATE, FEE_RECIPIENT_ACCOUNT } from "./lib/constants";
 
 import * as crypto from "crypto";
 import * as path from 'path';
 import { Utxo } from "./lib/utxo";
-import { parseProofToBytesArray, parseToBytesArray, prove, verify } from "./lib/prover";
+import { parseProofToBytesArray, parseToBytesArray, prove } from "./lib/prover";
 import { utils } from 'ffjavascript';
 import { LightWasm, WasmFactory } from "@lightprotocol/hasher.rs";
 import { BN } from 'bn.js';
