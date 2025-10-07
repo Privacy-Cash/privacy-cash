@@ -906,20 +906,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -931,11 +931,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
@@ -1425,20 +1422,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -1450,11 +1447,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
@@ -1950,20 +1944,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -1975,11 +1969,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
@@ -2454,20 +2445,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -2479,11 +2470,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
@@ -2948,20 +2936,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -2973,11 +2961,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
@@ -3394,20 +3379,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -3419,11 +3404,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
@@ -3889,20 +3871,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -3914,11 +3896,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
@@ -4390,20 +4369,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -4415,11 +4394,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
@@ -4887,20 +4863,20 @@ describe("zkcash", () => {
 
       // Verify first commitment event
       const firstEvent = commitmentEvents[0];
-      expect(firstEvent.data.index).to.be.a('number');
+      expect(firstEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(firstEvent.data.commitment).to.be.an('array');
-      expect(firstEvent.data.encryptedOutput).to.be.an('array');
+      expect(firstEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(firstEvent.data.commitment).to.have.length(32);
-
+      
       // Verify second commitment event
       const secondEvent = commitmentEvents[1];
-      expect(secondEvent.data.index).to.be.a('number');
+      expect(secondEvent.data.index).to.be.an.instanceOf(anchor.BN);
       expect(secondEvent.data.commitment).to.be.an('array');
-      expect(secondEvent.data.encryptedOutput).to.be.an('array');
+      expect(secondEvent.data.encryptedOutput).to.be.instanceOf(Buffer);
       expect(secondEvent.data.commitment).to.have.length(32);
       
       // Verify second index is first index + 1
-      expect(secondEvent.data.index).to.equal(firstEvent.data.index + 1);
+      expect(secondEvent.data.index.toNumber()).to.equal(firstEvent.data.index.toNumber() + 1);
 
       // Verify the event commitments match the actual output commitments
       const firstEventCommitment = Buffer.from(firstEvent.data.commitment);
@@ -4912,11 +4888,8 @@ describe("zkcash", () => {
       expect(secondEventCommitment.toString('hex')).to.deep.equal(Buffer.from(proofOutputCommitments[1]).toString('hex'));
 
       // Verify the event encrypted outputs match the actual encrypted outputs
-      const firstEventEncryptedOutput = Buffer.from(firstEvent.data.encryptedOutput);
-      const secondEventEncryptedOutput = Buffer.from(secondEvent.data.encryptedOutput);
-      
-      expect(firstEventEncryptedOutput).to.deep.equal(extData.encryptedOutput1);
-      expect(secondEventEncryptedOutput).to.deep.equal(extData.encryptedOutput2);
+      expect(firstEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput1);
+      expect(secondEvent.data.encryptedOutput).to.deep.equal(extData.encryptedOutput2);
     }
 
     // Verify commitment PDAs have correct data
