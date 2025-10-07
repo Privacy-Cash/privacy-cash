@@ -899,7 +899,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
@@ -1418,7 +1418,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
@@ -1943,7 +1943,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
@@ -2447,7 +2447,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
@@ -2941,7 +2941,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
@@ -3387,7 +3387,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
@@ -3882,7 +3882,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
@@ -4383,7 +4383,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
@@ -4880,7 +4880,7 @@ describe("zkcash", () => {
       // Parse commitment events using Anchor's EventParser
       const eventParser = new EventParser(program.programId, new BorshCoder(program.idl));
       const events = Array.from(eventParser.parseLogs(logs));
-      const commitmentEvents = events.filter(event => event.name === "CommitmentData");
+      const commitmentEvents = events.filter(event => event.name === "commitmentData");
       
       // All transactions must have exactly 2 commitment events
       expect(commitmentEvents).to.have.length(2);
