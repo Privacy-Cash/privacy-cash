@@ -3,7 +3,6 @@ use light_hasher::Poseidon;
 use anchor_lang::solana_program::sysvar::rent::Rent;
 use ark_ff::PrimeField;
 use ark_bn254::Fr;
-use base64::{Engine as _, engine::general_purpose};
 
 declare_id!("9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD");
 
@@ -252,18 +251,17 @@ pub mod zkcash {
         let second_index = next_index_to_insert.checked_add(1)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-        // Log commitment data for future PDA removal
-        msg!("COMMITMENT_DATA:{}:{}:{}",
-             next_index_to_insert,
-             general_purpose::STANDARD.encode(proof.output_commitments[0]),
-             general_purpose::STANDARD.encode(&encrypted_output1)
-        );
-        
-        msg!("COMMITMENT_DATA:{}:{}:{}",
-             second_index,
-             general_purpose::STANDARD.encode(proof.output_commitments[1]),
-             general_purpose::STANDARD.encode(&encrypted_output2)
-        );
+        emit!(CommitmentData {
+            index: next_index_to_insert,
+            commitment: proof.output_commitments[0],
+            encrypted_output: encrypted_output1.to_vec(),
+        });
+
+        emit!(CommitmentData {
+            index: second_index,
+            commitment: proof.output_commitments[1],
+            encrypted_output: encrypted_output2.to_vec(),
+        });
 
         ctx.accounts.commitment0.commitment = proof.output_commitments[0];
         ctx.accounts.commitment0.encrypted_output = encrypted_output1;
@@ -277,6 +275,13 @@ pub mod zkcash {
         
         Ok(())
     }
+}
+
+#[event]
+pub struct CommitmentData {
+    pub index: u64,
+    pub commitment: [u8; 32],
+    pub encrypted_output: Vec<u8>,
 }
 
 // all public inputs needs to be in big endian format
