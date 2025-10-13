@@ -262,16 +262,6 @@ pub mod zkcash {
             commitment: proof.output_commitments[1],
             encrypted_output: encrypted_output2.to_vec(),
         });
-
-        ctx.accounts.commitment0.commitment = proof.output_commitments[0];
-        ctx.accounts.commitment0.encrypted_output = encrypted_output1;
-        ctx.accounts.commitment0.index = next_index_to_insert;
-        ctx.accounts.commitment0.bump = ctx.bumps.commitment0;
-        
-        ctx.accounts.commitment1.commitment = proof.output_commitments[1];
-        ctx.accounts.commitment1.encrypted_output = encrypted_output2;
-        ctx.accounts.commitment1.index = second_index;
-        ctx.accounts.commitment1.bump = ctx.bumps.commitment1;
         
         Ok(())
     }
@@ -372,24 +362,6 @@ pub struct Transact<'info> {
         bump
     )]
     pub nullifier3: SystemAccount<'info>,
-    
-    #[account(
-        init,
-        payer = signer,
-        space = 8 + std::mem::size_of::<CommitmentAccount>() + encrypted_output1.len(),
-        seeds = [b"commitment0", proof.output_commitments[0].as_ref()],
-        bump
-    )]
-    pub commitment0: Account<'info, CommitmentAccount>,
-    
-    #[account(
-        init,
-        payer = signer,
-        space = 8 + std::mem::size_of::<CommitmentAccount>() + encrypted_output2.len(),
-        seeds = [b"commitment1", proof.output_commitments[1].as_ref()],
-        bump
-    )]
-    pub commitment1: Account<'info, CommitmentAccount>,
     
     #[account(
         mut,
@@ -501,14 +473,6 @@ pub struct GlobalConfig {
 pub struct NullifierAccount {
     /// This account's existence indicates that the nullifier has been used.
     /// No fields needed other than bump for PDA verification.
-    pub bump: u8,
-}
-
-#[account]
-pub struct CommitmentAccount {
-    pub commitment: [u8; 32],
-    pub encrypted_output: Vec<u8>,
-    pub index: u64,
     pub bump: u8,
 }
 
