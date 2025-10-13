@@ -359,8 +359,6 @@ describe("zkcash", () => {
     const depositTestProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -500,8 +498,6 @@ describe("zkcash", () => {
     const firstTestProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -650,8 +646,6 @@ describe("zkcash", () => {
     const secondTestProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -831,8 +825,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -1295,8 +1287,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
 
@@ -1765,8 +1755,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
 
@@ -2214,8 +2202,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -2652,8 +2638,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     testProtocolAddresses.push(attacker.publicKey); // Add attacker to the lookup table
@@ -3070,8 +3054,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -3510,8 +3492,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -3950,15 +3930,7 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
-      nullifier0PDA,
-      nullifier1PDA,
-      commitment0PDA,
-      commitment1PDA,
-      recipient.publicKey,
-      FEE_RECIPIENT_ACCOUNT,
-      randomUser.publicKey
+      FEE_RECIPIENT_ACCOUNT
     );
     
     const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
@@ -4398,8 +4370,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -5243,8 +5213,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -5306,8 +5274,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -5466,8 +5432,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -5620,8 +5584,6 @@ describe("zkcash", () => {
     const depositTestProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -5761,8 +5723,6 @@ describe("zkcash", () => {
     const withdrawTestProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -5918,8 +5878,6 @@ describe("zkcash", () => {
     const depositTestProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -6086,8 +6044,6 @@ describe("zkcash", () => {
       const withdrawTestProtocolAddresses = getTestProtocolAddresses(
         program.programId,
         authority.publicKey,
-        treeAccountPDA,
-        treeTokenAccountPDA,
         FEE_RECIPIENT_ACCOUNT
       );
       
@@ -6251,8 +6207,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     
@@ -6662,8 +6616,6 @@ describe("zkcash", () => {
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
       authority.publicKey,
-      treeAccountPDA,
-      treeTokenAccountPDA,
       FEE_RECIPIENT_ACCOUNT
     );
     

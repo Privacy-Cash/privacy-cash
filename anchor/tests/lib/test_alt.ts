@@ -110,43 +110,46 @@ export async function createGlobalTestALT(
 
 /**
  * Get all protocol addresses for the test ALT
+ * MUST match production ALT exactly to catch transaction size limit issues in tests
+ * 
+ * Only includes addresses that are CONSTANT across all transactions.
+ * Transaction-specific addresses (nullifiers, commitments, user, recipient) are NOT included
+ * since they change with every transaction.
  */
 export function getTestProtocolAddresses(
   programId: PublicKey,
   authority: PublicKey,
-  treeAccount: PublicKey,
-  treeTokenAccount: PublicKey,
   feeRecipient: PublicKey
 ): PublicKey[] {
+  // Derive global config PDA
+  const [globalConfigAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('global_config')],
+    programId
+  );
+
+  // Derive tree accounts
+  const [treeAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('merkle_tree')],
+    programId
+  );
+
+  const [treeTokenAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('tree_token')],
+    programId
+  );
+
   return [
-    // Program and system accounts
+    // Core program accounts (constant)
     programId,
-    SystemProgram.programId,
-    ComputeBudgetProgram.programId,
-    
-    // All important system variables and programs
-    anchor.web3.SYSVAR_RENT_PUBKEY,
-    anchor.web3.SYSVAR_CLOCK_PUBKEY,
-    anchor.web3.SYSVAR_EPOCH_SCHEDULE_PUBKEY,
-    anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-    anchor.web3.SYSVAR_RECENT_BLOCKHASHES_PUBKEY,
-    anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
-    anchor.web3.SYSVAR_SLOT_HISTORY_PUBKEY,
-    anchor.web3.SYSVAR_STAKE_HISTORY_PUBKEY,
-    
-    // Token program (even though we might not use it, include for safety)
-    new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-    
-    // Associated Token Program
-    new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'),
-    
-    // Main accounts
-    authority,
     treeAccount,
     treeTokenAccount,
-    
-    // Transaction-specific accounts
+    globalConfigAccount,
+    authority,
     feeRecipient,
+    
+    // System programs (constant)
+    SystemProgram.programId,
+    ComputeBudgetProgram.programId,
   ];
 }
 
