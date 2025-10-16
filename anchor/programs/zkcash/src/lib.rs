@@ -113,7 +113,7 @@ pub mod zkcash {
      * 
      * Reentrant attacks are not possible, because nullifier creation is checked by anchor first.
      */
-    pub fn transact_sol(ctx: Context<TransactSol>, proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>) -> Result<()> {
+    pub fn transact(ctx: Context<TransactSol>, proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>) -> Result<()> {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
         let global_config = &ctx.accounts.global_config;
 
