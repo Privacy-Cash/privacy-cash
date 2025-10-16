@@ -14,7 +14,7 @@ cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build"]
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 custom-heap = []
 custom-panic = []
 anchor-debug = []
@@ -24,9 +24,10 @@ localnet = []     # For local development and testing (no auth required)
 
 [dependencies]
 anchor-lang = { version = "0.31.0", features = ["init-if-needed"] }
+anchor-spl = "0.31.0"
 bytemuck = { version = "1.20.0", features = ["derive", "min_const_generics"] }
-light-poseidon = "0.3.0"
-light-hasher = "2.0.0"
+light-poseidon = "0.4.0"
+light-hasher = "4.0.0"
 num-bigint = "0.4.4"
 ark-bn254 = { version = "0.5.0", features = [] }
 ark-ff = { version = "0.5.0", features = [] }
