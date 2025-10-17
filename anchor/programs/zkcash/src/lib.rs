@@ -320,6 +320,17 @@ pub mod zkcash {
         // verify the proof
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
+        // Validate token accounts manually since we're using UncheckedAccount
+        require!(
+            ctx.accounts.signer_token_account.owner == ctx.accounts.token_program.key(),
+            ErrorCode::InvalidTokenAccount
+        );
+        
+        require!(
+            *ctx.accounts.fee_recipient_ata.owner == ctx.accounts.token_program.key(),
+            ErrorCode::InvalidTokenAccount
+        );
+
         // For SPL tokens, we know it's not native SOL
         if ext_amount > 0 {
             // Check deposit limit for deposits
@@ -349,8 +360,8 @@ pub mod zkcash {
                 .map_err(|_| ErrorCode::InvalidExtAmount)?;
             
             // SPL Token withdrawal: transfer from tree's ATA to recipient's token account
-            let bump = &[ctx.accounts.tree_token_account.bump];
-            let seeds: &[&[u8]] = &[b"tree_token", bump];
+            let bump = &[ctx.accounts.global_config.bump];
+            let seeds: &[&[u8]] = &[b"global_config", bump];
             let signer_seeds = &[seeds];
             
             token::transfer(
@@ -359,7 +370,7 @@ pub mod zkcash {
                     SplTransfer {
                         from: ctx.accounts.tree_ata.to_account_info(),
                         to: ctx.accounts.recipient_token_account.to_account_info(),
-                        authority: ctx.accounts.tree_token_account.to_account_info(),
+                        authority: ctx.accounts.global_config.to_account_info(),
                     },
                     signer_seeds,
                 ),
@@ -369,8 +380,8 @@ pub mod zkcash {
         
         if fee > 0 {
             // SPL Token fee payment: transfer from tree's ATA to fee recipient's token account
-            let bump = &[ctx.accounts.tree_token_account.bump];
-            let seeds: &[&[u8]] = &[b"tree_token", bump];
+            let bump = &[ctx.accounts.global_config.bump];
+            let seeds: &[&[u8]] = &[b"global_config", bump];
             let signer_seeds = &[seeds];
             
             token::transfer(
@@ -379,7 +390,7 @@ pub mod zkcash {
                     SplTransfer {
                         from: ctx.accounts.tree_ata.to_account_info(),
                         to: ctx.accounts.fee_recipient_ata.to_account_info(),
-                        authority: ctx.accounts.tree_token_account.to_account_info(),
+                        authority: ctx.accounts.global_config.to_account_info(),
                     },
                     signer_seeds,
                 ),
@@ -592,13 +603,6 @@ pub struct TransactSpl<'info> {
     pub nullifier3: SystemAccount<'info>,
     
     #[account(
-        mut,
-        seeds = [b"tree_token"],
-        bump = tree_token_account.bump
-    )]
-    pub tree_token_account: Account<'info, TreeTokenAccount>,
-    
-    #[account(
         seeds = [b"global_config"],
         bump = global_config.bump
     )]
@@ -608,6 +612,10 @@ pub struct TransactSpl<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     
+    /// The recipient account (owner of the recipient token account)
+    /// CHECK: Validated in the instruction logic
+    pub recipient: UncheckedAccount<'info>,
+    
     /// SPL Token mint account (required for token operations)
     pub mint: Account<'info, Mint>,
     
@@ -616,7 +624,12 @@ pub struct TransactSpl<'info> {
     pub signer_token_account: Account<'info, TokenAccount>,
     
     /// Recipient's token account (destination for withdrawals)
-    #[account(mut)]
+    #[account(
+        init_if_needed,
+        payer = signer,
+        associated_token::mint = mint,
+        associated_token::authority = recipient
+    )]
     pub recipient_token_account: Account<'info, TokenAccount>,
     
     /// Tree's associated token account (destination for deposits, source for withdrawals)
@@ -630,14 +643,10 @@ pub struct TransactSpl<'info> {
     pub tree_ata: Account<'info, TokenAccount>,
     
     /// Fee recipient's associated token account (auto-derived from fee_recipient_account + mint)
-    /// Created automatically if it doesn't exist - client pays for creation
-    #[account(
-        init_if_needed,
-        payer = signer,
-        associated_token::mint = mint,
-        associated_token::authority = global_config
-    )]
-    pub fee_recipient_ata: Account<'info, TokenAccount>,
+    /// Fee recipient ATA is guaranteed to exist for supported tokens
+    /// CHECK: Validated in the instruction logic
+    #[account(mut)]
+    pub fee_recipient_ata: UncheckedAccount<'info>,
     
     /// SPL Token program
     pub token_program: Program<'info, Token>,
@@ -786,4 +795,6 @@ pub enum ErrorCode {
     RecipientMismatch,
     #[msg("Merkle tree is full: cannot add more leaves")]
     MerkleTreeFull,
+    #[msg("Invalid token account: account is not owned by the token program")]
+    InvalidTokenAccount,
 }
