@@ -2,6 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, EventParser, BorshCoder } from "@coral-xyz/anchor";
 import { Zkcash } from "../target/types/zkcash";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddress, createInitializeMintInstruction, createAssociatedTokenAccountInstruction, createMintToInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
 import { getExtDataHash } from "./lib/utils";
 import { DEFAULT_HEIGHT, FIELD_SIZE, ROOT_HISTORY_SIZE, ZERO_BYTES, DEPOSIT_FEE_RATE, WITHDRAW_FEE_RATE, FEE_RECIPIENT_ACCOUNT } from "./lib/constants";
@@ -42,7 +43,7 @@ export function bnToBytes(bn: anchor.BN): number[] {
 }
 
 import { MerkleTree } from "./lib/merkle_tree";
-import { createGlobalTestALT, getTestProtocolAddresses, createVersionedTransactionWithALT, sendAndConfirmVersionedTransaction } from "./lib/test_alt";
+import { createGlobalTestALT, getTestProtocolAddresses, createVersionedTransactionWithALT, sendAndConfirmVersionedTransaction, getTestProtocolAddressesWithMint } from "./lib/test_alt";
 
 // Find nullifier PDAs for the given proof
 function findNullifierPDAs(program: anchor.Program<any>, proof: any) {
@@ -108,6 +109,7 @@ describe("zkcash", () => {
   // Generate keypairs for the accounts needed in the test
   let treeAccountPDA: PublicKey;
   let feeRecipient: anchor.web3.Keypair; // Regular keypair for fee recipient
+  let feeRecipientTokenAccount: PublicKey; // Token account for fee recipient
   let treeBump: number;
   let authority: anchor.web3.Keypair;
   let recipient: anchor.web3.Keypair;
@@ -115,8 +117,8 @@ describe("zkcash", () => {
   let randomUser: anchor.web3.Keypair; // Random user for signing transactions
   let attacker: anchor.web3.Keypair;
   let splTokenMint: anchor.web3.Keypair;
-  let randomUserTokenAccount: anchor.web3.Keypair;
-  let attackerTokenAccount: anchor.web3.Keypair;
+  let randomUserTokenAccount: PublicKey;
+  let attackerTokenAccount: PublicKey;
 
   // Initialize variables for tree token account
   let treeTokenAccountPDA: PublicKey;
@@ -227,9 +229,9 @@ describe("zkcash", () => {
         newAccountPubkey: splTokenMint.publicKey,
         space: 82, // Mint account size
         lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
-        programId: anchor.web3.TOKEN_PROGRAM_ID,
+        programId: TOKEN_PROGRAM_ID,
       }),
-      anchor.web3.createInitializeMintInstruction(
+      createInitializeMintInstruction(
         splTokenMint.publicKey,
         6, // decimals
         authority.publicKey,
@@ -264,73 +266,27 @@ describe("zkcash", () => {
       signature: feeRecipientAirdropSignature,
     });
 
-    // Create token accounts for signer and recipient
-    const recipientTokenAccount = await anchor.web3.getAssociatedTokenAddress(
-      splTokenMint.publicKey,
-      recipient.publicKey
-    );
-
-    const feeRecipientTokenAccount = await anchor.web3.getAssociatedTokenAddress(
-      splTokenMint.publicKey,
-      FEE_RECIPIENT_ACCOUNT
-    );
-
-    // Create the token accounts
-    const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-      anchor.web3.createAssociatedTokenAccountInstruction(
-        authority.publicKey, // payer
-        recipientTokenAccount, // associatedToken
-        recipient.publicKey, // owner
-        mint.publicKey // mint
-      )
-    );
-
-    const createFeeRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-      anchor.web3.createAssociatedTokenAccountInstruction(
-        authority.publicKey, // payer
-        feeRecipientTokenAccount, // associatedToken
-        FEE_RECIPIENT_ACCOUNT, // owner
-        splTokenMint.publicKey // mint
-      )
-    );
-
-    await provider.sendAndConfirm(createRecipientTokenAccountTx, [authority]);
-    await provider.sendAndConfirm(createFeeRecipientTokenAccountTx, [authority]);
-
-    // Mint tokens to token accounts
-    const mintAmount = 1000000000000000000; // 1 token with 6 decimals
-    const mintToRecipientTx = new anchor.web3.Transaction().add(
-      anchor.web3.createMintToInstruction(
-        splTokenMint.publicKey,
-        recipientTokenAccount,
-        authority.publicKey,
-        mintAmount
-      )
-    );
-    await provider.sendAndConfirm(mintToRecipientTx, [authority]);
-
-    const mintToFeeRecipientTx = new anchor.web3.Transaction().add(
-      anchor.web3.createMintToInstruction(
-        splTokenMint.publicKey,
-        feeRecipientTokenAccount,
-        FEE_RECIPIENT_ACCOUNT,
-        mintAmount
-      )
-    );
-    await provider.sendAndConfirm(mintToFeeRecipientTx, [authority]);
+    // Note: Token accounts will be derived in each test and created automatically by init_if_needed in the program
       
     try {
       // Generate a random user for signing transactions
       randomUser = anchor.web3.Keypair.generate();
-      randomUserTokenAccount = await anchor.web3.getAssociatedTokenAddress(
+      randomUserTokenAccount = await getAssociatedTokenAddress(
         splTokenMint.publicKey,
         randomUser.publicKey
       );
 
       attacker = anchor.web3.Keypair.generate();
-      attackerTokenAccount = await anchor.web3.getAssociatedTokenAddress(
+      attackerTokenAccount = await getAssociatedTokenAddress(
         splTokenMint.publicKey,
         attacker.publicKey
+      );
+
+      // Calculate the PDA for the fee recipient token account
+      feeRecipientTokenAccount = await getAssociatedTokenAddress(
+        splTokenMint.publicKey,
+        FEE_RECIPIENT_ACCOUNT,
+        true
       );
 
       // Fund the random user with SOL
@@ -352,29 +308,30 @@ describe("zkcash", () => {
       });
 
       // create token accounts for random user and attacker
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        anchor.web3.createAssociatedTokenAccountInstruction(
+      const createRandomUserTokenAccountTx = new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
           authority.publicKey, // payer
           randomUserTokenAccount, // associatedToken
-          recipient.publicKey, // owner
+          randomUser.publicKey, // owner
           splTokenMint.publicKey // mint
         )
       );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [authority]);
+      await provider.sendAndConfirm(createRandomUserTokenAccountTx, [authority]);
   
-      const createFeeRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        anchor.web3.createAssociatedTokenAccountInstruction(
+      const createAttackerTokenAccountTx = new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
           authority.publicKey, // payer
           attackerTokenAccount, // associatedToken
-          feeRecipient.publicKey, // owner
+          attacker.publicKey, // owner
           splTokenMint.publicKey // mint
         )
       );
-      await provider.sendAndConfirm(createFeeRecipientTokenAccountTx, [authority]);
+      await provider.sendAndConfirm(createAttackerTokenAccountTx, [authority]);
 
       // mint tokens to token accounts
+      const mintAmount = 1000000000000; // 1 million tokens with 6 decimals
       const mintToRandomUserTx = new anchor.web3.Transaction().add(
-        anchor.web3.createMintToInstruction(
+        createMintToInstruction(
           splTokenMint.publicKey,
           randomUserTokenAccount,
           authority.publicKey,
@@ -384,7 +341,7 @@ describe("zkcash", () => {
       await provider.sendAndConfirm(mintToRandomUserTx, [authority]);
 
       const mintToAttackerTx = new anchor.web3.Transaction().add(
-        anchor.web3.createMintToInstruction(
+        createMintToInstruction(
           splTokenMint.publicKey,
           attackerTokenAccount,
           authority.publicKey,
@@ -393,12 +350,41 @@ describe("zkcash", () => {
       );
       await provider.sendAndConfirm(mintToAttackerTx, [authority]);
 
+      // Create fee recipient token account first
+      const createFeeRecipientTokenAccountTx = new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          authority.publicKey, // payer
+          feeRecipientTokenAccount, // associatedToken
+          FEE_RECIPIENT_ACCOUNT, // owner (PDA)
+          splTokenMint.publicKey // mint
+        )
+      );
+      await provider.sendAndConfirm(createFeeRecipientTokenAccountTx, [authority]);
+
+      const mintToFeeRecipientTx = new anchor.web3.Transaction().add(
+        createMintToInstruction(
+          splTokenMint.publicKey,
+          feeRecipientTokenAccount,
+          authority.publicKey,
+          mintAmount
+        )
+      );
+      await provider.sendAndConfirm(mintToFeeRecipientTx, [authority]);
+
+      // fund the fee recipient token account with SOL
+      const feeRecipientTokenAccountAirdropSignature = await provider.connection.requestAirdrop(feeRecipientTokenAccount, 1 * LAMPORTS_PER_SOL);
+      const latestBlockHash7 = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction({
+        blockhash: latestBlockHash7.blockhash,
+        lastValidBlockHeight: latestBlockHash7.lastValidBlockHeight,
+        signature: feeRecipientTokenAccountAirdropSignature,
+      });
       // get token balances
       const randomUserTokenBalance = await provider.connection.getTokenAccountBalance(randomUserTokenAccount);
       const attackerTokenBalance = await provider.connection.getTokenAccountBalance(attackerTokenAccount);
 
-      expect(randomUserTokenBalance.value.amount).to.be.equals(mintAmount);
-      expect(attackerTokenBalance.value.amount).to.be.equals(mintAmount);
+      expect(randomUserTokenBalance.value.amount).to.be.equals(mintAmount.toString());
+      expect(attackerTokenBalance.value.amount).to.be.equals(mintAmount.toString());
     } catch (error) {
       console.error("Error initializing accounts:", error);
       // Get more detailed error information if available
@@ -416,75 +402,161 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     const depositAmount = 20000; // 0.02 tokens
     const calculatedDepositFee = calculateDepositFee(depositAmount);
 
+    // Get token accounts for signer (randomUser) and recipient
+    const signerTokenAccount = randomUserTokenAccount;
+    const recipientTokenAccount = await getAssociatedTokenAddress(
+      splTokenMint.publicKey,
+      recipient.publicKey
+    );
+
+
+    // Calculate fee recipient ATA early since we need it for extData
+    const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, FEE_RECIPIENT_ACCOUNT, true);
+
     const extData = {
-      recipient: recipient.publicKey,
+      recipient: recipientTokenAccount, // Use the token account, not the user account
       extAmount: new anchor.BN(depositAmount), // Positive ext amount (deposit)
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: new anchor.BN(calculatedDepositFee),
-      feeRecipient: FEE_RECIPIENT_ACCOUNT,
-      mintAddress: mint.publicKey, // SPL token mint address
+      feeRecipient: feeRecipientAta, // Use the fee recipient ATA, not the account
+      mintAddress: splTokenMint.publicKey, // SPL token mint address
     };
 
     // Create inputs for the deposit
     const inputs = [
-      new Utxo({ lightWasm }),
-      new Utxo({ lightWasm })
+      new Utxo({ lightWasm, mintAddress: '2' }),
+      new Utxo({ lightWasm, mintAddress: '2' })
     ];
 
-    const depositOutputs = [
-      new Utxo({ 
-        lightWasm, 
-        amount: new anchor.BN(depositAmount),
-        keypair: anchor.web3.Keypair.generate(),
-        asset: mint.publicKey
-      }),
-      new Utxo({ 
-        lightWasm, 
-        amount: new anchor.BN(0),
-        keypair: anchor.web3.Keypair.generate(),
-        asset: mint.publicKey
-      })
+    const outputAmount = (depositAmount - calculatedDepositFee).toString();
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount, index: globalMerkleTree._layers[0].length, mintAddress: '2' }), // Combined amount minus fee
+      new Utxo({ lightWasm, amount: '0', mintAddress: '2' }) // Empty UTXO
     ];
 
-    const depositInput = {
-      inputs,
-      outputs: depositOutputs,
-      extData,
-      publicAmount: new anchor.BN(depositAmount),
-      outPubkey: depositOutputs.map(x => x.keypair.pubkey),
-    };
-
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
-    const depositProofResult = await prove(depositInput, keyBasePath);
-    const depositProofInBytes = parseProofToBytesArray(depositProofResult.proof);
-    const depositInputsInBytes = parseToBytesArray(depositProofResult.publicSignals);
-
-    const depositProofToSubmit = {
-      proof: depositProofInBytes,
-      publicSignals: depositInputsInBytes,
-      inputNullifiers: [generateRandomNullifier(), generateRandomNullifier()],
-      outputCommitments: depositOutputs.map(x => x.getCommitment(lightWasm)),
-      publicAmount: depositInput.publicAmount,
-      extDataHash: getExtDataHash(extData),
-      root: globalMerkleTree.root,
-    };
-
-    const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
-
-    // Create Address Lookup Table for deposit transaction
-    const depositTestProtocolAddresses = getTestProtocolAddresses(
-      program.programId,
-      authority.publicKey,
-      FEE_RECIPIENT_ACCOUNT
-    );
+   // Create mock Merkle path data (normally built from the tree)
+   const inputMerklePathIndices = inputs.map((input) => input.index || 0);
     
-    const depositLookupTableAddress = await createGlobalTestALT(provider.connection, authority, depositTestProtocolAddresses);
+   // inputMerklePathElements won't be checked for empty utxos. so we need to create a sample full path
+   // Create the Merkle paths for each input
+   const inputMerklePathElements = inputs.map(() => {
+     // Return an array of zero elements as the path for each input
+     // Create a copy of the zeroElements array to avoid modifying the original
+     return [...new Array(globalMerkleTree.levels).fill(0)];
+   });
+
+   // Resolve all async operations before creating the input object
+   // Await nullifiers and commitments to get actual values instead of Promise objects
+   const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+   const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+
+   // Use the properly calculated Merkle tree root
+   const root = globalMerkleTree.root();
+
+   // Calculate the hash correctly using our utility
+   const calculatedExtDataHash = getExtDataHash(extData);
+   const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
+
+   const input = {
+     // Circuit inputs in exact order
+     root: root,
+     publicAmount: publicAmountNumber.toString(),
+     extDataHash: calculatedExtDataHash,
+     mintAddress: inputs[0].mintAddress,
+     
+     // Input nullifiers and UTXO data
+     inputNullifier: inputNullifiers,
+     inAmount: inputs.map(x => x.amount.toString(10)),
+     inPrivateKey: inputs.map(x => x.keypair.privkey),
+     inBlinding: inputs.map(x => x.blinding.toString(10)),
+     inPathIndices: inputMerklePathIndices,
+     inPathElements: inputMerklePathElements,
+     
+     // Output commitments and UTXO data
+     outputCommitment: outputCommitments,
+     outAmount: outputs.map(x => x.amount.toString(10)),
+     outBlinding: outputs.map(x => x.blinding.toString(10)),
+     outPubkey: outputs.map(x => x.keypair.pubkey),
+   };
+
+   // Path to the proving key files (wasm and zkey)
+   // Try with both circuits to see which one works
+   const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+   const {proof, publicSignals} = await prove(input, keyBasePath);
+
+   publicSignals.forEach((signal, index) => {
+     const signalStr = signal.toString();
+     let matchedKey = 'unknown';
+     
+     // Try to identify which input this signal matches
+     for (const [key, value] of Object.entries(input)) {
+       if (Array.isArray(value)) {
+         if (value.some(v => v.toString() === signalStr)) {
+           matchedKey = key;
+           break;
+         }
+       } else if (value.toString() === signalStr) {
+         matchedKey = key;
+         break;
+       }
+     }
+   });
+   
+
+   const proofInBytes = parseProofToBytesArray(proof);
+   const inputsInBytes = parseToBytesArray(publicSignals);
+   
+   // Create a Proof object with the correctly calculated hash
+   const proofToSubmit = {
+     proofA: proofInBytes.proofA, // 64-byte array for proofA
+     proofB: proofInBytes.proofB.flat(), // 128-byte array for proofB  
+     proofC: proofInBytes.proofC, // 64-byte array for proofC
+     root: inputsInBytes[0],
+     publicAmount: inputsInBytes[1],
+     extDataHash: inputsInBytes[2],
+     inputNullifiers: [
+       inputsInBytes[3],
+       inputsInBytes[4]
+     ],
+     outputCommitments: [
+       inputsInBytes[5],
+       inputsInBytes[6]
+     ],
+   };
+
+   // Derive nullifier PDAs
+   const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+   const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
+
+   // Derive commitment PDAs
+   const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+
+  const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+  // feeRecipientAta is already calculated above
+
+   // Create Address Lookup Table for transaction size optimization
+   const testProtocolAddresses = getTestProtocolAddressesWithMint(
+    program.programId,
+    authority.publicKey,
+    treeAta,
+    feeRecipient.publicKey,
+    feeRecipientAta
+  );
+   
+   const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
 
     // Get token balances before transaction
     const signerTokenBalanceBefore = await provider.connection.getTokenAccountBalance(signerTokenAccount);
-    const recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
+    
+    // Check if recipient token account exists, if not, it will be created by init_if_needed
+    let recipientTokenBalanceBefore;
+    try {
+      recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
+    } catch (error) {
+      // Account doesn't exist yet, will be created by init_if_needed
+      recipientTokenBalanceBefore = { value: { amount: '0' } };
+    }
 
     // Execute SPL token deposit transaction
     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
@@ -492,25 +564,25 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     });
     
     const depositTx = await program.methods
-      .transactSpl(depositProofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+      .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
       .accounts({
         treeAccount: treeAccountPDA,
-        nullifier0: depositNullifiers.nullifier0PDA,
-        nullifier1: depositNullifiers.nullifier1PDA,
-        nullifier2: depositNullifiers.nullifier2PDA,
-        nullifier3: depositNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
-        treeTokenAccount: treeTokenAccountPDA,
+        nullifier0: nullifier0PDA,
+        nullifier1: nullifier1PDA,
+        nullifier2: crossCheckNullifiers.nullifier2PDA,
+        nullifier3: crossCheckNullifiers.nullifier3PDA,
+        commitment0: commitment0PDA,
+        commitment1: commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
-        mint: mint.publicKey,
+        recipient: recipient.publicKey,
+        mint: splTokenMint.publicKey,
         signerTokenAccount: signerTokenAccount,
         recipientTokenAccount: recipientTokenAccount,
-        treeAta: await anchor.web3.getAssociatedTokenAddress(mint.publicKey, globalConfigPDA),
-        feeRecipientAta: await anchor.web3.getAssociatedTokenAddress(mint.publicKey, FEE_RECIPIENT_ACCOUNT),
-        tokenProgram: anchor.web3.TOKEN_PROGRAM_ID,
-        associatedTokenProgram: anchor.web3.ASSOCIATED_TOKEN_PROGRAM_ID,
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
@@ -522,7 +594,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
       provider.connection,
       randomUser.publicKey,
       depositTx.instructions,
-      depositLookupTableAddress
+      lookupTableAddress
     );
     
     // Send and confirm versioned transaction
@@ -546,8 +618,8 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     expect(recipientTokenDiff).to.be.equals(0); // Recipient should not receive tokens directly (they're in the tree)
 
     // Add commitments to the merkle tree
-    for (const commitment of depositOutputs) {
-      globalMerkleTree.insert(commitment.getCommitment(lightWasm));
+    for (const commitment of outputs) {
+      globalMerkleTree.insert(await commitment.getCommitment());
     }
   });
 });

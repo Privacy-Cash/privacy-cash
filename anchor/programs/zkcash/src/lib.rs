@@ -321,8 +321,9 @@ pub mod zkcash {
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
         // Validate token accounts manually since we're using UncheckedAccount
+        // Check that the signer token account is owned by the token program
         require!(
-            ctx.accounts.signer_token_account.owner == ctx.accounts.token_program.key(),
+            *ctx.accounts.signer_token_account.to_account_info().owner == ctx.accounts.token_program.key(),
             ErrorCode::InvalidTokenAccount
         );
         
