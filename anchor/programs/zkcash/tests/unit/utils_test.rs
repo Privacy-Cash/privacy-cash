@@ -953,7 +953,7 @@ fn test_calculate_complete_ext_data_hash_basic() {
         encrypted_output2,
         fee,
         fee_recipient,
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok());
@@ -967,7 +967,7 @@ fn test_calculate_complete_ext_data_hash_basic() {
         encrypted_output2,
         fee,
         fee_recipient,  // Use the same fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     assert_eq!(hash1, hash2, "Hash should be deterministic");
@@ -987,7 +987,7 @@ fn test_calculate_complete_ext_data_hash_different_inputs() {
         encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        recipient1, // Using recipient1 as mint_address for uniqueness
+        &recipient1.to_bytes(), // Using recipient1 as mint_address for uniqueness
     ).unwrap();
     
     let hash2 = calculate_complete_ext_data_hash(
@@ -997,7 +997,7 @@ fn test_calculate_complete_ext_data_hash_different_inputs() {
         encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        recipient1, // Same mint_address
+        &recipient1.to_bytes(), // Same mint_address
     ).unwrap();
     
     assert_ne!(hash1, hash2, "Different recipients should produce different hashes");
@@ -1017,7 +1017,7 @@ fn test_calculate_complete_ext_data_hash_different_amounts() {
         encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     let hash2 = calculate_complete_ext_data_hash(
@@ -1027,7 +1027,7 @@ fn test_calculate_complete_ext_data_hash_different_amounts() {
         encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     assert_ne!(hash1, hash2, "Different ext_amounts should produce different hashes");
@@ -1045,7 +1045,7 @@ fn test_calculate_complete_ext_data_hash_different_encrypted_outputs() {
         b"encrypted_output_2_data",
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     let hash2 = calculate_complete_ext_data_hash(
@@ -1055,7 +1055,7 @@ fn test_calculate_complete_ext_data_hash_different_encrypted_outputs() {
         b"encrypted_output_2_data",
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     assert_ne!(hash1, hash2, "Different encrypted outputs should produce different hashes");
@@ -1073,7 +1073,7 @@ fn test_calculate_complete_ext_data_hash_empty_encrypted_outputs() {
         &[],  // Empty encrypted output 2
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok(), "Should handle empty encrypted outputs");
@@ -1095,7 +1095,7 @@ fn test_calculate_complete_ext_data_hash_large_encrypted_outputs() {
         &large_encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok(), "Should handle large encrypted outputs");
@@ -1113,7 +1113,7 @@ fn test_calculate_complete_ext_data_hash_zero_values() {
         b"encrypted_output_2",
         0,    // Zero fee
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok(), "Should handle zero values");
@@ -1131,7 +1131,7 @@ fn test_calculate_complete_ext_data_hash_negative_amount() {
         b"encrypted_output_2",
         50,    // Fee for withdrawal
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok(), "Should handle negative ext_amount");
@@ -1151,7 +1151,7 @@ fn test_calculate_complete_ext_data_hash_different_fees() {
         encrypted_output2,
         10,   // Different fee
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     let hash2 = calculate_complete_ext_data_hash(
@@ -1161,7 +1161,7 @@ fn test_calculate_complete_ext_data_hash_different_fees() {
         encrypted_output2,
         20,   // Different fee
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     assert_ne!(hash1, hash2, "Different fees should produce different hashes");
@@ -1189,7 +1189,7 @@ fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
         encrypted_output2,
         fee,
         fee_recipient,
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     // Calculate manually using the same approach as our function
@@ -1201,7 +1201,7 @@ fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
         pub encrypted_output2: Vec<u8>,
         pub fee: u64,
         pub fee_recipient: Pubkey,
-        pub mint_address: Pubkey,
+        pub mint_address: Vec<u8>,
     }
     
     let manual_ext_data = TestCompleteExtData {
@@ -1211,7 +1211,7 @@ fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
         encrypted_output2: encrypted_output2.to_vec(),
         fee,
         fee_recipient,  // Use the same fee_recipient
-        mint_address,
+        mint_address: mint_address.to_bytes().to_vec(),
     };
     
     let mut serialized = Vec::new();

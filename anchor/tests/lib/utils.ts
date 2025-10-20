@@ -67,6 +67,15 @@ export function getExtDataHash(extData: {
     ? Buffer.from(extData.encryptedOutput2 as any)
     : Buffer.alloc(0); // Empty buffer if not provided
 
+  // For SPL tokens (not SOL), use only the first 16 bytes of the mint address
+  // SOL address is '11111111111111111111111111111112' which is handled specially
+  const mintAddressBytes = mintAddress.toBytes();
+  const solAddressBytes = new PublicKey('11111111111111111111111111111112').toBytes();
+  const isSolAddress = Buffer.from(mintAddressBytes).equals(Buffer.from(solAddressBytes));
+  const mintAddressBytesForHash = isSolAddress 
+    ? mintAddressBytes 
+    : mintAddressBytes.slice(0, 16);
+
   // Define the borsh schema matching the Rust struct
   const schema = {
     struct: {
@@ -76,7 +85,7 @@ export function getExtDataHash(extData: {
       encryptedOutput2: { array: { type: 'u8' } },
       fee: 'u64',
       feeRecipient: { array: { type: 'u8', len: 32 } },
-      mintAddress: { array: { type: 'u8', len: 32 } },
+      mintAddress: { array: { type: 'u8' } },
     }
   };
 
@@ -87,7 +96,7 @@ export function getExtDataHash(extData: {
     encryptedOutput2: encryptedOutput2,
     fee: fee,  // BN instance - Borsh handles it correctly with u64 type
     feeRecipient: feeRecipient.toBytes(),
-    mintAddress: mintAddress.toBytes(),
+    mintAddress: mintAddressBytesForHash,
   };
   
   // Serialize with Borsh

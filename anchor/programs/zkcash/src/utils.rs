@@ -278,7 +278,7 @@ pub fn calculate_complete_ext_data_hash(
     encrypted_output2: &[u8],
     fee: u64,
     fee_recipient: Pubkey,
-    mint_address: Pubkey,
+    mint_address: &[u8],
 ) -> Result<[u8; 32]> {
     #[derive(AnchorSerialize)]
     struct CompleteExtData {
@@ -288,7 +288,7 @@ pub fn calculate_complete_ext_data_hash(
         pub encrypted_output2: Vec<u8>,
         pub fee: u64,
         pub fee_recipient: Pubkey,
-        pub mint_address: Pubkey,
+        pub mint_address: Vec<u8>,
     }
     
     let complete_ext_data = CompleteExtData {
@@ -298,7 +298,7 @@ pub fn calculate_complete_ext_data_hash(
         encrypted_output2: encrypted_output2.to_vec(),
         fee,
         fee_recipient,
-        mint_address,
+        mint_address: mint_address.to_vec(),
     };
     
     let mut serialized_ext_data = Vec::new();

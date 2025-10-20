@@ -134,7 +134,7 @@ pub mod zkcash {
             &encrypted_output2,
             ext_data.fee,
             ext_data.fee_recipient,
-            ext_data.mint_address,
+            &ext_data.mint_address.to_bytes(),
         )?;
 
         require!(
@@ -285,6 +285,13 @@ pub mod zkcash {
         );
 
         // check if the ext_data hashes to the same ext_data in the proof
+        let mint_bytes = ext_data.mint_address.to_bytes();
+        // For SOL, use all 32 bytes; for SPL tokens, use only first 16 bytes
+        let mint_bytes_for_hash: &[u8] = if ext_data.mint_address == utils::SOL_ADDRESS {
+            &mint_bytes
+        } else {
+            &mint_bytes[..16]
+        };
         let calculated_ext_data_hash = utils::calculate_complete_ext_data_hash(
             ext_data.recipient,
             ext_data.ext_amount,
@@ -292,7 +299,7 @@ pub mod zkcash {
             &encrypted_output2,
             ext_data.fee,
             ext_data.fee_recipient,
-            ext_data.mint_address,
+            mint_bytes_for_hash,
         )?;
 
         require!(
@@ -319,18 +326,6 @@ pub mod zkcash {
 
         // verify the proof
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
-
-        // Validate token accounts manually since we're using UncheckedAccount
-        // Check that the signer token account is owned by the token program
-        require!(
-            *ctx.accounts.signer_token_account.to_account_info().owner == ctx.accounts.token_program.key(),
-            ErrorCode::InvalidTokenAccount
-        );
-        
-        require!(
-            *ctx.accounts.fee_recipient_ata.owner == ctx.accounts.token_program.key(),
-            ErrorCode::InvalidTokenAccount
-        );
 
         // For SPL tokens, we know it's not native SOL
         if ext_amount > 0 {
@@ -613,18 +608,17 @@ pub struct TransactSpl<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     
-    /// The recipient account (owner of the recipient token account)
-    /// CHECK: Validated in the instruction logic
-    pub recipient: UncheckedAccount<'info>,
-    
     /// SPL Token mint account (required for token operations)
     pub mint: Account<'info, Mint>,
     
     /// Signer's token account (source for deposits)
     #[account(mut)]
     pub signer_token_account: Account<'info, TokenAccount>,
+
+    pub recipient: SystemAccount<'info>,
     
     /// Recipient's token account (destination for withdrawals)
+    /// Created automatically if it doesn't exist
     #[account(
         init_if_needed,
         payer = signer,
