@@ -261,6 +261,31 @@ describe("zkcash", () => {
     );
     
     await provider.sendAndConfirm(mintTx, [authority, splTokenMint]);
+
+    // Fund the fee recipient with SOL for rent exemption
+    const feeRecipientAirdropSig = await provider.connection.requestAirdrop(feeRecipient.publicKey, 0.5 * LAMPORTS_PER_SOL);
+    const latestBlockhash = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction({
+      blockhash: latestBlockhash.blockhash,
+      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      signature: feeRecipientAirdropSig,
+    });
+
+    // Create fee recipient token account (once for all tests)
+    feeRecipientTokenAccount = await getAssociatedTokenAddress(
+      splTokenMint.publicKey,
+      feeRecipient.publicKey
+    );
+
+    const feeRecipientAtaTx = new anchor.web3.Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        authority.publicKey, // payer
+        feeRecipientTokenAccount, // associatedToken
+        feeRecipient.publicKey, // owner
+        splTokenMint.publicKey // mint
+      )
+    );
+    await provider.sendAndConfirm(feeRecipientAtaTx, [authority]);
   });
 
   // Reset program state before each test
@@ -302,11 +327,7 @@ describe("zkcash", () => {
         attacker.publicKey
       );
 
-      // Calculate the fee recipient token account
-      feeRecipientTokenAccount = await getAssociatedTokenAddress(
-        splTokenMint.publicKey,
-        feeRecipient.publicKey
-      );
+      // Note: feeRecipientTokenAccount is already created in before() hook
 
       // Fund the random user with SOL
       const randomUserAirdropSignature = await provider.connection.requestAirdrop(randomUser.publicKey, 1 * LAMPORTS_PER_SOL);
@@ -369,15 +390,7 @@ describe("zkcash", () => {
       );
       await provider.sendAndConfirm(mintToAttackerTx, [authority]);
 
-      const feeRecipientAtaTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          authority.publicKey, // payer
-          feeRecipientTokenAccount, // associatedToken
-          feeRecipient.publicKey, // owner
-          splTokenMint.publicKey // mint
-        )
-      );
-      await provider.sendAndConfirm(feeRecipientAtaTx, [authority]);
+      // Fee recipient token account already created in before() hook
       // get token balances
       const randomUserTokenBalance = await provider.connection.getTokenAccountBalance(randomUserTokenAccount);
       const attackerTokenBalance = await provider.connection.getTokenAccountBalance(attackerTokenAccount);
