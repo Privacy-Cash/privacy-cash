@@ -128,7 +128,7 @@ describe("zkcash", () => {
 
   // Generate keypairs for the accounts needed in the test
   let treeAccountPDA: PublicKey;
-  let feeRecipient: PublicKey = FEE_RECIPIENT_ACCOUNT; // Regular keypair for fee recipient
+  let feeRecipient: anchor.web3.Keypair; // Generate a new keypair for local testing
   let feeRecipientTokenAccount: PublicKey; // Token account for fee recipient
   let treeBump: number;
   let authority: anchor.web3.Keypair;
@@ -149,6 +149,7 @@ describe("zkcash", () => {
   // --- Funding a wallet to use for paying transaction fees ---
   before(async () => {
     authority = anchor.web3.Keypair.generate();
+    feeRecipient = anchor.web3.Keypair.generate(); // Generate fee recipient for local testing
     // Generate a funding account to pay for transactions
     fundingAccount = anchor.web3.Keypair.generate();
     lightWasm = await WasmFactory.getInstance();
@@ -278,7 +279,7 @@ describe("zkcash", () => {
     });
 
     // Fund the fee recipient with SOL for rent exemption
-    const feeRecipientAirdropSignature = await provider.connection.requestAirdrop(FEE_RECIPIENT_ACCOUNT, 0.5 * LAMPORTS_PER_SOL);
+    const feeRecipientAirdropSignature = await provider.connection.requestAirdrop(feeRecipient.publicKey, 0.5 * LAMPORTS_PER_SOL);
     await provider.connection.confirmTransaction({
       blockhash: latestBlockhash.blockhash,
       lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
@@ -301,11 +302,10 @@ describe("zkcash", () => {
         attacker.publicKey
       );
 
-      // Calculate the PDA for the fee recipient token account
+      // Calculate the fee recipient token account
       feeRecipientTokenAccount = await getAssociatedTokenAddress(
         splTokenMint.publicKey,
-        FEE_RECIPIENT_ACCOUNT,
-        true
+        feeRecipient.publicKey
       );
 
       // Fund the random user with SOL
@@ -373,20 +373,11 @@ describe("zkcash", () => {
         createAssociatedTokenAccountInstruction(
           authority.publicKey, // payer
           feeRecipientTokenAccount, // associatedToken
-          FEE_RECIPIENT_ACCOUNT, // owner
+          feeRecipient.publicKey, // owner
           splTokenMint.publicKey // mint
         )
       );
       await provider.sendAndConfirm(feeRecipientAtaTx, [authority]);
-
-      // fund the fee recipient token account with SOL
-      const feeRecipientTokenAccountAirdropSignature = await provider.connection.requestAirdrop(feeRecipientTokenAccount, 1 * LAMPORTS_PER_SOL);
-      const latestBlockHash7 = await provider.connection.getLatestBlockhash();
-      await provider.connection.confirmTransaction({
-        blockhash: latestBlockHash7.blockhash,
-        lastValidBlockHeight: latestBlockHash7.lastValidBlockHeight,
-        signature: feeRecipientTokenAccountAirdropSignature,
-      });
       // get token balances
       const randomUserTokenBalance = await provider.connection.getTokenAccountBalance(randomUserTokenAccount);
       const attackerTokenBalance = await provider.connection.getTokenAccountBalance(attackerTokenAccount);
@@ -563,7 +554,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     program.programId,
     authority.publicKey,
     treeAta,
-    feeRecipient,
+    feeRecipient.publicKey,
     feeRecipientTokenAccount
   );
    
@@ -768,7 +759,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
       program.programId,
       authority.publicKey,
       treeAta,
-      feeRecipient,
+      feeRecipient.publicKey,
       feeRecipientTokenAccount
     );
     
@@ -847,7 +838,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
       encryptedOutput1: Buffer.from("firstEncryptedOutput1"),
       encryptedOutput2: Buffer.from("firstEncryptedOutput2"),
       fee: firstWithdrawFee,
-      feeRecipient: await getAssociatedTokenAddress(splTokenMint.publicKey, FEE_RECIPIENT_ACCOUNT, true),
+      feeRecipient: await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey),
       mintAddress: splTokenMint.publicKey,
     };
 
@@ -1067,7 +1058,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
   //   const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
 
   //   const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
-  //   const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, FEE_RECIPIENT_ACCOUNT, true);
+  //   const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey);
 
   //   const testProtocolAddresses = getTestProtocolAddressesWithMint(
   //     program.programId,
@@ -1259,7 +1250,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
   //   const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
 
   //   const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
-  //   const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, FEE_RECIPIENT_ACCOUNT, true);
+  //   const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey);
 
   //   try {
   //     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
@@ -1428,7 +1419,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
   //   const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
 
   //   const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
-  //   const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, FEE_RECIPIENT_ACCOUNT, true);
+  //   const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey);
 
   //   try {
   //     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
