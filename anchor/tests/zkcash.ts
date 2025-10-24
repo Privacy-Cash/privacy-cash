@@ -128,7 +128,7 @@ describe("zkcash", () => {
 
   // Generate keypairs for the accounts needed in the test
   let treeAccountPDA: PublicKey;
-  let feeRecipient: anchor.web3.Keypair; // Regular keypair for fee recipient
+  let feeRecipient: PublicKey = FEE_RECIPIENT_ACCOUNT; // Regular keypair for fee recipient
   let feeRecipientTokenAccount: PublicKey; // Token account for fee recipient
   let treeBump: number;
   let authority: anchor.web3.Keypair;
@@ -266,7 +266,6 @@ describe("zkcash", () => {
   beforeEach(async () => {
     // Generate new recipient and fee recipient keypairs for each test
     recipient = anchor.web3.Keypair.generate();
-    feeRecipient = anchor.web3.Keypair.generate();
     
     // Fund the recipient with SOL for rent exemption
     const recipientAirdropSignature = await provider.connection.requestAirdrop(recipient.publicKey, 0.5 * LAMPORTS_PER_SOL);
@@ -434,16 +433,13 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
       console.log("Recipient token account might already exist:", error.message);
     }
 
-    // Calculate fee recipient ATA early since we need it for extData
-    const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, FEE_RECIPIENT_ACCOUNT, true);
-
     const extData = {
       recipient: recipientTokenAccount, // Use the token account, not the user account
       extAmount: new anchor.BN(depositAmount), // Positive ext amount (deposit)
       encryptedOutput1: Buffer.from("encryptedOutput1Data"),
       encryptedOutput2: Buffer.from("encryptedOutput2Data"),
       fee: new anchor.BN(calculatedDepositFee),
-      feeRecipient: feeRecipientAta, // Use the fee recipient ATA, not the account
+      feeRecipient: feeRecipientTokenAccount, // Use the fee recipient ATA, not the account
       mintAddress: splTokenMint.publicKey, // SPL token mint address
     };
 
@@ -567,8 +563,8 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     program.programId,
     authority.publicKey,
     treeAta,
-    feeRecipient.publicKey,
-    feeRecipientAta
+    feeRecipient,
+    feeRecipientTokenAccount
   );
    
    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
@@ -607,7 +603,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
         signerTokenAccount: signerTokenAccount,
         recipientTokenAccount: recipientTokenAccount,
         treeAta: treeAta,
-        feeRecipientAta: feeRecipientAta,
+        feeRecipientAta: feeRecipientTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
@@ -767,14 +763,13 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     });
     
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
-    const feeRecipientAta = await getAssociatedTokenAddress(splTokenMint.publicKey, FEE_RECIPIENT_ACCOUNT, true);
     
     const depositTestProtocolAddresses = getTestProtocolAddressesWithMint(
       program.programId,
       authority.publicKey,
       treeAta,
-      feeRecipient.publicKey,
-      feeRecipientAta
+      feeRecipient,
+      feeRecipientTokenAccount
     );
     
     const depositLookupTableAddress = await createGlobalTestALT(provider.connection, authority, depositTestProtocolAddresses);
@@ -797,7 +792,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
         signerTokenAccount: randomUserTokenAccount,
         recipientTokenAccount: recipientTokenAccount,
         treeAta: treeAta,
-        feeRecipientAta: feeRecipientAta,
+        feeRecipientAta: feeRecipientTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
@@ -932,7 +927,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
         signerTokenAccount: randomUserTokenAccount,
         recipientTokenAccount: recipientTokenAccount,
         treeAta: treeAta,
-        feeRecipientAta: feeRecipientAta,
+        feeRecipientAta: feeRecipientTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId
@@ -1078,7 +1073,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
   //     program.programId,
   //     authority.publicKey,
   //     treeAta,
-  //     feeRecipient.publicKey,
+  //     feeRecipient,
   //     feeRecipientAta
   //   );
     
@@ -1305,7 +1300,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
   //         program.programId,
   //         authority.publicKey,
   //         treeAta,
-  //         feeRecipient.publicKey,
+  //         feeRecipient,
   //         feeRecipientAta
   //       ))
   //     );
@@ -1474,7 +1469,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
   //         program.programId,
   //         authority.publicKey,
   //         treeAta,
-  //         feeRecipient.publicKey,
+  //         feeRecipient,
   //         feeRecipientAta
   //       ))
   //     );
