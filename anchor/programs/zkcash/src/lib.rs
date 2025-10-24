@@ -615,7 +615,8 @@ pub struct TransactSpl<'info> {
     #[account(mut)]
     pub signer_token_account: Account<'info, TokenAccount>,
 
-    pub recipient: SystemAccount<'info>,
+    /// CHECK: user should be able to send funds to any types of accounts
+    pub recipient: UncheckedAccount<'info>,
     
     /// Recipient's token account (destination for withdrawals)
     /// Created automatically if it doesn't exist
