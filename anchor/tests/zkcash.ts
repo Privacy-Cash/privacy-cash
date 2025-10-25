@@ -1279,4 +1279,344 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     }
   });
 
+  it("SPL Can execute both deposit and withdraw instruction to PDA recipient, with positive fee", async () => {
+    // Step 1: Perform a deposit with configured fee
+    const depositAmount = 50000;
+    const depositFee = calculateDepositFee(depositAmount);
+
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+
+    // Create regular recipient token account for deposit
+    const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
+    try {
+      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          randomUser.publicKey,
+          recipientTokenAccount,
+          recipient.publicKey,
+          splTokenMint.publicKey
+        )
+      );
+      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
+    } catch (error) {
+      console.log("Recipient token account might already exist:", error.message);
+    }
+
+    // Create a different PDA as the withdrawal recipient
+    // We can't use globalConfigPDA because it's already the tree authority (tree_ata uses it)
+    // So we create a test PDA with a different seed
+    const [pdaRecipient] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("test_pda_recipient")],
+      program.programId
+    );
+    
+    const pdaRecipientTokenAccount = await getAssociatedTokenAddress(
+      splTokenMint.publicKey, 
+      pdaRecipient, 
+      true // allowOwnerOffCurve for PDA
+    );
+
+    // Deposit transaction
+    const depositInputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressField }),
+      new Utxo({ lightWasm, mintAddress: mintAddressField })
+    ];
+
+    const depositOutputAmount = (depositAmount - depositFee).toString();
+    const depositOutputs = [
+      new Utxo({ 
+        lightWasm, 
+        amount: depositOutputAmount,
+        index: globalMerkleTree._layers[0].length,
+        mintAddress: mintAddressField
+      }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressField })
+    ];
+
+    const depositExtData = {
+      recipient: recipientTokenAccount, // Use regular recipient for deposit
+      extAmount: new anchor.BN(depositAmount),
+      encryptedOutput1: Buffer.from("pdaDepositEncryptedOutput1"),
+      encryptedOutput2: Buffer.from("pdaDepositEncryptedOutput2"),
+      fee: new anchor.BN(depositFee),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    const depositInputMerklePathIndices = depositInputs.map((input) => input.index || 0);
+    const depositInputMerklePathElements = depositInputs.map(() => {
+      return [...new Array(globalMerkleTree.levels).fill(0)];
+    });
+
+    const depositInputNullifiers = await Promise.all(depositInputs.map(x => x.getNullifier()));
+    const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
+
+    const depositRoot = globalMerkleTree.root();
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
+
+    const depositInput = {
+      root: depositRoot,
+      publicAmount: depositPublicAmountNumber.toString(),
+      extDataHash: depositCalculatedExtDataHash,
+      mintAddress: depositInputs[0].mintAddress,
+      
+      inputNullifier: depositInputNullifiers,
+      inAmount: depositInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: depositInputs.map(x => x.keypair.privkey),
+      inBlinding: depositInputs.map(x => x.blinding.toString(10)),
+      inPathIndices: depositInputMerklePathIndices,
+      inPathElements: depositInputMerklePathElements,
+      
+      outputCommitment: depositOutputCommitments,
+      outAmount: depositOutputs.map(x => x.amount.toString(10)),
+      outBlinding: depositOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: depositOutputs.map(x => x.keypair.pubkey),
+    };
+
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof: depositProof, publicSignals: depositPublicSignals} = await prove(depositInput, keyBasePath);
+
+    const depositProofInBytes = parseProofToBytesArray(depositProof);
+    const depositInputsInBytes = parseToBytesArray(depositPublicSignals);
+    
+    const depositProofToSubmit = {
+      proofA: depositProofInBytes.proofA,
+      proofB: depositProofInBytes.proofB.flat(),
+      proofC: depositProofInBytes.proofC,
+      root: depositInputsInBytes[0],
+      publicAmount: depositInputsInBytes[1],
+      extDataHash: depositInputsInBytes[2],
+      inputNullifiers: [depositInputsInBytes[3], depositInputsInBytes[4]],
+      outputCommitments: [depositInputsInBytes[5], depositInputsInBytes[6]],
+    };
+
+    const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
+    const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
+    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
+
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+
+    const depositTestProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount
+    );
+    
+    const depositLookupTableAddress = await createGlobalTestALT(provider.connection, authority, depositTestProtocolAddresses);
+
+    const signerTokenBalanceBefore = await provider.connection.getTokenAccountBalance(randomUserTokenAccount);
+
+    const modifyComputeUnitsDeposit = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    const depositTx = await program.methods
+      .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: depositNullifiers.nullifier0PDA,
+        nullifier1: depositNullifiers.nullifier1PDA,
+        nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
+        nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
+        commitment0: depositCommitments.commitment0PDA,
+        commitment1: depositCommitments.commitment1PDA,
+        globalConfig: globalConfigPDA,
+        signer: randomUser.publicKey,
+        recipient: recipient.publicKey, // Use regular recipient for deposit
+        mint: splTokenMint.publicKey,
+        signerTokenAccount: randomUserTokenAccount,
+        recipientTokenAccount: recipientTokenAccount, // Use regular token account for deposit
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnitsDeposit])
+      .transaction();
+
+    const depositVersionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      randomUser.publicKey,
+      depositTx.instructions,
+      depositLookupTableAddress
+    );
+    
+    const depositTxSig = await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      depositVersionedTx,
+      [randomUser]
+    );
+
+    expect(depositTxSig).to.be.a('string');
+
+    const signerTokenBalanceAfter = await provider.connection.getTokenAccountBalance(randomUserTokenAccount);
+    const signerTokenDiff = parseInt(signerTokenBalanceAfter.value.amount) - parseInt(signerTokenBalanceBefore.value.amount);
+
+    expect(signerTokenDiff).to.equal(-depositAmount);
+
+    // Add deposit commitments to the merkle tree
+    for (const commitment of depositOutputs) {
+      globalMerkleTree.insert(await commitment.getCommitment());
+    }
+
+    // Step 2: Perform a withdrawal to PDA recipient with configured fee
+    const withdrawAmount = 25000;
+    const withdrawFee = calculateWithdrawalFee(withdrawAmount);
+
+    const withdrawInputs = [
+      depositOutputs[0], // Use the UTXO from the deposit
+      new Utxo({ lightWasm, mintAddress: mintAddressField })
+    ];
+
+    const changeAmount = depositAmount - depositFee - withdrawAmount - withdrawFee;
+    const withdrawOutputs = [
+      new Utxo({ 
+        lightWasm, 
+        amount: changeAmount.toString(),
+        index: globalMerkleTree._layers[0].length,
+        mintAddress: mintAddressField
+      }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressField })
+    ];
+
+    const withdrawExtData = {
+      recipient: pdaRecipientTokenAccount,
+      extAmount: new anchor.BN(-withdrawAmount),
+      encryptedOutput1: Buffer.from("pdaWithdrawEncryptedOutput1"),
+      encryptedOutput2: Buffer.from("pdaWithdrawEncryptedOutput2"),
+      fee: new anchor.BN(withdrawFee),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    const withdrawInputMerklePathIndices = withdrawInputs.map((input) => input.index || 0);
+    const withdrawInputMerklePathElements = withdrawInputs.map((input, i) => {
+      if (i === 0) {
+        return globalMerkleTree.path(input.index).pathElements;
+      }
+      return [...new Array(globalMerkleTree.levels).fill(0)];
+    });
+
+    const withdrawInputNullifiers = await Promise.all(withdrawInputs.map(x => x.getNullifier()));
+    const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
+
+    const withdrawRoot = globalMerkleTree.root();
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+    const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
+
+    const withdrawCircuitInput = {
+      root: withdrawRoot,
+      publicAmount: withdrawPublicAmountNumber.toString(),
+      extDataHash: withdrawCalculatedExtDataHash,
+      mintAddress: withdrawInputs[0].mintAddress,
+      
+      inputNullifier: withdrawInputNullifiers,
+      inAmount: withdrawInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
+      inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+      inPathIndices: withdrawInputMerklePathIndices,
+      inPathElements: withdrawInputMerklePathElements,
+      
+      outputCommitment: withdrawOutputCommitments,
+      outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
+      outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+    };
+
+    const {proof: withdrawProof, publicSignals: withdrawPublicSignals} = await prove(withdrawCircuitInput, keyBasePath);
+
+    const withdrawProofInBytes = parseProofToBytesArray(withdrawProof);
+    const withdrawInputsInBytes = parseToBytesArray(withdrawPublicSignals);
+    
+    const withdrawProofToSubmit = {
+      proofA: withdrawProofInBytes.proofA,
+      proofB: withdrawProofInBytes.proofB.flat(),
+      proofC: withdrawProofInBytes.proofC,
+      root: withdrawInputsInBytes[0],
+      publicAmount: withdrawInputsInBytes[1],
+      extDataHash: withdrawInputsInBytes[2],
+      inputNullifiers: [withdrawInputsInBytes[3], withdrawInputsInBytes[4]],
+      outputCommitments: [withdrawInputsInBytes[5], withdrawInputsInBytes[6]],
+    };
+
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+
+    // PDA recipient token account doesn't exist yet, will be created during withdrawal via init_if_needed
+    let pdaRecipientBalanceBefore = 0;
+    try {
+      const balance = await provider.connection.getTokenAccountBalance(pdaRecipientTokenAccount);
+      pdaRecipientBalanceBefore = parseInt(balance.value.amount);
+    } catch (error) {
+      // Account doesn't exist yet, balance is 0
+      pdaRecipientBalanceBefore = 0;
+    }
+    const feeRecipientBalanceBefore = await provider.connection.getTokenAccountBalance(feeRecipientTokenAccount);
+
+    const modifyComputeUnitsWithdraw = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    const withdrawTx = await program.methods
+      .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: withdrawNullifiers.nullifier0PDA,
+        nullifier1: withdrawNullifiers.nullifier1PDA,
+        nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
+        nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
+        commitment0: withdrawCommitments.commitment0PDA,
+        commitment1: withdrawCommitments.commitment1PDA,
+        globalConfig: globalConfigPDA,
+        signer: randomUser.publicKey,
+        recipient: pdaRecipient,
+        mint: splTokenMint.publicKey,
+        signerTokenAccount: randomUserTokenAccount,
+        recipientTokenAccount: pdaRecipientTokenAccount,
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnitsWithdraw])
+      .transaction();
+
+    const withdrawVersionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      randomUser.publicKey,
+      withdrawTx.instructions,
+      depositLookupTableAddress
+    );
+    
+    const withdrawTxSig = await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      withdrawVersionedTx,
+      [randomUser]
+    );
+
+    expect(withdrawTxSig).to.be.a('string');
+
+    const pdaRecipientBalanceAfter = await provider.connection.getTokenAccountBalance(pdaRecipientTokenAccount);
+    const feeRecipientBalanceAfter = await provider.connection.getTokenAccountBalance(feeRecipientTokenAccount);
+    
+    const pdaRecipientDiff = parseInt(pdaRecipientBalanceAfter.value.amount) - pdaRecipientBalanceBefore;
+    const feeRecipientDiff = parseInt(feeRecipientBalanceAfter.value.amount) - parseInt(feeRecipientBalanceBefore.value.amount);
+
+    expect(pdaRecipientDiff).to.equal(withdrawAmount);
+    expect(feeRecipientDiff).to.equal(withdrawFee);
+
+    // Add withdrawal commitments to the merkle tree
+    for (const commitment of withdrawOutputs) {
+      globalMerkleTree.insert(await commitment.getCommitment());
+    }
+  });
+
 });
