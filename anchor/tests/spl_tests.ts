@@ -1974,4 +1974,375 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     }
   });
 
+  it("SPL Attacker can't frontrun withdraw transaction", async () => {
+    // Step 1: First, do a deposit to create a UTXO for withdrawal
+    const depositAmount = 100000;
+    const depositFee = calculateDepositFee(depositAmount);
+    
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+    
+    // Create recipient token account
+    const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
+    try {
+      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          randomUser.publicKey,
+          recipientTokenAccount,
+          recipient.publicKey,
+          splTokenMint.publicKey
+        )
+      );
+      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
+    } catch (error) {
+      console.log("Recipient token account might already exist:", error.message);
+    }
+    
+    const depositInputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressField }),
+      new Utxo({ lightWasm, mintAddress: mintAddressField })
+    ];
+
+    const depositOutputs = [
+      new Utxo({ 
+        lightWasm, 
+        amount: new anchor.BN(depositAmount - depositFee),
+        index: globalMerkleTree._layers[0].length,
+        mintAddress: mintAddressField
+      }),
+      new Utxo({ 
+        lightWasm, 
+        amount: new anchor.BN(0),
+        mintAddress: mintAddressField
+      })
+    ];
+
+    const depositExtData = {
+      recipient: recipientTokenAccount,
+      extAmount: new anchor.BN(depositAmount),
+      encryptedOutput1: Buffer.from("depositEncryptedOutput1"),
+      encryptedOutput2: Buffer.from("depositEncryptedOutput2"),
+      fee: new anchor.BN(depositFee),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    const depositInputMerklePathIndices = depositInputs.map((input) => input.index || 0);
+    const depositInputMerklePathElements = depositInputs.map(() => {
+      return [...new Array(globalMerkleTree.levels).fill(0)];
+    });
+
+    const depositInputNullifiers = await Promise.all(depositInputs.map(x => x.getNullifier()));
+    const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
+
+    const depositRoot = globalMerkleTree.root();
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
+
+    const depositInput = {
+      root: depositRoot,
+      publicAmount: depositPublicAmountNumber.toString(),
+      extDataHash: depositCalculatedExtDataHash,
+      mintAddress: depositInputs[0].mintAddress,
+      
+      inputNullifier: depositInputNullifiers,
+      inAmount: depositInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: depositInputs.map(x => x.keypair.privkey),
+      inBlinding: depositInputs.map(x => x.blinding.toString(10)),
+      inPathIndices: depositInputMerklePathIndices,
+      inPathElements: depositInputMerklePathElements,
+      
+      outputCommitment: depositOutputCommitments,
+      outAmount: depositOutputs.map(x => x.amount.toString(10)),
+      outBlinding: depositOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: depositOutputs.map(x => x.keypair.pubkey),
+    };
+
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const depositProofResult = await prove(depositInput, keyBasePath);
+    const depositProofInBytes = parseProofToBytesArray(depositProofResult.proof);
+    const depositInputsInBytes = parseToBytesArray(depositProofResult.publicSignals);
+
+    const depositProofToSubmit = {
+      proofA: depositProofInBytes.proofA,
+      proofB: depositProofInBytes.proofB.flat(),
+      proofC: depositProofInBytes.proofC,
+      root: depositInputsInBytes[0],
+      publicAmount: depositInputsInBytes[1],
+      extDataHash: depositInputsInBytes[2],
+      inputNullifiers: [depositInputsInBytes[3], depositInputsInBytes[4]],
+      outputCommitments: [depositInputsInBytes[5], depositInputsInBytes[6]],
+    };
+
+    const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
+    const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
+    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
+
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+
+    const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    const depositTestProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount
+    );
+    
+    const depositLookupTableAddress = await createGlobalTestALT(provider.connection, authority, depositTestProtocolAddresses);
+
+    const depositTx = await program.methods
+      .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: depositNullifiers.nullifier0PDA,
+        nullifier1: depositNullifiers.nullifier1PDA,
+        nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
+        nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
+        commitment0: depositCommitments.commitment0PDA,
+        commitment1: depositCommitments.commitment1PDA,
+        globalConfig: globalConfigPDA,
+        signer: randomUser.publicKey,
+        recipient: recipient.publicKey,
+        mint: splTokenMint.publicKey,
+        signerTokenAccount: randomUserTokenAccount,
+        recipientTokenAccount: recipientTokenAccount,
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnits])
+      .transaction();
+
+    const depositVersionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      randomUser.publicKey,
+      depositTx.instructions,
+      depositLookupTableAddress
+    );
+    
+    const depositTxSig = await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      depositVersionedTx,
+      [randomUser]
+    );
+
+    expect(depositTxSig).to.be.a('string');
+
+    // Add commitments to the merkle tree
+    for (const commitment of depositOutputs) {
+      globalMerkleTree.insert(await commitment.getCommitment());
+    }
+
+    // Step 2: User creates a valid withdrawal with legitimate recipient
+    const withdrawAmount = 50000;
+    const withdrawFee = calculateWithdrawalFee(withdrawAmount);
+
+    const withdrawInputs = [
+      depositOutputs[0], // Use the deposited UTXO
+      new Utxo({ lightWasm, mintAddress: mintAddressField })
+    ];
+
+    const changeAmount = depositAmount - depositFee - withdrawAmount - withdrawFee;
+    const withdrawOutputs = [
+      new Utxo({ 
+        lightWasm, 
+        amount: changeAmount.toString(),
+        index: globalMerkleTree._layers[0].length,
+        mintAddress: mintAddressField
+      }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressField })
+    ];
+
+    // User's legitimate withdrawal with their recipient
+    const legitimateExtData = {
+      recipient: recipientTokenAccount, // Legitimate recipient
+      extAmount: new anchor.BN(-withdrawAmount),
+      encryptedOutput1: Buffer.from("legitimateEncryptedOutput1"),
+      encryptedOutput2: Buffer.from("legitimateEncryptedOutput2"),
+      fee: new anchor.BN(withdrawFee),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    const withdrawInputMerklePathIndices = withdrawInputs.map((input) => input.index || 0);
+    const withdrawInputMerklePathElements = withdrawInputs.map((input, i) => {
+      if (i === 0) {
+        return globalMerkleTree.path(input.index).pathElements;
+      }
+      return [...new Array(globalMerkleTree.levels).fill(0)];
+    });
+
+    const withdrawInputNullifiers = await Promise.all(withdrawInputs.map(x => x.getNullifier()));
+    const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
+
+    const withdrawRoot = globalMerkleTree.root();
+    const legitimateExtDataHash = getExtDataHash(legitimateExtData);
+    const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
+
+    const withdrawCircuitInput = {
+      root: withdrawRoot,
+      publicAmount: withdrawPublicAmountNumber.toString(),
+      extDataHash: legitimateExtDataHash,
+      mintAddress: withdrawInputs[0].mintAddress,
+      
+      inputNullifier: withdrawInputNullifiers,
+      inAmount: withdrawInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
+      inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+      inPathIndices: withdrawInputMerklePathIndices,
+      inPathElements: withdrawInputMerklePathElements,
+      
+      outputCommitment: withdrawOutputCommitments,
+      outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
+      outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+    };
+
+    const {proof: withdrawProof, publicSignals: withdrawPublicSignals} = await prove(withdrawCircuitInput, keyBasePath);
+
+    const withdrawProofInBytes = parseProofToBytesArray(withdrawProof);
+    const withdrawInputsInBytes = parseToBytesArray(withdrawPublicSignals);
+    
+    const withdrawProofToSubmit = {
+      proofA: withdrawProofInBytes.proofA,
+      proofB: withdrawProofInBytes.proofB.flat(),
+      proofC: withdrawProofInBytes.proofC,
+      root: withdrawInputsInBytes[0],
+      publicAmount: withdrawInputsInBytes[1],
+      extDataHash: withdrawInputsInBytes[2],
+      inputNullifiers: [withdrawInputsInBytes[3], withdrawInputsInBytes[4]],
+      outputCommitments: [withdrawInputsInBytes[5], withdrawInputsInBytes[6]],
+    };
+
+    const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
+
+    // Step 3: Attacker tries to frontrun by changing the recipient to their own address
+    // Create attacker's token account
+    const attackerRecipientTokenAccount = attackerTokenAccount;
+
+    // Attacker creates their own extData with THEIR recipient
+    const attackerExtData = {
+      recipient: attackerRecipientTokenAccount, // Attacker's recipient!
+      extAmount: new anchor.BN(-withdrawAmount),
+      encryptedOutput1: Buffer.from("legitimateEncryptedOutput1"), // Same encrypted outputs
+      encryptedOutput2: Buffer.from("legitimateEncryptedOutput2"),
+      fee: new anchor.BN(withdrawFee),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    // Attacker tries to submit the transaction with their recipient but the legitimate proof
+    let frontrunFailed = false;
+    try {
+      const attackerTx = await program.methods
+        .transactSpl(withdrawProofToSubmit, createExtDataMinified(attackerExtData), attackerExtData.encryptedOutput1, attackerExtData.encryptedOutput2)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          nullifier0: withdrawNullifiers.nullifier0PDA,
+          nullifier1: withdrawNullifiers.nullifier1PDA,
+          nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
+          nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
+          commitment0: withdrawCommitments.commitment0PDA,
+          commitment1: withdrawCommitments.commitment1PDA,
+          globalConfig: globalConfigPDA,
+          signer: attacker.publicKey, // Attacker signs
+          recipient: attacker.publicKey,
+          mint: splTokenMint.publicKey,
+          signerTokenAccount: attackerTokenAccount,
+          recipientTokenAccount: attackerRecipientTokenAccount, // Attacker's token account
+          treeAta: treeAta,
+          feeRecipientAta: feeRecipientTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([attacker])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+
+      const attackerVersionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        attacker.publicKey,
+        attackerTx.instructions,
+        depositLookupTableAddress
+      );
+
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        attackerVersionedTx,
+        [attacker]
+      );
+
+      // If we get here, the attack succeeded (this should NOT happen)
+      frontrunFailed = false;
+    } catch (error) {
+      // Expected: The transaction should fail because extDataHash doesn't match
+      frontrunFailed = true;
+      expect(error).to.exist;
+      // The error should be ExtDataHashMismatch because the recipient is part of the hash
+    }
+
+    // Verify that the frontrun attack failed
+    expect(frontrunFailed).to.be.true;
+
+    // Step 4: Verify that the legitimate transaction still works
+    const legitimateTx = await program.methods
+      .transactSpl(withdrawProofToSubmit, createExtDataMinified(legitimateExtData), legitimateExtData.encryptedOutput1, legitimateExtData.encryptedOutput2)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: withdrawNullifiers.nullifier0PDA,
+        nullifier1: withdrawNullifiers.nullifier1PDA,
+        nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
+        nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
+        commitment0: withdrawCommitments.commitment0PDA,
+        commitment1: withdrawCommitments.commitment1PDA,
+        globalConfig: globalConfigPDA,
+        signer: randomUser.publicKey,
+        recipient: recipient.publicKey,
+        mint: splTokenMint.publicKey,
+        signerTokenAccount: randomUserTokenAccount,
+        recipientTokenAccount: recipientTokenAccount,
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnits])
+      .transaction();
+
+    const legitimateVersionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      randomUser.publicKey,
+      legitimateTx.instructions,
+      depositLookupTableAddress
+    );
+    
+    const legitimateTxSig = await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      legitimateVersionedTx,
+      [randomUser]
+    );
+
+    expect(legitimateTxSig).to.be.a('string');
+
+    // Verify the legitimate recipient received the tokens
+    const recipientTokenBalanceAfter = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
+    expect(parseInt(recipientTokenBalanceAfter.value.amount)).to.be.greaterThan(0);
+
+    // Add withdrawal commitments to the merkle tree
+    for (const commitment of withdrawOutputs) {
+      globalMerkleTree.insert(await commitment.getCommitment());
+    }
+  });
+
 });
