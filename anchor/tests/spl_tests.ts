@@ -3738,4 +3738,320 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
       globalMerkleTree.insert(await commitment.getCommitment());
     }
   });
+
+  it("SPL Fails transact instruction for the wrong extDataHash", async () => {
+    // Create a sample ExtData object
+    const extData = {
+      recipient: await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey),
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    // Create a different ExtData to generate a different hash
+    const modifiedExtData = {
+      recipient: await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey),
+      extAmount: new anchor.BN(100), // Different amount (positive instead of negative)
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    // Calculate the hash using the modified data
+    const incorrectExtDataHash = getExtDataHash(modifiedExtData);
+    
+    // Create a Proof object with the incorrect hash
+    const proof = {
+      proofA: Array(64).fill(1),
+      proofB: Array(128).fill(2),
+      proofC: Array(64).fill(3),
+      root: ZERO_BYTES[DEFAULT_HEIGHT],
+      inputNullifiers: [
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(200)),
+      extDataHash: Array.from(incorrectExtDataHash)
+    };
+
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
+    const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
+
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    try {
+      const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+        units: 1_000_000 
+      });
+      
+      const tx = await program.methods
+        .transactSpl(proof, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          nullifier2: nullifier2PDA,
+          nullifier3: nullifier3PDA,
+          commitment0: commitment0PDA,
+          commitment1: commitment1PDA,
+          globalConfig: globalConfigPDA,
+          signer: randomUser.publicKey,
+          recipient: recipient.publicKey,
+          mint: splTokenMint.publicKey,
+          signerTokenAccount: randomUserTokenAccount,
+          recipientTokenAccount: extData.recipient,
+          treeAta: treeAta,
+          feeRecipientAta: feeRecipientTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+      
+      const versionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        randomUser.publicKey,
+        tx.instructions,
+        lookupTableAddress
+      );
+      
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        versionedTx,
+        [randomUser]
+      );
+      
+      expect.fail("Transaction should have failed due to invalid extDataHash but succeeded");
+    } catch (error) {
+      const errorString = error.toString();
+      expect(errorString.includes("0x1771") || errorString.includes("ExtDataHashMismatch")).to.be.true;
+    }
+  });
+
+  it("SPL Fails transact instruction for an unknown root", async () => {
+    const extData = {
+      recipient: await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey),
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    const invalidRoot = Array(32).fill(123); // Different from any known root
+    
+    const proof = {
+      proofA: Array(64).fill(1),
+      proofB: Array(128).fill(2),
+      proofC: Array(64).fill(3),
+      root: invalidRoot,
+      inputNullifiers: [
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(200)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
+    const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
+
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    try {
+      const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+        units: 1_000_000 
+      });
+      
+      const tx = await program.methods
+        .transactSpl(proof, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          nullifier2: nullifier2PDA,
+          nullifier3: nullifier3PDA,
+          commitment0: commitment0PDA,
+          commitment1: commitment1PDA,
+          globalConfig: globalConfigPDA,
+          signer: randomUser.publicKey,
+          recipient: recipient.publicKey,
+          mint: splTokenMint.publicKey,
+          signerTokenAccount: randomUserTokenAccount,
+          recipientTokenAccount: extData.recipient,
+          treeAta: treeAta,
+          feeRecipientAta: feeRecipientTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+      
+      const versionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        randomUser.publicKey,
+        tx.instructions,
+        lookupTableAddress
+      );
+      
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        versionedTx,
+        [randomUser]
+      );
+      
+      expect.fail("Transaction should have failed due to unknown root but succeeded");
+    } catch (error) {
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x1772") || 
+        errorString.includes("UnknownRoot") ||
+        errorString.includes("Transaction simulation failed")
+      ).to.be.true;
+    }
+  });
+
+  it("SPL Fails transact instruction for zero root", async () => {
+    const extData = {
+      recipient: await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey),
+      extAmount: new anchor.BN(-100),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(100),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    const calculatedExtDataHash = getExtDataHash(extData);
+    const zeroRoot = Array(32).fill(0);
+    
+    const proof = {
+      proofA: Array(64).fill(1),
+      proofB: Array(128).fill(2),
+      proofC: Array(64).fill(3),
+      root: zeroRoot,
+      inputNullifiers: [
+        Array.from(generateRandomNullifier()),
+        Array.from(generateRandomNullifier())
+      ],
+      outputCommitments: [
+        Array(32).fill(3),
+        Array(32).fill(4)
+      ],
+      publicAmount: bnToBytes(new anchor.BN(200)),
+      extDataHash: Array.from(calculatedExtDataHash)
+    };
+
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
+    const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
+
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    try {
+      const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+        units: 1_000_000 
+      });
+      
+      const tx = await program.methods
+        .transactSpl(proof, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          nullifier2: nullifier2PDA,
+          nullifier3: nullifier3PDA,
+          commitment0: commitment0PDA,
+          commitment1: commitment1PDA,
+          globalConfig: globalConfigPDA,
+          signer: randomUser.publicKey,
+          recipient: recipient.publicKey,
+          mint: splTokenMint.publicKey,
+          signerTokenAccount: randomUserTokenAccount,
+          recipientTokenAccount: extData.recipient,
+          treeAta: treeAta,
+          feeRecipientAta: feeRecipientTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+      
+      const versionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        randomUser.publicKey,
+        tx.instructions,
+        lookupTableAddress
+      );
+      
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        versionedTx,
+        [randomUser]
+      );
+      
+      expect.fail("Transaction should have failed due to zero root but succeeded");
+    } catch (error) {
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x1772") || 
+        errorString.includes("UnknownRoot") ||
+        errorString.includes("Transaction simulation failed")
+      ).to.be.true;
+    }
+  });
+
 });
