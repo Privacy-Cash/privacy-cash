@@ -369,7 +369,7 @@ describe("zkcash", () => {
       await provider.sendAndConfirm(createAttackerTokenAccountTx, [authority]);
 
       // mint tokens to token accounts
-      const mintAmount = 1000000000000; // 1 million tokens with 6 decimals
+      const mintAmount = 100_000_000_000_000; // 100 million tokens with 6 decimals
       const mintToRandomUserTx = new anchor.web3.Transaction().add(
         createMintToInstruction(
           splTokenMint.publicKey,
@@ -4237,6 +4237,248 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
       }
       
       expect(hasExpectedError, `Expected ExtDataHashMismatch (0x1771) error but got: ${errorString}`).to.be.true;
+    }
+  });
+
+  it("Can execute SPL token deposit for amount larger than SOL deposit limit", async () => {
+    // airdrop 1000 SPL tokens to the recipient
+
+    const depositAmount = 50_000_000_000_000; // 50 SPL tokens (50x the SOL deposit limit)
+    const calculatedDepositFee = calculateDepositFee(depositAmount);
+
+    // Get token accounts for signer (randomUser) and recipient
+    const signerTokenAccount = randomUserTokenAccount;
+    const recipientTokenAccount = await getAssociatedTokenAddress(
+      splTokenMint.publicKey,
+      recipient.publicKey
+    );
+
+    // Create recipient token account manually since it's now UncheckedAccount
+    try {
+      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          randomUser.publicKey, // payer
+          recipientTokenAccount, // associatedToken
+          recipient.publicKey, // owner
+          splTokenMint.publicKey // mint
+        )
+      );
+      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
+    } catch (error) {
+      // Account might already exist, which is fine
+      console.log("Recipient token account might already exist:", error.message);
+    }
+
+    const extData = {
+      recipient: recipientTokenAccount, // Use the token account, not the user account
+      extAmount: new anchor.BN(depositAmount), // Positive ext amount (deposit)
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(calculatedDepositFee),
+      feeRecipient: feeRecipientTokenAccount, // Use the fee recipient ATA, not the account
+      mintAddress: splTokenMint.publicKey, // SPL token mint address
+    };
+
+    // Convert SPL token mint address to a field element that the circuit can understand
+    // Get the mint address as a field element for the circuit
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+    
+    const inputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressField }),
+      new Utxo({ lightWasm, mintAddress: mintAddressField })
+    ];
+
+    const outputAmount = (depositAmount - calculatedDepositFee).toString();
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount, index: globalMerkleTree._layers[0].length, mintAddress: mintAddressField }), // Combined amount minus fee
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressField }) // Empty UTXO
+    ];
+
+   // Create mock Merkle path data (normally built from the tree)
+   const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    
+   // inputMerklePathElements won't be checked for empty utxos. so we need to create a sample full path
+   // Create the Merkle paths for each input
+   const inputMerklePathElements = inputs.map(() => {
+     // Return an array of zero elements as the path for each input
+     // Create a copy of the zeroElements array to avoid modifying the original
+     return [...new Array(globalMerkleTree.levels).fill(0)];
+   });
+
+   // Resolve all async operations before creating the input object
+   // Await nullifiers and commitments to get actual values instead of Promise objects
+   const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+   const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+
+   // Use the properly calculated Merkle tree root
+   const root = globalMerkleTree.root();
+
+   // Calculate the hash correctly using our utility
+   const calculatedExtDataHash = getExtDataHash(extData);
+   const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
+
+   const input = {
+     // Circuit inputs in exact order
+     root: root,
+     publicAmount: publicAmountNumber.toString(),
+     extDataHash: calculatedExtDataHash,
+     mintAddress: inputs[0].mintAddress,
+     
+     // Input nullifiers and UTXO data
+     inputNullifier: inputNullifiers,
+     inAmount: inputs.map(x => x.amount.toString(10)),
+     inPrivateKey: inputs.map(x => x.keypair.privkey),
+     inBlinding: inputs.map(x => x.blinding.toString(10)),
+     inPathIndices: inputMerklePathIndices,
+     inPathElements: inputMerklePathElements,
+     
+     // Output commitments and UTXO data
+     outputCommitment: outputCommitments,
+     outAmount: outputs.map(x => x.amount.toString(10)),
+     outBlinding: outputs.map(x => x.blinding.toString(10)),
+     outPubkey: outputs.map(x => x.keypair.pubkey),
+   };
+
+   // Path to the proving key files (wasm and zkey)
+   // Try with both circuits to see which one works
+   const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+   const {proof, publicSignals} = await prove(input, keyBasePath);
+
+   publicSignals.forEach((signal, index) => {
+     const signalStr = signal.toString();
+     let matchedKey = 'unknown';
+     
+     // Try to identify which input this signal matches
+     for (const [key, value] of Object.entries(input)) {
+       if (Array.isArray(value)) {
+         if (value.some(v => v.toString() === signalStr)) {
+           matchedKey = key;
+           break;
+         }
+       } else if (value.toString() === signalStr) {
+         matchedKey = key;
+         break;
+       }
+     }
+   });
+   
+
+   const proofInBytes = parseProofToBytesArray(proof);
+   const inputsInBytes = parseToBytesArray(publicSignals);
+   
+   // Create a Proof object with the correctly calculated hash
+   const proofToSubmit = {
+     proofA: proofInBytes.proofA, // 64-byte array for proofA
+     proofB: proofInBytes.proofB.flat(), // 128-byte array for proofB  
+     proofC: proofInBytes.proofC, // 64-byte array for proofC
+     root: inputsInBytes[0],
+     publicAmount: inputsInBytes[1],
+     extDataHash: inputsInBytes[2],
+     inputNullifiers: [
+       inputsInBytes[3],
+       inputsInBytes[4]
+     ],
+     outputCommitments: [
+       inputsInBytes[5],
+       inputsInBytes[6]
+     ],
+   };
+
+   // Derive nullifier PDAs
+   const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+   const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
+
+   // Derive commitment PDAs
+   const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+
+  const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+  // feeRecipientAta is already calculated above
+
+   // Create Address Lookup Table for transaction size optimization
+   const testProtocolAddresses = getTestProtocolAddressesWithMint(
+    program.programId,
+    authority.publicKey,
+    treeAta,
+    feeRecipient.publicKey,
+    feeRecipientTokenAccount
+  );
+   
+   const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    // Get token balances before transaction
+    const signerTokenBalanceBefore = await provider.connection.getTokenAccountBalance(signerTokenAccount);
+    
+    // Check if recipient token account exists, if not, it will be created by init_if_needed
+    let recipientTokenBalanceBefore;
+    try {
+      recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
+    } catch (error) {
+      // Account doesn't exist yet, will be created by init_if_needed
+      recipientTokenBalanceBefore = { value: { amount: '0' } };
+    }
+
+    // Execute SPL token deposit transaction
+    const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    const depositTx = await program.methods
+      .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+      .accounts({
+        treeAccount: treeAccountPDA,
+        nullifier0: nullifier0PDA,
+        nullifier1: nullifier1PDA,
+        nullifier2: crossCheckNullifiers.nullifier2PDA,
+        nullifier3: crossCheckNullifiers.nullifier3PDA,
+        commitment0: commitment0PDA,
+        commitment1: commitment1PDA,
+        globalConfig: globalConfigPDA,
+        signer: randomUser.publicKey,
+        recipient: recipient.publicKey,
+        mint: splTokenMint.publicKey,
+        signerTokenAccount: signerTokenAccount,
+        recipientTokenAccount: recipientTokenAccount,
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnits])
+      .transaction();
+
+    // Create versioned transaction with ALT
+    const depositVersionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      randomUser.publicKey,
+      depositTx.instructions,
+      lookupTableAddress
+    );
+    
+    // Send and confirm versioned transaction
+    const depositTxSig = await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      depositVersionedTx,
+      [randomUser]
+    );
+
+    expect(depositTxSig).to.be.a('string');
+
+    // Get token balances after transaction
+    const signerTokenBalanceAfter = await provider.connection.getTokenAccountBalance(signerTokenAccount);
+    const recipientTokenBalanceAfter = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
+
+    // Verify token balances
+    const signerTokenDiff = signerTokenBalanceAfter.value.amount - signerTokenBalanceBefore.value.amount;
+    const recipientTokenDiff = recipientTokenBalanceAfter.value.amount - recipientTokenBalanceBefore.value.amount;
+
+    expect(signerTokenDiff).to.be.equals(-depositAmount); // Signer should have less tokens
+    expect(recipientTokenDiff).to.be.equals(0); // Recipient should not receive tokens directly (they're in the tree)
+
+    // Add commitments to the merkle tree
+    for (const commitment of outputs) {
+      globalMerkleTree.insert(await commitment.getCommitment());
     }
   });
 

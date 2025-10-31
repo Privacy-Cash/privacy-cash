@@ -336,15 +336,8 @@ pub mod zkcash {
         // verify the proof
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
-        // For SPL tokens, we know it's not native SOL
         if ext_amount > 0 {
-            // Check deposit limit for deposits
-            let deposit_amount = ext_amount as u64;
-            require!(
-                deposit_amount <= tree_account.max_deposit_amount,
-                ErrorCode::DepositLimitExceeded
-            );
-            
+            // For SPL tokens, we don't limit the amount of tokens deposited.
             // SPL Token deposit: transfer from signer's token account to tree's ATA
             token::transfer(
                 CpiContext::new(
