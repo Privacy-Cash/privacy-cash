@@ -24,6 +24,14 @@ pub const ADMIN_PUBKEY: Option<Pubkey> = None;
 #[cfg(not(any(feature = "localnet", test)))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM"));
 
+#[cfg(any(feature = "localnet", test))]
+pub const ALLOW_ALL_SPL_TOKENS: bool = true;
+
+#[cfg(not(any(feature = "localnet", test)))]
+pub const ALLOW_ALL_SPL_TOKENS: bool = false;
+
+pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")];
+
 #[program]
 pub mod zkcash {
     use crate::utils::{verify_proof, VERIFYING_KEY};
@@ -284,14 +292,15 @@ pub mod zkcash {
             ErrorCode::UnknownRoot
         );
 
-        // check if the ext_data hashes to the same ext_data in the proof
-        let mint_bytes = ext_data.mint_address.to_bytes();
-        // For SOL, use all 32 bytes; for SPL tokens, use only first 16 bytes
-        let mint_bytes_for_hash: &[u8] = if ext_data.mint_address == utils::SOL_ADDRESS {
-            &mint_bytes
-        } else {
-            &mint_bytes[..16]
-        };
+        require!(
+            ALLOW_ALL_SPL_TOKENS || ALLOWED_TOKENS.contains(&ext_data.mint_address),
+            ErrorCode::InvalidMintAddress
+        );
+
+        // For SOL, use all 32 bytes; for SPL tokens, use only first 31 bytes because circuit only supports 254 bits.
+        // This is still safe because ALLOWED_TOKENS only has limited tokens that don't have the same first 31 bytes.
+        // Also, 31 bytes collision is never known to happen, and such Ethereum only has 20 bytes for pubkey.
+        let mint_bytes_for_hash: &[u8] = &ext_data.mint_address.to_bytes()[..31];
         let calculated_ext_data_hash = utils::calculate_complete_ext_data_hash(
             ext_data.recipient,
             ext_data.ext_amount,
@@ -793,4 +802,6 @@ pub enum ErrorCode {
     MerkleTreeFull,
     #[msg("Invalid token account: account is not owned by the token program")]
     InvalidTokenAccount,
+    #[msg("Invalid mint address: mint address is not allowed")]
+    InvalidMintAddress,
 }

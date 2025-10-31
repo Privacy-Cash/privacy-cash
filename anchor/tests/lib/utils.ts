@@ -74,7 +74,7 @@ export function getExtDataHash(extData: {
   const isSolAddress = Buffer.from(mintAddressBytes).equals(Buffer.from(solAddressBytes));
   const mintAddressBytesForHash = isSolAddress 
     ? mintAddressBytes 
-    : mintAddressBytes.slice(0, 16);
+    : mintAddressBytes.slice(0, 31);
 
   // Define the borsh schema matching the Rust struct
   const schema = {
