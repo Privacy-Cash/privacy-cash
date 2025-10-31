@@ -1,4 +1,5 @@
 .DS_Store
+target/
 program/target/
 artifacts/circuits/powersOfTau28_hez_final_18.ptau
 artifacts/circuits/transaction2_0.zkey
