@@ -49,7 +49,8 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
 
 4. Run integration test:
    ```bash
-   anchor test -- --features localnet
+   npm run test:localnet
+   npm run test:mint-checked
    ```
 
 5. Deploy the program to devnet:

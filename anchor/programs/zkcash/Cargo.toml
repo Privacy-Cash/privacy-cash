@@ -21,6 +21,7 @@ anchor-debug = []
 
 # Network-specific features for authorization
 localnet = []     # For local development and testing (no auth required)
+localnet-mint-checked = []  # For testing with mint authority checks
 
 [dependencies]
 anchor-lang = { version = "0.31.0", features = ["init-if-needed"] }

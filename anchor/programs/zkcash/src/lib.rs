@@ -18,10 +18,10 @@ use merkle_tree::MerkleTree;
 // Constants
 const MERKLE_TREE_HEIGHT: u8 = 26;
 
-#[cfg(any(feature = "localnet", test))]
+#[cfg(any(feature = "localnet", feature = "localnet-mint-checked", test))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = None;
 
-#[cfg(not(any(feature = "localnet", test)))]
+#[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", test)))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM"));
 
 #[cfg(any(feature = "localnet", test))]
