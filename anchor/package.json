@@ -3,7 +3,8 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "test:localnet": "TEST_FILES='tests/spl_tests.ts tests/sol_tests.ts' anchor test -- --features localnet",
+    "test:spl": "TEST_FILES='tests/spl_tests.ts' anchor test -- --features localnet",
+    "test:sol": "TEST_FILES='tests/sol_tests.ts' anchor test -- --features localnet",
     "test:mint-checked": "TEST_FILES='tests/spl_mint_test.ts' anchor test -- --features localnet-mint-checked"
   },
   "dependencies": {

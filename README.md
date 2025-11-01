@@ -49,7 +49,8 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
 
 4. Run integration test:
    ```bash
-   npm run test:localnet
+   npm run test:sol
+   npm run test:spl
    npm run test:mint-checked
    ```
 
