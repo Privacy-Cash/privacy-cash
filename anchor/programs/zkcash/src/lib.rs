@@ -6,7 +6,8 @@ use ark_bn254::Fr;
 use anchor_spl::token::{self, Token, TokenAccount, Mint, Transfer as SplTransfer};
 use anchor_spl::associated_token::AssociatedToken;
 
-declare_id!("9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD");
+// IMPORTANT!!!!!!!: Change it back to 9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD after devnet testing is done!!!!!!!
+declare_id!("2H723rrywJVPGRdqC2iL8Egcz2A3VCkEQ6hmt8XGcGix");
 
 pub mod merkle_tree;
 pub mod utils;
@@ -21,8 +22,9 @@ const MERKLE_TREE_HEIGHT: u8 = 26;
 #[cfg(any(feature = "localnet", feature = "localnet-mint-checked", test))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = None;
 
+// IMPORTANT!!!!!!!: Change it back to AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM after devnet testing is done!!!!!!!
 #[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", test)))]
-pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM"));
+pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf"));
 
 #[cfg(any(feature = "localnet", test))]
 pub const ALLOW_ALL_SPL_TOKENS: bool = true;
