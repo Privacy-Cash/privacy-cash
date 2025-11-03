@@ -353,7 +353,6 @@ pub mod zkcash {
                 ext_amount as u64,
             )?;
         } else if ext_amount < 0 {
-            // No limit on withdrawals
             let ext_amount_abs: u64 = ext_amount.checked_neg()
                 .ok_or(ErrorCode::ArithmeticOverflow)?
                 .try_into()
