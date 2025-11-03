@@ -87,7 +87,7 @@ pub mod zkcash {
     }
 
     /**
-     * Update global configuration. Only the authority can call this.
+     * Update global configuration for SOL. Only the authority can call this.
      */
     pub fn update_global_config(
         ctx: Context<UpdateGlobalConfig>, 
