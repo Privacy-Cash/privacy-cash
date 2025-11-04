@@ -128,7 +128,7 @@ pub mod zkcash {
         let global_config = &ctx.accounts.global_config;
 
         // Reconstruct full ExtData from minified version and context accounts
-        let ext_data = ExtData::from_minified_sol(&ctx, ext_data_minified);
+        let ext_data = ExtData::from_minified(&ctx, ext_data_minified);
 
         // check if proof.root is in the tree_account's proof history
         require!(
@@ -456,7 +456,7 @@ pub struct ExtDataMinified {
 }
 
 impl ExtData {
-    fn from_minified_sol(ctx: &Context<Transact>, minified: ExtDataMinified) -> Self {
+    fn from_minified(ctx: &Context<Transact>, minified: ExtDataMinified) -> Self {
         Self {
             recipient: ctx.accounts.recipient.key(),
             ext_amount: minified.ext_amount,
