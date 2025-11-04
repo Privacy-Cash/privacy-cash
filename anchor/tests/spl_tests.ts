@@ -4,7 +4,7 @@ import { Zkcash } from "../target/types/zkcash";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddress, createInitializeMintInstruction, createAssociatedTokenAccountInstruction, createMintToInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
-import { getExtDataHash } from "./lib/utils";
+import { getExtDataHashForSpl } from "./lib/utils";
 import { DEFAULT_HEIGHT, FIELD_SIZE, ROOT_HISTORY_SIZE, ZERO_BYTES, DEPOSIT_FEE_RATE, WITHDRAW_FEE_RATE, FEE_RECIPIENT_ACCOUNT } from "./lib/constants";
 
 // SOL address constant (matches the Rust program)
@@ -481,7 +481,7 @@ describe("zkcash", () => {
    const root = globalMerkleTree.root();
 
    // Calculate the hash correctly using our utility
-   const calculatedExtDataHash = getExtDataHash(extData);
+   const calculatedExtDataHash = getExtDataHashForSpl(extData);
    const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
 
    const input = {
@@ -713,7 +713,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee.toNumber());
 
     const depositInput = {
@@ -874,7 +874,7 @@ describe("zkcash", () => {
     const firstInputNullifiers = await Promise.all(firstInputs.map(x => x.getNullifier()));
     const firstOutputCommitments = await Promise.all(firstOutputs.map(x => x.getCommitment()));
     const firstRoot = globalMerkleTree.root();
-    const firstExtDataHash = getExtDataHash(firstExtData);
+    const firstExtDataHash = getExtDataHashForSpl(firstExtData);
 
     const firstProofInput = {
       root: firstRoot,
@@ -1019,7 +1019,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -1173,7 +1173,7 @@ describe("zkcash", () => {
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = globalMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
     const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
     const withdrawCircuitInput = {
@@ -1351,7 +1351,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -1505,7 +1505,7 @@ describe("zkcash", () => {
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = globalMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
     const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
     const withdrawCircuitInput = {
@@ -1705,7 +1705,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -1859,7 +1859,7 @@ describe("zkcash", () => {
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = globalMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
     const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
     const withdrawCircuitInput = {
@@ -2034,7 +2034,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -2181,7 +2181,7 @@ describe("zkcash", () => {
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = globalMerkleTree.root();
-    const legitimateExtDataHash = getExtDataHash(legitimateExtData);
+    const legitimateExtDataHash = getExtDataHashForSpl(legitimateExtData);
     const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
     const withdrawCircuitInput = {
@@ -2403,7 +2403,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -2560,7 +2560,7 @@ describe("zkcash", () => {
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = globalMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
 
     const withdrawCircuitInput = {
       root: withdrawRoot,
@@ -2725,7 +2725,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -2907,7 +2907,7 @@ describe("zkcash", () => {
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = globalMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
 
     const withdrawCircuitInput = {
       root: withdrawRoot,
@@ -3100,7 +3100,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -3282,7 +3282,7 @@ describe("zkcash", () => {
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = globalMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
 
     const withdrawCircuitInput = {
       root: withdrawRoot,
@@ -3475,7 +3475,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -3632,7 +3632,7 @@ describe("zkcash", () => {
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = globalMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
 
     const withdrawCircuitInput = {
       root: withdrawRoot,
@@ -3762,7 +3762,7 @@ describe("zkcash", () => {
     };
 
     // Calculate the hash using the modified data
-    const incorrectExtDataHash = getExtDataHash(modifiedExtData);
+    const incorrectExtDataHash = getExtDataHashForSpl(modifiedExtData);
     
     // Create a Proof object with the incorrect hash
     const proof = {
@@ -3860,7 +3860,7 @@ describe("zkcash", () => {
       mintAddress: splTokenMint.publicKey,
     };
 
-    const calculatedExtDataHash = getExtDataHash(extData);
+    const calculatedExtDataHash = getExtDataHashForSpl(extData);
     const invalidRoot = Array(32).fill(123); // Different from any known root
     
     const proof = {
@@ -3962,7 +3962,7 @@ describe("zkcash", () => {
       mintAddress: splTokenMint.publicKey,
     };
 
-    const calculatedExtDataHash = getExtDataHash(extData);
+    const calculatedExtDataHash = getExtDataHashForSpl(extData);
     const zeroRoot = Array(32).fill(0);
     
     const proof = {
@@ -4103,7 +4103,7 @@ describe("zkcash", () => {
     };
 
     // Calculate the hash using the modified data (with different mint address)
-    const incorrectExtDataHash = getExtDataHash(modifiedExtData);
+    const incorrectExtDataHash = getExtDataHashForSpl(modifiedExtData);
     
     // Create a Proof object with the incorrect hash
     const proof = {
@@ -4313,7 +4313,7 @@ describe("zkcash", () => {
    const root = globalMerkleTree.root();
 
    // Calculate the hash correctly using our utility
-   const calculatedExtDataHash = getExtDataHash(extData);
+   const calculatedExtDataHash = getExtDataHashForSpl(extData);
    const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
 
    const input = {
@@ -4545,7 +4545,7 @@ describe("zkcash", () => {
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
     
     const depositRoot = globalMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(smallDepositAmount - depositFee);
     
     const depositInput = {
@@ -4748,7 +4748,7 @@ describe("zkcash", () => {
       mintAddress: splTokenMint.publicKey,
     };
     
-    const largeExtDataHash = getExtDataHash(largeExtData);
+    const largeExtDataHash = getExtDataHashForSpl(largeExtData);
     
     const largeCircuitInput = {
       root: largeRoot,
@@ -4824,7 +4824,7 @@ describe("zkcash", () => {
     const invalidCircuitInput = {
       root: globalMerkleTree.root(),
       publicAmount: "0", // Balanced (no external transfer)
-      extDataHash: getExtDataHash(invalidExtData),
+      extDataHash: getExtDataHashForSpl(invalidExtData),
       mintAddress: invalidInputs[0].mintAddress,
       
       inputNullifier: invalidInputNullifiers,
