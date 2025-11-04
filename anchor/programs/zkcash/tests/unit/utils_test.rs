@@ -1201,7 +1201,7 @@ fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
         pub encrypted_output2: Vec<u8>,
         pub fee: u64,
         pub fee_recipient: Pubkey,
-        pub mint_address: Vec<u8>,
+        pub mint_address: Pubkey,
     }
     
     let manual_ext_data = TestCompleteExtData {
@@ -1211,7 +1211,7 @@ fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
         encrypted_output2: encrypted_output2.to_vec(),
         fee,
         fee_recipient,  // Use the same fee_recipient
-        mint_address: mint_address.to_bytes().to_vec(),
+        mint_address: mint_address,
     };
     
     let mut serialized = Vec::new();
