@@ -144,7 +144,7 @@ pub mod zkcash {
             &encrypted_output2,
             ext_data.fee,
             ext_data.fee_recipient,
-            &ext_data.mint_address.to_bytes(),
+            ext_data.mint_address,
         )?;
 
         require!(
@@ -303,7 +303,7 @@ pub mod zkcash {
         // This is still safe because ALLOWED_TOKENS only has limited tokens that don't have the same first 31 bytes.
         // Also, 31 bytes collision is never known to happen, and such Ethereum only has 20 bytes for pubkey.
         let mint_bytes_for_hash: &[u8] = &ext_data.mint_address.to_bytes()[..31];
-        let calculated_ext_data_hash = utils::calculate_complete_ext_data_hash(
+        let calculated_ext_data_hash = utils::calculate_complete_ext_data_hash_for_spl(
             ext_data.recipient,
             ext_data.ext_amount,
             &encrypted_output1,
