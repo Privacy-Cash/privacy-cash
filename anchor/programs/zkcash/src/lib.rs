@@ -123,7 +123,7 @@ pub mod zkcash {
      * 
      * Reentrant attacks are not possible, because nullifier creation is checked by anchor first.
      */
-    pub fn transact(ctx: Context<TransactSol>, proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>) -> Result<()> {
+    pub fn transact(ctx: Context<Transact>, proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>) -> Result<()> {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
         let global_config = &ctx.accounts.global_config;
 
@@ -456,7 +456,7 @@ pub struct ExtDataMinified {
 }
 
 impl ExtData {
-    fn from_minified_sol(ctx: &Context<TransactSol>, minified: ExtDataMinified) -> Self {
+    fn from_minified_sol(ctx: &Context<Transact>, minified: ExtDataMinified) -> Self {
         Self {
             recipient: ctx.accounts.recipient.key(),
             ext_amount: minified.ext_amount,
@@ -479,7 +479,7 @@ impl ExtData {
 
 #[derive(Accounts)]
 #[instruction(proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>)]
-pub struct TransactSol<'info> {
+pub struct Transact<'info> {
     #[account(
         mut,
         seeds = [b"merkle_tree"],
