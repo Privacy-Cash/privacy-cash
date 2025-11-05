@@ -80,21 +80,6 @@ function findNullifierPDAs(program: anchor.Program<any>, proof: any) {
   return { nullifier0PDA, nullifier1PDA };
 }
 
-// Find commitment PDAs for the given proof
-function findCommitmentPDAs(program: anchor.Program<any>, proof: any) {
-  const [commitment0PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("commitment0"), Buffer.from(proof.outputCommitments[0])],
-    program.programId
-  );
-  
-  const [commitment1PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("commitment1"), Buffer.from(proof.outputCommitments[1])],
-    program.programId
-  );
-  
-  return { commitment0PDA, commitment1PDA };
-}
-
 // Find cross-check nullifier PDAs for the given proof
 function findCrossCheckNullifierPDAs(program: anchor.Program<any>, proof: any) {
   const [nullifier2PDA] = PublicKey.findProgramAddressSync(
@@ -555,9 +540,6 @@ it("Fails deposit instruction for non USDC token mint", async () => {
    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-   // Derive commitment PDAs
-   const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
   const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
   // feeRecipientAta is already calculated above
 
@@ -597,8 +579,6 @@ it("Fails deposit instruction for non USDC token mint", async () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,

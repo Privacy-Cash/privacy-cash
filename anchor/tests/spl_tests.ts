@@ -80,21 +80,6 @@ function findNullifierPDAs(program: anchor.Program<any>, proof: any) {
   return { nullifier0PDA, nullifier1PDA };
 }
 
-// Find commitment PDAs for the given proof
-function findCommitmentPDAs(program: anchor.Program<any>, proof: any) {
-  const [commitment0PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("commitment0"), Buffer.from(proof.outputCommitments[0])],
-    program.programId
-  );
-  
-  const [commitment1PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("commitment1"), Buffer.from(proof.outputCommitments[1])],
-    program.programId
-  );
-  
-  return { commitment0PDA, commitment1PDA };
-}
-
 // Find cross-check nullifier PDAs for the given proof
 function findCrossCheckNullifierPDAs(program: anchor.Program<any>, proof: any) {
   const [nullifier2PDA] = PublicKey.findProgramAddressSync(
@@ -555,9 +540,6 @@ describe("zkcash", () => {
    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-   // Derive commitment PDAs
-   const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
   const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
   // feeRecipientAta is already calculated above
 
@@ -597,8 +579,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -785,8 +765,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         treeTokenAccount: treeTokenAccountPDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
@@ -910,7 +888,6 @@ describe("zkcash", () => {
 
     const firstNullifiers = findNullifierPDAs(program, firstProofToSubmit);
     const firstCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, firstProofToSubmit);
-    const firstCommitments = findCommitmentPDAs(program, firstProofToSubmit);
 
     // This should fail because we're trying to use the same nullifiers
     const firstTx = await program.methods
@@ -921,8 +898,6 @@ describe("zkcash", () => {
         nullifier1: firstNullifiers.nullifier1PDA,
         nullifier2: firstCrossCheckNullifiers.nullifier2PDA,
         nullifier3: firstCrossCheckNullifiers.nullifier3PDA,
-        commitment0: firstCommitments.commitment0PDA,
-        commitment1: firstCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -1088,8 +1063,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -1230,8 +1203,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -1420,8 +1391,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey, // Use regular recipient for deposit
@@ -1570,8 +1539,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: pdaRecipient,
@@ -1774,8 +1741,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -1925,8 +1890,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -2100,8 +2063,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -2249,8 +2210,6 @@ describe("zkcash", () => {
           nullifier1: withdrawNullifiers.nullifier1PDA,
           nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
           nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-          commitment0: withdrawCommitments.commitment0PDA,
-          commitment1: withdrawCommitments.commitment1PDA,
           globalConfig: globalConfigPDA,
           signer: attacker.publicKey, // Attacker signs
           recipient: attacker.publicKey,
@@ -2301,8 +2260,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -2472,8 +2429,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -2616,8 +2571,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -2803,8 +2756,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -2969,8 +2920,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -3178,8 +3127,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -3344,8 +3291,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -3544,8 +3489,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -3688,8 +3631,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -3784,7 +3725,6 @@ describe("zkcash", () => {
 
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -3811,8 +3751,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           globalConfig: globalConfigPDA,
           signer: randomUser.publicKey,
           recipient: recipient.publicKey,
@@ -3882,7 +3820,6 @@ describe("zkcash", () => {
 
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -3909,8 +3846,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           globalConfig: globalConfigPDA,
           signer: randomUser.publicKey,
           recipient: recipient.publicKey,
@@ -3984,7 +3919,6 @@ describe("zkcash", () => {
 
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -4011,8 +3945,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           globalConfig: globalConfigPDA,
           signer: randomUser.publicKey,
           recipient: recipient.publicKey,
@@ -4125,7 +4057,6 @@ describe("zkcash", () => {
 
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     // Create the token accounts
     const createAtasTx = new anchor.web3.Transaction().add(
@@ -4180,8 +4111,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           globalConfig: globalConfigPDA,
           signer: randomUser.publicKey,
           recipient: recipient.publicKey,
@@ -4387,9 +4316,6 @@ describe("zkcash", () => {
    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-   // Derive commitment PDAs
-   const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
   const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
   // feeRecipientAta is already calculated above
 
@@ -4429,8 +4355,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -4614,8 +4538,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         globalConfig: globalConfigPDA,
         signer: randomUser.publicKey,
         recipient: recipient.publicKey,
@@ -4967,7 +4889,6 @@ describe("zkcash", () => {
 
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -4995,8 +4916,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: crossCheckNullifiers.nullifier2PDA,
           nullifier3: crossCheckNullifiers.nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           globalConfig: globalConfigPDA,
           signer: randomUser.publicKey,
           recipient: recipient.publicKey,
@@ -5176,7 +5095,6 @@ describe("zkcash", () => {
 
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -5204,8 +5122,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: crossCheckNullifiers.nullifier2PDA,
           nullifier3: crossCheckNullifiers.nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           globalConfig: globalConfigPDA,
           signer: randomUser.publicKey,
           recipient: recipient.publicKey,
