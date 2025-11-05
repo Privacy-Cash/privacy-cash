@@ -739,7 +739,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
       units: 1_000_000 
@@ -1035,7 +1034,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -1363,7 +1361,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -1713,7 +1710,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -2037,7 +2033,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -2401,7 +2396,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -2719,7 +2713,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -3090,7 +3083,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -3461,7 +3453,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
 
@@ -4510,7 +4501,6 @@ describe("zkcash", () => {
     
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
     
     const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
     
