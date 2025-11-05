@@ -4864,4 +4864,386 @@ describe("zkcash", () => {
     expect(true).to.be.true;
   });
 
+  it("SPL Fails transact instruction when signer_token_account owner does not match signer", async () => {
+    const depositAmount = 20000;
+    const calculatedDepositFee = calculateDepositFee(depositAmount);
+
+    const recipientTokenAccount = await getAssociatedTokenAddress(
+      splTokenMint.publicKey,
+      recipient.publicKey
+    );
+
+    // Create recipient token account
+    try {
+      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          randomUser.publicKey,
+          recipientTokenAccount,
+          recipient.publicKey,
+          splTokenMint.publicKey
+        )
+      );
+      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
+    } catch (error) {
+      console.log("Recipient token account might already exist:", error.message);
+    }
+
+    const extData = {
+      recipient: recipientTokenAccount,
+      extAmount: new anchor.BN(depositAmount),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(calculatedDepositFee),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+    
+    const inputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressField }),
+      new Utxo({ lightWasm, mintAddress: mintAddressField })
+    ];
+
+    const outputAmount = (depositAmount - calculatedDepositFee).toString();
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount, index: globalMerkleTree._layers[0].length, mintAddress: mintAddressField }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressField })
+    ];
+
+    const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    const inputMerklePathElements = inputs.map(() => {
+      return [...new Array(globalMerkleTree.levels).fill(0)];
+    });
+
+    const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+    const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+
+    const root = globalMerkleTree.root();
+    const calculatedExtDataHash = getExtDataHashForSpl(extData);
+    const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
+
+    const input = {
+      root: root,
+      publicAmount: publicAmountNumber.toString(),
+      extDataHash: calculatedExtDataHash,
+      mintAddress: inputs[0].mintAddress,
+      
+      inputNullifier: inputNullifiers,
+      inAmount: inputs.map(x => x.amount.toString(10)),
+      inPrivateKey: inputs.map(x => x.keypair.privkey),
+      inBlinding: inputs.map(x => x.blinding.toString(10)),
+      inPathIndices: inputMerklePathIndices,
+      inPathElements: inputMerklePathElements,
+      
+      outputCommitment: outputCommitments,
+      outAmount: outputs.map(x => x.amount.toString(10)),
+      outBlinding: outputs.map(x => x.blinding.toString(10)),
+      outPubkey: outputs.map(x => x.keypair.pubkey),
+    };
+
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof, publicSignals} = await prove(input, keyBasePath);
+
+    const proofInBytes = parseProofToBytesArray(proof);
+    const inputsInBytes = parseToBytesArray(publicSignals);
+    
+    const proofToSubmit = {
+      proofA: proofInBytes.proofA,
+      proofB: proofInBytes.proofB.flat(),
+      proofC: proofInBytes.proofC,
+      root: inputsInBytes[0],
+      publicAmount: inputsInBytes[1],
+      extDataHash: inputsInBytes[2],
+      inputNullifiers: [
+        inputsInBytes[3],
+        inputsInBytes[4]
+      ],
+      outputCommitments: [
+        inputsInBytes[5],
+        inputsInBytes[6]
+      ],
+    };
+
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    try {
+      const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+        units: 1_000_000 
+      });
+      
+      // Try to use attacker's token account instead of randomUser's
+      const depositTx = await program.methods
+        .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          nullifier2: crossCheckNullifiers.nullifier2PDA,
+          nullifier3: crossCheckNullifiers.nullifier3PDA,
+          commitment0: commitment0PDA,
+          commitment1: commitment1PDA,
+          globalConfig: globalConfigPDA,
+          signer: randomUser.publicKey,
+          recipient: recipient.publicKey,
+          mint: splTokenMint.publicKey,
+          signerTokenAccount: attackerTokenAccount, // Wrong owner! Should be randomUserTokenAccount
+          recipientTokenAccount: recipientTokenAccount,
+          treeAta: treeAta,
+          feeRecipientAta: feeRecipientTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+
+      const depositVersionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        randomUser.publicKey,
+        depositTx.instructions,
+        lookupTableAddress
+      );
+      
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        depositVersionedTx,
+        [randomUser]
+      );
+
+      expect.fail("Transaction should have failed due to invalid token account owner but succeeded");
+    } catch (error) {
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x17d3") || 
+        errorString.includes("InvalidTokenAccount") ||
+        errorString.includes("ConstraintRaw")
+      ).to.be.true;
+    }
+  });
+
+  it("SPL Fails transact instruction when signer_token_account mint does not match transaction mint", async () => {
+    const depositAmount = 20000;
+    const calculatedDepositFee = calculateDepositFee(depositAmount);
+
+    // Create a different SPL token mint
+    const differentMint = anchor.web3.Keypair.generate();
+    const mintTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.createAccount({
+        fromPubkey: authority.publicKey,
+        newAccountPubkey: differentMint.publicKey,
+        space: 82,
+        lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      createInitializeMintInstruction(
+        differentMint.publicKey,
+        6,
+        authority.publicKey,
+        authority.publicKey
+      )
+    );
+    
+    await provider.sendAndConfirm(mintTx, [authority, differentMint]);
+
+    // Create token account for randomUser with the different mint
+    const differentMintTokenAccount = await getAssociatedTokenAddress(
+      differentMint.publicKey,
+      randomUser.publicKey
+    );
+
+    const createDifferentMintAccountTx = new anchor.web3.Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        authority.publicKey,
+        differentMintTokenAccount,
+        randomUser.publicKey,
+        differentMint.publicKey
+      )
+    );
+    await provider.sendAndConfirm(createDifferentMintAccountTx, [authority]);
+
+    const recipientTokenAccount = await getAssociatedTokenAddress(
+      splTokenMint.publicKey,
+      recipient.publicKey
+    );
+
+    // Create recipient token account
+    try {
+      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          randomUser.publicKey,
+          recipientTokenAccount,
+          recipient.publicKey,
+          splTokenMint.publicKey
+        )
+      );
+      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
+    } catch (error) {
+      console.log("Recipient token account might already exist:", error.message);
+    }
+
+    const extData = {
+      recipient: recipientTokenAccount,
+      extAmount: new anchor.BN(depositAmount),
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: new anchor.BN(calculatedDepositFee),
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+    
+    const inputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressField }),
+      new Utxo({ lightWasm, mintAddress: mintAddressField })
+    ];
+
+    const outputAmount = (depositAmount - calculatedDepositFee).toString();
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount, index: globalMerkleTree._layers[0].length, mintAddress: mintAddressField }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressField })
+    ];
+
+    const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    const inputMerklePathElements = inputs.map(() => {
+      return [...new Array(globalMerkleTree.levels).fill(0)];
+    });
+
+    const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+    const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+
+    const root = globalMerkleTree.root();
+    const calculatedExtDataHash = getExtDataHashForSpl(extData);
+    const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
+
+    const input = {
+      root: root,
+      publicAmount: publicAmountNumber.toString(),
+      extDataHash: calculatedExtDataHash,
+      mintAddress: inputs[0].mintAddress,
+      
+      inputNullifier: inputNullifiers,
+      inAmount: inputs.map(x => x.amount.toString(10)),
+      inPrivateKey: inputs.map(x => x.keypair.privkey),
+      inBlinding: inputs.map(x => x.blinding.toString(10)),
+      inPathIndices: inputMerklePathIndices,
+      inPathElements: inputMerklePathElements,
+      
+      outputCommitment: outputCommitments,
+      outAmount: outputs.map(x => x.amount.toString(10)),
+      outBlinding: outputs.map(x => x.blinding.toString(10)),
+      outPubkey: outputs.map(x => x.keypair.pubkey),
+    };
+
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof, publicSignals} = await prove(input, keyBasePath);
+
+    const proofInBytes = parseProofToBytesArray(proof);
+    const inputsInBytes = parseToBytesArray(publicSignals);
+    
+    const proofToSubmit = {
+      proofA: proofInBytes.proofA,
+      proofB: proofInBytes.proofB.flat(),
+      proofC: proofInBytes.proofC,
+      root: inputsInBytes[0],
+      publicAmount: inputsInBytes[1],
+      extDataHash: inputsInBytes[2],
+      inputNullifiers: [
+        inputsInBytes[3],
+        inputsInBytes[4]
+      ],
+      outputCommitments: [
+        inputsInBytes[5],
+        inputsInBytes[6]
+      ],
+    };
+
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
+    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    try {
+      const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+        units: 1_000_000 
+      });
+      
+      // Try to use token account with different mint
+      const depositTx = await program.methods
+        .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+        .accounts({
+          treeAccount: treeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          nullifier2: crossCheckNullifiers.nullifier2PDA,
+          nullifier3: crossCheckNullifiers.nullifier3PDA,
+          commitment0: commitment0PDA,
+          commitment1: commitment1PDA,
+          globalConfig: globalConfigPDA,
+          signer: randomUser.publicKey,
+          recipient: recipient.publicKey,
+          mint: splTokenMint.publicKey,
+          signerTokenAccount: differentMintTokenAccount, // Wrong mint! Should be randomUserTokenAccount
+          recipientTokenAccount: recipientTokenAccount,
+          treeAta: treeAta,
+          feeRecipientAta: feeRecipientTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+
+      const depositVersionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        randomUser.publicKey,
+        depositTx.instructions,
+        lookupTableAddress
+      );
+      
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        depositVersionedTx,
+        [randomUser]
+      );
+
+      expect.fail("Transaction should have failed due to invalid token account mint but succeeded");
+    } catch (error) {
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0xbbf") || 
+        errorString.includes("InvalidMintAddress") ||
+        errorString.includes("ConstraintRaw")
+      ).to.be.true;
+    }
+  });
+
 });

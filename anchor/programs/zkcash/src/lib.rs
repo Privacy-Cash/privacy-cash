@@ -285,6 +285,16 @@ pub mod zkcash {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
         let global_config = &ctx.accounts.global_config;
 
+        // Validate signer's token account ownership and mint
+        require!(
+            ctx.accounts.signer_token_account.owner == ctx.accounts.signer.key(),
+            ErrorCode::InvalidTokenAccount
+        );
+        require!(
+            ctx.accounts.signer_token_account.mint == ctx.accounts.mint.key(),
+            ErrorCode::InvalidMintAddress
+        );
+
         // Reconstruct full ExtData from minified version and context accounts
         let ext_data = ExtData::from_minified_spl(&ctx, ext_data_minified);
 
