@@ -1184,7 +1184,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     const recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
     const feeRecipientBalanceBefore = await provider.connection.getTokenAccountBalance(feeRecipientTokenAccount);
@@ -1511,7 +1510,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     // PDA recipient token account doesn't exist yet, will be created during withdrawal via init_if_needed
     let pdaRecipientBalanceBefore = 0;
@@ -1860,7 +1858,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     const recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
     
@@ -2177,7 +2174,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     // Step 3: Attacker tries to frontrun by changing the recipient to their own address
     // Create attacker's token account
@@ -2548,7 +2544,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     const recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
     const feeRecipientBalanceBefore = await provider.connection.getTokenAccountBalance(feeRecipientTokenAccount);
@@ -2890,7 +2885,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     // Check if recipient token account exists, if not assume balance is 0
     let recipientTokenBalanceBefore = { value: { amount: '0' } };
@@ -3260,7 +3254,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     // Check if recipient token account exists, if not assume balance is 0
     let recipientTokenBalanceBefore = { value: { amount: '0' } };
@@ -3605,7 +3598,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     const recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
     const feeRecipientBalanceBefore = await provider.connection.getTokenAccountBalance(feeRecipientTokenAccount);
