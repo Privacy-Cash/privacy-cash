@@ -25,10 +25,11 @@ const user = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
 // IMPORTANT!!!!!!!: Change it back to 9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD after devnet testing is done!!!!!!!
 const PROGRAM_ID = new PublicKey('2H723rrywJVPGRdqC2iL8Egcz2A3VCkEQ6hmt8XGcGix');
 // IMPORTANT!!!!!!!: Change it back to AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM after devnet testing is done!!!!!!!
-const FEE_RECIPIENT_ACCOUNT = new PublicKey('BxuZn19npE43qkrQycBSb12vgruyD3vLygxwZss7eXLU');
+const FEE_RECIPIENT_ACCOUNT = new PublicKey('AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM');
 
 // USDC mint address on devnet
-const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+// IMPORTANT!!!!!!!: Change it back to EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v after devnet testing is done!!!!!!!
+const USDC_MINT = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
 
 // Configure connection to Solana mainnet-beta
 const connection = new Connection('https://domini-i2gp2o-fast-devnet.helius-rpc.com', 'confirmed');
@@ -183,7 +184,8 @@ async function getProtocolAddresses(
 
   const usdcFeeRecipientAta = await getAssociatedTokenAddress(
     USDC_MINT,
-    feeRecipientAccount
+    feeRecipientAccount,
+    true // allowOwnerOffCurve for PDA
   );
 
   const addresses = [
@@ -289,7 +291,7 @@ async function main() {
 
     // Calculate USDC addresses to display
     const usdcTreeAta = await getAssociatedTokenAddress(USDC_MINT, globalConfigAccount, true);
-    const usdcFeeRecipientAta = await getAssociatedTokenAddress(USDC_MINT, FEE_RECIPIENT_ACCOUNT);
+    const usdcFeeRecipientAta = await getAssociatedTokenAddress(USDC_MINT, FEE_RECIPIENT_ACCOUNT, true /* allowOwnerOffCurve */);
 
     console.log(`\n💵 USDC Token Addresses:`);
     console.log(`- USDC Mint: ${USDC_MINT.toString()}`);
