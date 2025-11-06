@@ -4,7 +4,7 @@ import { Zkcash } from "../target/types/zkcash";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddress, createInitializeMintInstruction, createAssociatedTokenAccountInstruction, createMintToInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
-import { getExtDataHash } from "./lib/utils";
+import { getExtDataHash, getMintAddressField } from "./lib/utils";
 import { DEFAULT_HEIGHT, FIELD_SIZE, ROOT_HISTORY_SIZE, ZERO_BYTES, DEPOSIT_FEE_RATE, WITHDRAW_FEE_RATE, FEE_RECIPIENT_ACCOUNT } from "./lib/constants";
 
 // SOL address constant (matches the Rust program)
@@ -36,23 +36,6 @@ function calculateDepositFee(amount: number): number {
 // Helper function to calculate withdrawal fee
 function calculateWithdrawalFee(amount: number): number {
   return calculateFee(amount, WITHDRAW_FEE_RATE);
-}
-
-// Helper function to get mint address field for circuit
-// Returns a field element that fits within the circuit's prime field (254 bits)
-function getMintAddressField(mint: PublicKey): string {
-  const mintStr = mint.toString();
-  
-  // Special case for SOL (system program)
-  if (mintStr === '11111111111111111111111111111112') {
-    return mintStr;
-  }
-  
-  // For SPL tokens (USDC, USDT, etc): use first 16 bytes (128 bits)
-  // This provides better collision resistance than 8 bytes while still fitting in the field
-  // We will only suppport private SOL, USDC and USDT send, so there won't be any collision.
-  const mintBytes = mint.toBytes();
-  return new anchor.BN(mintBytes.slice(0, 16), 'be').toString();
 }
 
 export function bnToBytes(bn: anchor.BN): number[] {
@@ -433,7 +416,7 @@ it("Fails deposit instruction for non USDC token mint", async () => {
 
     // Convert SPL token mint address to a field element that the circuit can understand
     // Get the mint address as a field element for the circuit
-    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey.toBase58());
     
     const inputs = [
       new Utxo({ lightWasm, mintAddress: mintAddressField }),

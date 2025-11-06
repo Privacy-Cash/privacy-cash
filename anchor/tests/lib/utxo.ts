@@ -8,6 +8,8 @@
 import BN from 'bn.js';
 import { Keypair } from './keypair';
 import { LightWasm } from '@lightprotocol/hasher.rs';
+import { PublicKey } from '@solana/web3.js';
+import { getMintAddressField } from './utils';
 
 /**
  * Simplified Utxo class inspired by Tornado Cash Nova
@@ -53,7 +55,14 @@ export class Utxo {
   }
 
   async getCommitment(): Promise<string> {
-    return this.lightWasm.poseidonHashString([this.amount.toString(), this.keypair.pubkey.toString(), this.blinding.toString(), this.mintAddress]);
+    // Convert mint address to field representation (31 bytes for SPL, 32 bytes for SOL)
+    const mintAddressField = getMintAddressField(new PublicKey(this.mintAddress));
+    return this.lightWasm.poseidonHashString([
+      this.amount.toString(), 
+      this.keypair.pubkey.toString(), 
+      this.blinding.toString(), 
+      mintAddressField
+    ]);
   }
 
   async getNullifier(): Promise<string> {

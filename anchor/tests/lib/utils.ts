@@ -175,3 +175,20 @@ export function getExtDataHashForSpl(extData: {
   // Convert from hex string to Uint8Array
   return Buffer.from(hashHex.slice(2), 'hex');
 }
+
+// Helper function to get mint address field for circuit
+// Returns a field element that fits within the circuit's prime field (254 bits)
+export function getMintAddressField(mint: PublicKey): string {
+  const mintStr = mint.toString();
+  
+  // Special case for SOL (system program)
+  if (mintStr === '11111111111111111111111111111112') {
+    return mintStr;
+  }
+  
+  // For SPL tokens (USDC, USDT, etc): use first 16 bytes (128 bits)
+  // This provides better collision resistance than 8 bytes while still fitting in the field
+  // We will only suppport private SOL, USDC and USDT send, so there won't be any collision.
+  const mintBytes = mint.toBytes();
+  return new anchor.BN(mintBytes.slice(0, 31), 'be').toString();
+}
