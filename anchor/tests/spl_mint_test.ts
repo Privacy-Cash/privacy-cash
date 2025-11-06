@@ -416,17 +416,19 @@ it("Fails deposit instruction for non USDC token mint", async () => {
 
     // Convert SPL token mint address to a field element that the circuit can understand
     // Get the mint address as a field element for the circuit
-    const mintAddressField = getMintAddressField(splTokenMint.publicKey.toBase58());
+    // Store full mint address (base58 string), will be converted to field representation in getCommitment()
+    const mintAddressBase58 = splTokenMint.publicKey.toBase58();
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
     
     const inputs = [
-      new Utxo({ lightWasm, mintAddress: mintAddressField }),
-      new Utxo({ lightWasm, mintAddress: mintAddressField })
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 })
     ];
 
     const outputAmount = (depositAmount - calculatedDepositFee).toString();
     const outputs = [
-      new Utxo({ lightWasm, amount: outputAmount, index: globalMerkleTree._layers[0].length, mintAddress: mintAddressField }), // Combined amount minus fee
-      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressField }) // Empty UTXO
+      new Utxo({ lightWasm, amount: outputAmount, index: globalMerkleTree._layers[0].length, mintAddress: mintAddressBase58 }), // Combined amount minus fee
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressBase58 }) // Empty UTXO
     ];
 
    // Create mock Merkle path data (normally built from the tree)
@@ -457,7 +459,7 @@ it("Fails deposit instruction for non USDC token mint", async () => {
      root: root,
      publicAmount: publicAmountNumber.toString(),
      extDataHash: calculatedExtDataHash,
-     mintAddress: inputs[0].mintAddress,
+     mintAddress: mintAddressField, // Use field representation (31 bytes for SPL, 32 for SOL)
      
      // Input nullifiers and UTXO data
      inputNullifier: inputNullifiers,
