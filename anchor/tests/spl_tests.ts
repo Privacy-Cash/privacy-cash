@@ -5035,7 +5035,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       root: root,
       publicAmount: publicAmountNumber.toString(),
       extDataHash: calculatedExtDataHash,
-      mintAddress: inputs[0].mintAddress,
+      mintAddress: mintAddressField,
       
       inputNullifier: inputNullifiers,
       inAmount: inputs.map(x => x.amount.toString(10)),
