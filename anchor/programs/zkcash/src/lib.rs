@@ -32,7 +32,8 @@ pub const ALLOW_ALL_SPL_TOKENS: bool = true;
 #[cfg(not(any(feature = "localnet", test)))]
 pub const ALLOW_ALL_SPL_TOKENS: bool = false;
 
-pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")];
+// IMPORTANT!!!!!!!: Change it back to EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v after devnet testing is done!!!!!!!
+pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")];
 
 #[program]
 pub mod zkcash {
