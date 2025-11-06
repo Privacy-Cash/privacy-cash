@@ -293,7 +293,7 @@ pub mod zkcash {
         );
         require!(
             ctx.accounts.signer_token_account.mint == ctx.accounts.mint.key(),
-            ErrorCode::InvalidMintAddress
+            ErrorCode::InvalidTokenAccountMintAddress
         );
 
         // Reconstruct full ExtData from minified version and context accounts
@@ -809,4 +809,6 @@ pub enum ErrorCode {
     InvalidTokenAccount,
     #[msg("Invalid mint address: mint address is not allowed")]
     InvalidMintAddress,
+    #[msg("Invalid token account mint address")]
+    InvalidTokenAccountMintAddress,
 }

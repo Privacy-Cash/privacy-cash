@@ -5135,8 +5135,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     } catch (error) {
       const errorString = error.toString();
       expect(
-        errorString.includes("0xbbf") || 
-        errorString.includes("InvalidMintAddress") ||
+        errorString.includes("InvalidTokenAccountMintAddress") ||
         errorString.includes("ConstraintRaw")
       ).to.be.true;
     }
