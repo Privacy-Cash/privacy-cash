@@ -305,6 +305,11 @@ pub mod zkcash {
             ErrorCode::UnknownRoot
         );
 
+        msg!("ext_data.mint_address: {}", ext_data.mint_address);
+        msg!("ALLOW_ALL_SPL_TOKENS: {}", ALLOW_ALL_SPL_TOKENS);
+        msg!("ALLOWED_TOKENS[0]: {}", ALLOWED_TOKENS[0]);
+        msg!("Contains check: {}", ALLOWED_TOKENS.contains(&ext_data.mint_address));
+
         require!(
             ALLOW_ALL_SPL_TOKENS || ALLOWED_TOKENS.contains(&ext_data.mint_address),
             ErrorCode::InvalidMintAddress
