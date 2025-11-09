@@ -186,7 +186,7 @@ export function getMintAddressField(mint: PublicKey): string {
     return mintStr;
   }
   
-  // For SPL tokens (USDC, USDT, etc): use first 16 bytes (128 bits)
+  // For SPL tokens (USDC, USDT, etc): use first 31 bytes (248 bits)
   // This provides better collision resistance than 8 bytes while still fitting in the field
   // We will only suppport private SOL, USDC and USDT send, so there won't be any collision.
   const mintBytes = mint.toBytes();
