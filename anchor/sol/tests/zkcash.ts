@@ -331,7 +331,7 @@ describe("zkcash", () => {
       outPubkey: depositOutputs.map(x => x.keypair.pubkey),
     };
 
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const depositProofResult = await prove(depositInput, keyBasePath);
     const depositProofInBytes = parseProofToBytesArray(depositProofResult.proof);
     const depositInputsInBytes = parseToBytesArray(depositProofResult.publicSignals);
@@ -771,7 +771,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -1233,7 +1233,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -1701,7 +1701,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -2148,7 +2148,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -2584,7 +2584,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -3000,7 +3000,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -3438,7 +3438,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -3876,7 +3876,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -4316,7 +4316,7 @@ describe("zkcash", () => {
 
     // Path to the proving key files (wasm and zkey)
     // Try with both circuits to see which one works
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     publicSignals.forEach((signal, index) => {
@@ -5406,7 +5406,7 @@ describe("zkcash", () => {
     };
 
     // Generate proof
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     const proofInBytes = parseProofToBytesArray(proof);
@@ -5556,7 +5556,7 @@ describe("zkcash", () => {
       outPubkey: depositOutputs.map(x => x.keypair.pubkey),
     };
 
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const depositProofResult = await prove(depositInput, keyBasePath);
     const depositProofInBytes = parseProofToBytesArray(depositProofResult.proof);
     const depositInputsInBytes = parseToBytesArray(depositProofResult.publicSignals);
@@ -5840,7 +5840,7 @@ describe("zkcash", () => {
     };
 
     // Generate proof for deposit
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     const proofInBytes = parseProofToBytesArray(proof);
@@ -6590,7 +6590,7 @@ describe("zkcash", () => {
     };
 
     // Generate proof
-    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const keyBasePath = path.resolve(__dirname, '../../../artifacts/sol/circuits/transaction2');
     const {proof, publicSignals} = await prove(input, keyBasePath);
 
     const proofInBytes = parseProofToBytesArray(proof);

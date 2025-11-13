@@ -13,13 +13,6 @@ This project implements a privacy protocol on Solana that allows users to:
 
 The implementation uses zero-knowledge proofs to ensure that withdrawals cannot be linked to deposits, providing privacy for Solana transactions.
 
-## Project Structure
-
-- **program/**: Solana on-chain program (smart contract)
-  - **src/**: Rust source code for the program
-  - **test/**: Tests
-  - **Cargo.toml**: Rust dependencies and configuration
-
 ## Prerequisites
 
 - Solana CLI 2.1.18 or later
@@ -34,7 +27,7 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
 ## Anchor Program
 1. Navigate to the program directory:
    ```bash
-   cd anchor
+   cd anchor/sol
    ```
 
 2. Build the program:
@@ -82,7 +75,7 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
    --url mainnet-beta
    ```
 
-# Program verification
+# Program verification for SOL transfers
 1. Dump onchain program hash
    ```bash
    solana program dump 9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD current_program.so --url mainnet-beta && sha256sum current_program.so
@@ -91,7 +84,7 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
 2. Build a verifiable anchor program based on github commit
    ```bash
    git checkout 549686066e81c5434182f9f85b9296bb636b07e9
-   cd anchor
+   cd anchor/sol
    solana-verify build --base-image solanafoundation/anchor:v0.31.0
    solana-verify get-executable-hash target/deploy/zkcash.so
    >> c6f1e5336f2068dc1c1e1c64e92e3d8495b8df79f78011e2620af60aa43090c5  target/verifiable/zkcash.so
