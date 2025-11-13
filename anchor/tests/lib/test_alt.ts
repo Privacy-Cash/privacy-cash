@@ -17,13 +17,6 @@ import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token
 let globalTestALT: PublicKey | null = null;
 
 /**
- * Reset the global test ALT (call this when you need a fresh ALT with different addresses)
- */
-export function resetGlobalTestALT() {
-  globalTestALT = null;
-}
-
-/**
  * Create a global test ALT that will be reused for all tests in the session
  */
 export async function createGlobalTestALT(
@@ -166,9 +159,7 @@ export function getTestProtocolAddressesWithMint(
   authority: PublicKey,
   treeAta: PublicKey,
   feeRecipient: PublicKey,
-  feeRecipientAta: PublicKey,
-  splTreeAccount: PublicKey,
-  mint: PublicKey
+  feeRecipientAta: PublicKey
 ): PublicKey[] {
   // Derive global config PDA
   const [globalConfigAccount] = PublicKey.findProgramAddressSync(
@@ -176,13 +167,13 @@ export function getTestProtocolAddressesWithMint(
     programId
   );
 
-  // Derive SOL tree account
+  // Derive tree accounts
   const [treeAccount] = PublicKey.findProgramAddressSync(
     [Buffer.from('merkle_tree')],
     programId
   );
 
-  const addresses = [
+  return [
     // Core program accounts (constant)
     programId,
     treeAccount,
@@ -191,16 +182,13 @@ export function getTestProtocolAddressesWithMint(
     authority,
     feeRecipient,
     feeRecipientAta,
-    splTreeAccount,
-    mint,
+    
     // System programs (constant)
     SystemProgram.programId,
     ComputeBudgetProgram.programId,
     ASSOCIATED_TOKEN_PROGRAM_ID,
     TOKEN_PROGRAM_ID,
   ];
-
-  return addresses;
 }
 
 /**
