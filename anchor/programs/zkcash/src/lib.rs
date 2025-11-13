@@ -120,6 +120,68 @@ pub mod zkcash {
     }
 
     /**
+     * Initialize a new merkle tree for a specific SPL token.
+     * This allows each token type to have its own separate tree.
+     * Only the authority can call this.
+     */
+    pub fn initialize_tree_account_for_spl_token(
+        ctx: Context<InitializeTreeAccountForSplToken>,
+        max_deposit_amount: u64
+    ) -> Result<()> {
+        if let Some(admin_key) = ADMIN_PUBKEY {
+            require!(ctx.accounts.authority.key().eq(&admin_key), ErrorCode::Unauthorized);
+        }
+        
+        // Validate that the mint is in the allowed tokens list
+        require!(
+            ALLOW_ALL_SPL_TOKENS || ALLOWED_TOKENS.contains(&ctx.accounts.mint.key()),
+            ErrorCode::InvalidMintAddress
+        );
+        
+        let tree_account = &mut ctx.accounts.tree_account.load_init()?;
+        tree_account.authority = ctx.accounts.authority.key();
+        tree_account.next_index = 0;
+        tree_account.root_index = 0;
+        tree_account.bump = ctx.bumps.tree_account;
+        tree_account.max_deposit_amount = max_deposit_amount;
+        tree_account.height = MERKLE_TREE_HEIGHT;
+        tree_account.root_history_size = 100;
+
+        MerkleTree::initialize::<Poseidon>(tree_account)?;
+        
+        msg!(
+            "SPL Token merkle tree initialized for mint: {}, height: {}, root history size: {}, deposit limit: {}",
+            ctx.accounts.mint.key(),
+            MERKLE_TREE_HEIGHT,
+            100,
+            max_deposit_amount
+        );
+        
+        Ok(())
+    }
+
+    /**
+     * Update the maximum deposit amount limit for a specific SPL token tree.
+     * Only the authority can call this.
+     */
+    pub fn update_deposit_limit_for_spl_token(
+        ctx: Context<UpdateDepositLimitForSplToken>,
+        new_limit: u64
+    ) -> Result<()> {
+        let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
+        
+        tree_account.max_deposit_amount = new_limit;
+        
+        msg!(
+            "Deposit limit updated to: {} for mint: {}",
+            new_limit,
+            ctx.accounts.mint.key()
+        );
+        
+        Ok(())
+    }
+
+    /**
      * Users deposit or withdraw SOL from the program.
      * 
      * Reentrant attacks are not possible, because nullifier creation is checked by anchor first.
@@ -569,7 +631,7 @@ pub struct Transact<'info> {
 pub struct TransactSpl<'info> {
     #[account(
         mut,
-        seeds = [b"merkle_tree"],
+        seeds = [b"merkle_tree", mint.key().as_ref()],
         bump = tree_account.load()?.bump
     )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
@@ -728,6 +790,49 @@ pub struct UpdateGlobalConfig<'info> {
     pub global_config: Account<'info, GlobalConfig>,
     
     /// The authority account that can update the global config
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct InitializeTreeAccountForSplToken<'info> {
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + std::mem::size_of::<MerkleTreeAccount>(),
+        seeds = [b"merkle_tree", mint.key().as_ref()],
+        bump
+    )]
+    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
+    
+    /// SPL Token mint account
+    pub mint: Account<'info, Mint>,
+    
+    #[account(
+        seeds = [b"global_config"],
+        bump = global_config.bump
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateDepositLimitForSplToken<'info> {
+    #[account(
+        mut,
+        seeds = [b"merkle_tree", mint.key().as_ref()],
+        bump = tree_account.load()?.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
+    
+    /// SPL Token mint account
+    pub mint: Account<'info, Mint>,
+    
+    /// The authority account that can update the deposit limit
     pub authority: Signer<'info>,
 }
 
