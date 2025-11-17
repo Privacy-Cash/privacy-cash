@@ -215,6 +215,18 @@ pub fn validate_fee(
     Ok(())
 }
 
+/// Converts mint address bytes (first 31 bytes) to the expected proof format
+/// The circuit converts the first 31 bytes to a BigUint field element, then to bytes
+/// This function replicates that conversion for comparison
+pub fn mint_bytes_to_proof_format(mint_bytes_31: &[u8]) -> [u8; 32] {
+    let mint_field_value = num_bigint::BigUint::from_bytes_be(mint_bytes_31);
+    let mut expected_proof_mint = [0u8; 32];
+    let mint_field_bytes = mint_field_value.to_bytes_be();
+    let start_idx = 32 - mint_field_bytes.len();
+    expected_proof_mint[start_idx..].copy_from_slice(&mint_field_bytes);
+    expected_proof_mint
+}
+
 pub fn verify_proof(proof: Proof, verifying_key: Groth16Verifyingkey) -> bool {
     let mut public_inputs_vec: [[u8; 32]; 8] = [[0u8; 32]; 8];
 
@@ -272,18 +284,14 @@ pub fn verify_proof(proof: Proof, verifying_key: Groth16Verifyingkey) -> bool {
     verifier.verify().unwrap_or(false)
 }
 
-/**
- * Calculate ExtData hash with encrypted outputs included
- * This matches the client-side calculation for hash verification
- */
-pub fn calculate_complete_ext_data_hash(
+pub fn calculate_complete_ext_data_hash_for_spl(
     recipient: Pubkey,
     ext_amount: i64,
     encrypted_output1: &[u8],
     encrypted_output2: &[u8],
     fee: u64,
     fee_recipient: Pubkey,
-    mint_address: Pubkey,
+    mint_address: &[u8],
 ) -> Result<[u8; 32]> {
     #[derive(AnchorSerialize)]
     struct CompleteExtData {
@@ -293,7 +301,7 @@ pub fn calculate_complete_ext_data_hash(
         pub encrypted_output2: Vec<u8>,
         pub fee: u64,
         pub fee_recipient: Pubkey,
-        pub mint_address: Pubkey,
+        pub mint_address: Vec<u8>,
     }
     
     let complete_ext_data = CompleteExtData {
@@ -303,7 +311,7 @@ pub fn calculate_complete_ext_data_hash(
         encrypted_output2: encrypted_output2.to_vec(),
         fee,
         fee_recipient,
-        mint_address,
+        mint_address: mint_address.to_vec(),
     };
     
     let mut serialized_ext_data = Vec::new();
@@ -506,5 +514,132 @@ mod tests {
         assert!(result.is_err());
         // We don't need to check the specific error type since overflow protection
         // may result in different error conditions depending on implementation
+    }
+
+    #[test]
+    fn test_mint_bytes_to_proof_format_all_zeros() {
+        // Test with all zeros (edge case)
+        let mint_bytes = [0u8; 31];
+        let result = mint_bytes_to_proof_format(&mint_bytes);
+        
+        // All zeros should result in all zeros
+        assert_eq!(result, [0u8; 32]);
+    }
+
+    #[test]
+    fn test_mint_bytes_to_proof_format_all_ones() {
+        // Test with all ones (large value)
+        let mint_bytes = [0xFFu8; 31];
+        let result = mint_bytes_to_proof_format(&mint_bytes);
+        
+        // The BigUint conversion should preserve the value
+        // When converting back, it should be right-aligned (big-endian)
+        let mut expected = [0u8; 32];
+        expected[0] = 0x00; // First byte is 0 because we only use 31 bytes
+        expected[1..32].copy_from_slice(&mint_bytes);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mint_bytes_to_proof_format_small_value() {
+        // Test with a small value that doesn't use all bytes
+        let mut mint_bytes = [0u8; 31];
+        mint_bytes[30] = 0x42; // Only the last byte is non-zero
+        
+        let result = mint_bytes_to_proof_format(&mint_bytes);
+        
+        // Should be right-aligned with leading zeros
+        let mut expected = [0u8; 32];
+        expected[31] = 0x42;
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mint_bytes_to_proof_format_realistic_pubkey() {
+        // Test with realistic SPL token mint address bytes
+        // Using first 31 bytes of a typical Solana pubkey pattern
+        let mint_bytes: [u8; 31] = [
+            0x06, 0xdd, 0xf6, 0xe1, 0xd7, 0x65, 0xa1, 0x93,
+            0xd9, 0xcb, 0xe1, 0x46, 0xce, 0xeb, 0x79, 0xac,
+            0x1c, 0xb4, 0x85, 0xed, 0x5f, 0x5b, 0x37, 0x91,
+            0x3a, 0x8c, 0xf5, 0x85, 0x7e, 0xff, 0x00,
+        ];
+        
+        let result = mint_bytes_to_proof_format(&mint_bytes);
+        
+        // The result should be the BigUint representation padded to 32 bytes
+        // Since we start with 31 bytes, the result will have 1 leading zero byte
+        let mut expected = [0u8; 32];
+        expected[1..32].copy_from_slice(&mint_bytes);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mint_bytes_to_proof_format_leading_zeros() {
+        // Test with leading zeros (smaller value)
+        let mut mint_bytes = [0u8; 31];
+        mint_bytes[20..31].copy_from_slice(&[
+            0x01, 0x02, 0x03, 0x04, 0x05, 
+            0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+        ]);
+        
+        let result = mint_bytes_to_proof_format(&mint_bytes);
+        
+        // Should remove leading zeros and right-align
+        let mut expected = [0u8; 32];
+        expected[21..32].copy_from_slice(&[
+            0x01, 0x02, 0x03, 0x04, 0x05, 
+            0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+        ]);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mint_bytes_to_proof_format_single_byte() {
+        // Test with just one non-zero byte
+        let mut mint_bytes = [0u8; 31];
+        mint_bytes[30] = 0xFF;
+        
+        let result = mint_bytes_to_proof_format(&mint_bytes);
+        
+        // Should result in a single 0xFF byte at the end
+        let mut expected = [0u8; 32];
+        expected[31] = 0xFF;
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mint_bytes_to_proof_format_idempotent() {
+        // Test that converting twice gives the same result
+        let mint_bytes: [u8; 31] = [
+            0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+            0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00,
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        ];
+        
+        let result1 = mint_bytes_to_proof_format(&mint_bytes);
+        
+        // Converting the first 31 bytes of result should give the same thing
+        let result2 = mint_bytes_to_proof_format(&result1[1..32]);
+        
+        // Since we're using 31 bytes, the results should match
+        // (the BigUint normalization is consistent)
+        assert_eq!(result1, result2);
+    }
+
+    #[test]
+    fn test_mint_bytes_to_proof_format_max_31_bytes() {
+        // Test with maximum value that fits in 31 bytes
+        let mut mint_bytes = [0xFFu8; 31];
+        mint_bytes[0] = 0x7F; // Make it 248 bits (31 bytes * 8 - 1 bit)
+        
+        let result = mint_bytes_to_proof_format(&mint_bytes);
+        
+        // Should preserve the value without overflow
+        let mut expected = [0u8; 32];
+        expected[1] = 0x7F;
+        expected[2..32].copy_from_slice(&[0xFFu8; 30]);
+        assert_eq!(result, expected);
     }
 }

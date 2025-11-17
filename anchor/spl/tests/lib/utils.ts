@@ -33,7 +33,7 @@ export function mockEncrypt(value: Utxo): string {
  * @param extData External data object containing recipient, amount, encrypted outputs, fee, fee recipient, and mint address
  * @returns The hash as a Uint8Array (32 bytes)
  */
-export function getExtDataHash(extData: {
+export function getExtDataHashForSpl(extData: {
   recipient: string | PublicKey;
   extAmount: string | number | BN;
   encryptedOutput1?: string | Uint8Array;  // Optional for Account Data Separation
@@ -67,6 +67,12 @@ export function getExtDataHash(extData: {
     ? Buffer.from(extData.encryptedOutput2 as any)
     : Buffer.alloc(0); // Empty buffer if not provided
 
+  // For SPL tokens (not SOL), use only the first 16 bytes of the mint address
+  // SOL address is '11111111111111111111111111111112' which is handled specially
+  const mintAddressBytes = mintAddress.toBytes();
+  const solAddressBytes = new PublicKey('11111111111111111111111111111112').toBytes();
+  const mintAddressBytesForHash = mintAddressBytes.slice(0, 31);
+
   // Define the borsh schema matching the Rust struct
   const schema = {
     struct: {
@@ -76,7 +82,7 @@ export function getExtDataHash(extData: {
       encryptedOutput2: { array: { type: 'u8' } },
       fee: 'u64',
       feeRecipient: { array: { type: 'u8', len: 32 } },
-      mintAddress: { array: { type: 'u8', len: 32 } },
+      mintAddress: { array: { type: 'u8' } },
     }
   };
 
@@ -87,7 +93,7 @@ export function getExtDataHash(extData: {
     encryptedOutput2: encryptedOutput2,
     fee: fee,  // BN instance - Borsh handles it correctly with u64 type
     feeRecipient: feeRecipient.toBytes(),
-    mintAddress: mintAddress.toBytes(),
+    mintAddress: mintAddressBytesForHash,
   };
   
   // Serialize with Borsh
@@ -97,4 +103,21 @@ export function getExtDataHash(extData: {
   const hashHex = sha256(serializedData);
   // Convert from hex string to Uint8Array
   return Buffer.from(hashHex.slice(2), 'hex');
-} 
+}
+
+// Helper function to get mint address field for circuit
+// Returns a field element that fits within the circuit's prime field (254 bits)
+export function getMintAddressField(mint: PublicKey): string {
+  const mintStr = mint.toString();
+  
+  // Special case for SOL (system program)
+  if (mintStr === '11111111111111111111111111111112') {
+    return mintStr;
+  }
+  
+  // For SPL tokens (USDC, USDT, etc): use first 31 bytes (248 bits)
+  // This provides better collision resistance than 8 bytes while still fitting in the field
+  // We will only suppport private SOL, USDC and USDT send, so there won't be any collision.
+  const mintBytes = mint.toBytes();
+  return new anchor.BN(mintBytes.slice(0, 31), 'be').toString();
+}

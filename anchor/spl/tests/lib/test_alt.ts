@@ -7,10 +7,10 @@ import {
   Transaction,
   sendAndConfirmTransaction,
   ComputeBudgetProgram,
-  VersionedTransaction,
-  TransactionMessage
+  VersionedTransaction
 } from '@solana/web3.js';
 import * as anchor from "@coral-xyz/anchor";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 // Global ALT for test session (created once, used everywhere)
 let globalTestALT: PublicKey | null = null;
@@ -108,18 +108,14 @@ export async function createGlobalTestALT(
   }
 }
 
-/**
- * Get all protocol addresses for the test ALT
- * MUST match production ALT exactly to catch transaction size limit issues in tests
- * 
- * Only includes addresses that are CONSTANT across all transactions.
- * Transaction-specific addresses (nullifiers, commitments, user, recipient) are NOT included
- * since they change with every transaction.
- */
-export function getTestProtocolAddresses(
+export function getTestProtocolAddressesWithMint(
   programId: PublicKey,
   authority: PublicKey,
-  feeRecipient: PublicKey
+  treeAta: PublicKey,
+  feeRecipient: PublicKey,
+  feeRecipientAta: PublicKey,
+  splTreeAccount: PublicKey,
+  mint: PublicKey
 ): PublicKey[] {
   // Derive global config PDA
   const [globalConfigAccount] = PublicKey.findProgramAddressSync(
@@ -127,30 +123,31 @@ export function getTestProtocolAddresses(
     programId
   );
 
-  // Derive tree accounts
+  // Derive SOL tree account
   const [treeAccount] = PublicKey.findProgramAddressSync(
     [Buffer.from('merkle_tree')],
     programId
   );
 
-  const [treeTokenAccount] = PublicKey.findProgramAddressSync(
-    [Buffer.from('tree_token')],
-    programId
-  );
-
-  return [
+  const addresses = [
     // Core program accounts (constant)
     programId,
     treeAccount,
-    treeTokenAccount,
+    treeAta,
     globalConfigAccount,
     authority,
     feeRecipient,
-    
+    feeRecipientAta,
+    splTreeAccount,
+    mint,
     // System programs (constant)
     SystemProgram.programId,
     ComputeBudgetProgram.programId,
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
   ];
+
+  return addresses;
 }
 
 /**

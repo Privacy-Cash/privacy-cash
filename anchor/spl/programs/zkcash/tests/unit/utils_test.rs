@@ -4,7 +4,7 @@ use ark_ff::{PrimeField, BigInteger};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use std::ops::Neg;
 use ark_bn254::Fr;
-use zkcash::{groth16::{is_less_than_bn254_field_size_be, Groth16Verifyingkey}, utils::{change_endianness, check_public_amount, verify_proof, validate_fee, calculate_complete_ext_data_hash, VERIFYING_KEY}, Proof};
+use zkcash::{Proof, groth16::{Groth16Verifyingkey, is_less_than_bn254_field_size_be}, utils::{VERIFYING_KEY, calculate_complete_ext_data_hash_for_spl, change_endianness, check_public_amount, validate_fee, verify_proof}};
 use anchor_lang::prelude::*;
 
 type G1 = ark_bn254::g1::G1Affine;
@@ -331,11 +331,11 @@ fn proof_verification_should_succeed() {
 fn proof_verification_should_fail_for_wrong_proof_a() {
     let proof = Proof {
         root: PUBLIC_INPUTS[0],
-        public_amount: PUBLIC_INPUTS[1],
-        ext_data_hash: PUBLIC_INPUTS[2],
-        mint_address: PUBLIC_INPUTS[3],
-        input_nullifiers: [PUBLIC_INPUTS[4], PUBLIC_INPUTS[5]],
-        output_commitments: [PUBLIC_INPUTS[6], PUBLIC_INPUTS[7]],
+        input_nullifiers: [PUBLIC_INPUTS[1], PUBLIC_INPUTS[2]],
+        output_commitments: [PUBLIC_INPUTS[3], PUBLIC_INPUTS[4]],
+        public_amount: PUBLIC_INPUTS[5],
+        ext_data_hash: PUBLIC_INPUTS[6],
+        mint_address: PUBLIC_INPUTS[7],
         proof_a: PROOF_C,
         proof_b: PROOF_B,
         proof_c: PROOF_C,
@@ -466,6 +466,10 @@ fn wrong_verifying_key_verification_should_not_succeed() {
             [
                 1,83,134,187,30,49,61,118,206,110,225,192,155,101,155,204,202,49,229,41,148,232,24,47,85,47,108,99,113,12,209,88,
                 41,144,185,30,176,46,190,244,148,151,142,64,45,22,16,17,48,122,183,81,187,18,142,10,230,78,6,42,245,140,166,121,
+            ],
+            [
+                12,34,56,78,90,112,134,156,178,200,222,244,10,32,54,76,98,120,142,164,186,208,230,252,18,40,62,84,106,128,150,172,
+                13,35,57,79,91,113,135,157,179,201,223,245,11,33,55,77,99,121,143,165,187,209,231,253,19,41,63,85,107,129,151,173,
             ],
         ]
     };
@@ -954,7 +958,7 @@ fn test_validate_fee_withdrawal_large_amount() {
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_basic() {
+fn test_calculate_complete_ext_data_for_spl_hash_basic() {
     let recipient = Pubkey::new_unique();
     let ext_amount = 100;
     let encrypted_output1 = b"encrypted_output_1_data";
@@ -963,141 +967,141 @@ fn test_calculate_complete_ext_data_hash_basic() {
     let fee_recipient = Pubkey::new_unique();  // Use the same fee_recipient for both calls
     let mint_address = Pubkey::new_unique();
     
-    let result = calculate_complete_ext_data_hash(
+    let result = calculate_complete_ext_data_hash_for_spl(
         recipient,
         ext_amount,
         encrypted_output1,
         encrypted_output2,
         fee,
         fee_recipient,
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok());
     
     // The hash should be deterministic
     let hash1 = result.unwrap();
-    let hash2 = calculate_complete_ext_data_hash(
+    let hash2 = calculate_complete_ext_data_hash_for_spl(
         recipient,
         ext_amount,
         encrypted_output1,
         encrypted_output2,
         fee,
         fee_recipient,  // Use the same fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     assert_eq!(hash1, hash2, "Hash should be deterministic");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_different_inputs() {
+fn test_calculate_complete_ext_data_hash_for_spl_different_inputs() {
     let recipient1 = Pubkey::new_unique();
     let recipient2 = Pubkey::new_unique();
     let encrypted_output1 = b"encrypted_output_1_data";
     let encrypted_output2 = b"encrypted_output_2_data";
     
-    let hash1 = calculate_complete_ext_data_hash(
+    let hash1 = calculate_complete_ext_data_hash_for_spl(
         recipient1,
         100,
         encrypted_output1,
         encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        recipient1, // Using recipient1 as mint_address for uniqueness
+        &recipient1.to_bytes(), // Using recipient1 as mint_address for uniqueness
     ).unwrap();
     
-    let hash2 = calculate_complete_ext_data_hash(
+    let hash2 = calculate_complete_ext_data_hash_for_spl(
         recipient2,  // Different recipient
         100,
         encrypted_output1,
         encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        recipient1, // Same mint_address
+        &recipient1.to_bytes(), // Same mint_address
     ).unwrap();
     
     assert_ne!(hash1, hash2, "Different recipients should produce different hashes");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_different_amounts() {
+fn test_calculate_complete_ext_data_hash_for_spl_different_amounts() {
     let recipient = Pubkey::new_unique();
     let encrypted_output1 = b"encrypted_output_1_data";
     let encrypted_output2 = b"encrypted_output_2_data";
     let mint_address = Pubkey::new_unique();
     
-    let hash1 = calculate_complete_ext_data_hash(
+    let hash1 = calculate_complete_ext_data_hash_for_spl(
         recipient,
         100,  // Positive amount (deposit)
         encrypted_output1,
         encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
-    let hash2 = calculate_complete_ext_data_hash(
+    let hash2 = calculate_complete_ext_data_hash_for_spl(
         recipient,
         -100, // Negative amount (withdrawal)
         encrypted_output1,
         encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     assert_ne!(hash1, hash2, "Different ext_amounts should produce different hashes");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_different_encrypted_outputs() {
+fn test_calculate_complete_ext_data_hash_for_spl_different_encrypted_outputs() {
     let recipient = Pubkey::new_unique();
     let mint_address = Pubkey::new_unique();
     
-    let hash1 = calculate_complete_ext_data_hash(
+    let hash1 = calculate_complete_ext_data_hash_for_spl(
         recipient,
         100,
         b"encrypted_output_1_data",
         b"encrypted_output_2_data",
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
-    let hash2 = calculate_complete_ext_data_hash(
+    let hash2 = calculate_complete_ext_data_hash_for_spl(
         recipient,
         100,
         b"different_encrypted_output_1",  // Different encrypted output
         b"encrypted_output_2_data",
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     assert_ne!(hash1, hash2, "Different encrypted outputs should produce different hashes");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_empty_encrypted_outputs() {
+fn test_calculate_complete_ext_data_hash_for_spl_empty_encrypted_outputs() {
     let recipient = Pubkey::new_unique();
     let mint_address = Pubkey::new_unique();
     
-    let result = calculate_complete_ext_data_hash(
+    let result = calculate_complete_ext_data_hash_for_spl(
         recipient,
         100,
         &[],  // Empty encrypted output 1
         &[],  // Empty encrypted output 2
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok(), "Should handle empty encrypted outputs");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_large_encrypted_outputs() {
+fn test_calculate_complete_ext_data_hash_for_spl_large_encrypted_outputs() {
     let recipient = Pubkey::new_unique();
     let mint_address = Pubkey::new_unique();
     
@@ -1105,87 +1109,87 @@ fn test_calculate_complete_ext_data_hash_large_encrypted_outputs() {
     let large_encrypted_output1 = vec![0x42u8; 512];
     let large_encrypted_output2 = vec![0x73u8; 512];
     
-    let result = calculate_complete_ext_data_hash(
+    let result = calculate_complete_ext_data_hash_for_spl(
         recipient,
         100,
         &large_encrypted_output1,
         &large_encrypted_output2,
         10,
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok(), "Should handle large encrypted outputs");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_zero_values() {
+fn test_calculate_complete_ext_data_hash_for_spl_zero_values() {
     let recipient = Pubkey::new_unique();
     let mint_address = Pubkey::new_unique();
     
-    let result = calculate_complete_ext_data_hash(
+    let result = calculate_complete_ext_data_hash_for_spl(
         recipient,
         0,    // Zero ext_amount
         b"encrypted_output_1",
         b"encrypted_output_2",
         0,    // Zero fee
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok(), "Should handle zero values");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_negative_amount() {
+fn test_calculate_complete_ext_data_hash_for_spl_negative_amount() {
     let recipient = Pubkey::new_unique();
     let mint_address = Pubkey::new_unique();
     
-    let result = calculate_complete_ext_data_hash(
+    let result = calculate_complete_ext_data_hash_for_spl(
         recipient,
         -1000, // Negative ext_amount (withdrawal)
         b"encrypted_output_1",
         b"encrypted_output_2",
         50,    // Fee for withdrawal
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     );
     
     assert!(result.is_ok(), "Should handle negative ext_amount");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_different_fees() {
+fn test_calculate_complete_ext_data_hash_for_spl_different_fees() {
     let recipient = Pubkey::new_unique();
     let mint_address = Pubkey::new_unique();
     let encrypted_output1 = b"encrypted_output_1_data";
     let encrypted_output2 = b"encrypted_output_2_data";
     
-    let hash1 = calculate_complete_ext_data_hash(
+    let hash1 = calculate_complete_ext_data_hash_for_spl(
         recipient,
         100,
         encrypted_output1,
         encrypted_output2,
         10,   // Different fee
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
-    let hash2 = calculate_complete_ext_data_hash(
+    let hash2 = calculate_complete_ext_data_hash_for_spl(
         recipient,
         100,
         encrypted_output1,
         encrypted_output2,
         20,   // Different fee
         Pubkey::new_unique(),  // fee_recipient
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     assert_ne!(hash1, hash2, "Different fees should produce different hashes");
 }
 
 #[test]
-fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
+fn test_calculate_complete_ext_data_hash_for_spl_consistency_with_borsh() {
     // This test ensures our hash calculation is consistent with Borsh serialization
     use anchor_lang::AnchorSerialize;
     use anchor_lang::solana_program::hash::hash;
@@ -1199,14 +1203,14 @@ fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
     let mint_address = Pubkey::new_unique();
     
     // Calculate using our function
-    let our_hash = calculate_complete_ext_data_hash(
+    let our_hash = calculate_complete_ext_data_hash_for_spl(
         recipient,
         ext_amount,
         encrypted_output1,
         encrypted_output2,
         fee,
         fee_recipient,
-        mint_address,
+        &mint_address.to_bytes(),
     ).unwrap();
     
     // Calculate manually using the same approach as our function
@@ -1218,7 +1222,7 @@ fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
         pub encrypted_output2: Vec<u8>,
         pub fee: u64,
         pub fee_recipient: Pubkey,
-        pub mint_address: Pubkey,
+        pub mint_address: Vec<u8>,
     }
     
     let manual_ext_data = TestCompleteExtData {
@@ -1228,7 +1232,7 @@ fn test_calculate_complete_ext_data_hash_consistency_with_borsh() {
         encrypted_output2: encrypted_output2.to_vec(),
         fee,
         fee_recipient,  // Use the same fee_recipient
-        mint_address,
+        mint_address: mint_address.to_bytes().to_vec(),
     };
     
     let mut serialized = Vec::new();
