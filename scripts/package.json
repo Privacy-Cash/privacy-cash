@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "@lightprotocol/hasher.rs": "^0.2.1",
+    "@solana/web3.js": "^1.98.4",
+    "@types/bn.js": "^5.2.0",
+    "@types/node": "^24.10.1",
+    "bn.js": "^5.2.2",
+    "ffjavascript": "^0.3.1",
+    "fs": "^0.0.1-security"
+  }
+}
