@@ -54,7 +54,7 @@ pub mod zkcash {
         let global_config = &mut ctx.accounts.global_config;
         global_config.authority = ctx.accounts.authority.key();
         global_config.deposit_fee_rate = 0; // 0% - Free deposits
-        global_config.withdrawal_fee_rate = 25; // 0.25% (25 basis points)
+        global_config.withdrawal_fee_rate = 35; // 0.35% (35 basis points)
         global_config.fee_error_margin = 500; // 5% (500 basis points)
         global_config.bump = ctx.bumps.global_config;
         
@@ -62,38 +62,6 @@ pub mod zkcash {
     }
 
     /**
-     * Update global configuration for SOL and SPL tokens. Only the authority can call this.
-     */
-    pub fn update_global_config(
-        ctx: Context<UpdateGlobalConfig>, 
-        deposit_fee_rate: Option<u16>,
-        withdrawal_fee_rate: Option<u16>,
-        fee_error_margin: Option<u16>
-    ) -> Result<()> {
-        let global_config = &mut ctx.accounts.global_config;
-        
-        if let Some(deposit_rate) = deposit_fee_rate {
-            require!(deposit_rate <= 10000, ErrorCode::InvalidFeeRate);
-            global_config.deposit_fee_rate = deposit_rate;
-            msg!("Deposit fee rate updated to: {} basis points", deposit_rate);
-        }
-        
-        if let Some(withdrawal_rate) = withdrawal_fee_rate {
-            require!(withdrawal_rate <= 10000, ErrorCode::InvalidFeeRate);
-            global_config.withdrawal_fee_rate = withdrawal_rate;
-            msg!("Withdrawal fee rate updated to: {} basis points", withdrawal_rate);
-        }
-        
-        if let Some(fee_error_margin_val) = fee_error_margin {
-            require!(fee_error_margin_val <= 10000, ErrorCode::InvalidFeeRate);
-            global_config.fee_error_margin = fee_error_margin_val;
-            msg!("Fee error margin updated to: {} basis points", fee_error_margin_val);
-        }
-        
-        Ok(())
-    }
-
-        /**
      * Initialize a new merkle tree for a specific SPL token.
      * This allows each token type to have its own separate tree.
      * Only the authority can call this.
@@ -131,6 +99,38 @@ pub mod zkcash {
             max_deposit_amount
         );
 
+        Ok(())
+    }
+
+    /**
+     * Update global configuration for SOL and SPL tokens. Only the authority can call this.
+     */
+    pub fn update_global_config(
+        ctx: Context<UpdateGlobalConfig>, 
+        deposit_fee_rate: Option<u16>,
+        withdrawal_fee_rate: Option<u16>,
+        fee_error_margin: Option<u16>
+    ) -> Result<()> {
+        let global_config = &mut ctx.accounts.global_config;
+        
+        if let Some(deposit_rate) = deposit_fee_rate {
+            require!(deposit_rate <= 10000, ErrorCode::InvalidFeeRate);
+            global_config.deposit_fee_rate = deposit_rate;
+            msg!("Deposit fee rate updated to: {} basis points", deposit_rate);
+        }
+        
+        if let Some(withdrawal_rate) = withdrawal_fee_rate {
+            require!(withdrawal_rate <= 10000, ErrorCode::InvalidFeeRate);
+            global_config.withdrawal_fee_rate = withdrawal_rate;
+            msg!("Withdrawal fee rate updated to: {} basis points", withdrawal_rate);
+        }
+        
+        if let Some(fee_error_margin_val) = fee_error_margin {
+            require!(fee_error_margin_val <= 10000, ErrorCode::InvalidFeeRate);
+            global_config.fee_error_margin = fee_error_margin_val;
+            msg!("Fee error margin updated to: {} basis points", fee_error_margin_val);
+        }
+        
         Ok(())
     }
 
@@ -315,6 +315,18 @@ pub mod zkcash {
     }
 }
 
+impl ExtData {
+    fn from_minified_spl(ctx: &Context<TransactSpl>, minified: ExtDataMinified) -> Self {
+        Self {
+            recipient: ctx.accounts.recipient_token_account.key(),
+            ext_amount: minified.ext_amount,
+            fee: minified.fee,
+            fee_recipient: ctx.accounts.fee_recipient_ata.key(),
+            mint_address: ctx.accounts.mint.key(),
+        }
+    }
+}
+
 #[event]
 pub struct CommitmentData {
     pub index: u64,
@@ -349,18 +361,6 @@ pub struct ExtData {
 pub struct ExtDataMinified {
     pub ext_amount: i64,
     pub fee: u64,
-}
-
-impl ExtData {
-    fn from_minified_spl(ctx: &Context<TransactSpl>, minified: ExtDataMinified) -> Self {
-        Self {
-            recipient: ctx.accounts.recipient_token_account.key(),
-            ext_amount: minified.ext_amount,
-            fee: minified.fee,
-            fee_recipient: ctx.accounts.fee_recipient_ata.key(),
-            mint_address: ctx.accounts.mint.key(),
-        }
-    }
 }
 
 #[derive(Accounts)]
@@ -454,6 +454,46 @@ pub struct TransactSpl<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[account]
+pub struct TreeTokenAccount {
+    pub authority: Pubkey,
+    pub bump: u8,
+}
+
+#[account]
+pub struct GlobalConfig {
+    pub authority: Pubkey,
+    pub deposit_fee_rate: u16,    // basis points (0-10000, where 10000 = 100%)
+    pub withdrawal_fee_rate: u16, // basis points (0-10000, where 10000 = 100%)
+    pub fee_error_margin: u16,    // basis points (0-10000, where 10000 = 100%)
+    pub bump: u8,
+}
+
+#[account]
+pub struct NullifierAccount {
+    /// This account's existence indicates that the nullifier has been used.
+    /// No fields needed other than bump for PDA verification.
+    pub bump: u8,
+}
+
+#[account(zero_copy)]
+pub struct MerkleTreeAccount {
+    pub authority: Pubkey,
+    pub next_index: u64,
+    pub subtrees: [[u8; 32]; MERKLE_TREE_HEIGHT as usize],
+    pub root: [u8; 32],
+    pub root_history: [[u8; 32]; 100],
+    pub root_index: u64,
+    pub max_deposit_amount: u64,
+    pub height: u8,
+    pub root_history_size: u8,
+    pub bump: u8,
+    // The pub _padding: [u8; 5] is needed because of the #[account(zero_copy)] attribute.
+    pub _padding: [u8; 5],
+}
+
+
+
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -527,44 +567,6 @@ pub struct UpdateGlobalConfig<'info> {
     
     /// The authority account that can update the global config
     pub authority: Signer<'info>,
-}
-
-#[account]
-pub struct TreeTokenAccount {
-    pub authority: Pubkey,
-    pub bump: u8,
-}
-
-#[account]
-pub struct GlobalConfig {
-    pub authority: Pubkey,
-    pub deposit_fee_rate: u16,    // basis points (0-10000, where 10000 = 100%)
-    pub withdrawal_fee_rate: u16, // basis points (0-10000, where 10000 = 100%)
-    pub fee_error_margin: u16,    // basis points (0-10000, where 10000 = 100%)
-    pub bump: u8,
-}
-
-#[account]
-pub struct NullifierAccount {
-    /// This account's existence indicates that the nullifier has been used.
-    /// No fields needed other than bump for PDA verification.
-    pub bump: u8,
-}
-
-#[account(zero_copy)]
-pub struct MerkleTreeAccount {
-    pub authority: Pubkey,
-    pub next_index: u64,
-    pub subtrees: [[u8; 32]; MERKLE_TREE_HEIGHT as usize],
-    pub root: [u8; 32],
-    pub root_history: [[u8; 32]; 100],
-    pub root_index: u64,
-    pub max_deposit_amount: u64,
-    pub height: u8,
-    pub root_history_size: u8,
-    pub bump: u8,
-    // The pub _padding: [u8; 5] is needed because of the #[account(zero_copy)] attribute.
-    pub _padding: [u8; 5],
 }
 
 #[error_code]
