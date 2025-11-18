@@ -284,14 +284,18 @@ pub fn verify_proof(proof: Proof, verifying_key: Groth16Verifyingkey) -> bool {
     verifier.verify().unwrap_or(false)
 }
 
-pub fn calculate_complete_ext_data_hash_for_spl(
+/**
+ * Calculate ExtData hash with encrypted outputs included
+ * This matches the client-side calculation for hash verification
+ */
+pub fn calculate_complete_ext_data_hash(
     recipient: Pubkey,
     ext_amount: i64,
     encrypted_output1: &[u8],
     encrypted_output2: &[u8],
     fee: u64,
     fee_recipient: Pubkey,
-    mint_address: &[u8],
+    mint_address: Pubkey,
 ) -> Result<[u8; 32]> {
     #[derive(AnchorSerialize)]
     struct CompleteExtData {
@@ -301,7 +305,7 @@ pub fn calculate_complete_ext_data_hash_for_spl(
         pub encrypted_output2: Vec<u8>,
         pub fee: u64,
         pub fee_recipient: Pubkey,
-        pub mint_address: Vec<u8>,
+        pub mint_address: Pubkey,
     }
     
     let complete_ext_data = CompleteExtData {
@@ -311,7 +315,7 @@ pub fn calculate_complete_ext_data_hash_for_spl(
         encrypted_output2: encrypted_output2.to_vec(),
         fee,
         fee_recipient,
-        mint_address: mint_address.to_vec(),
+        mint_address,
     };
     
     let mut serialized_ext_data = Vec::new();

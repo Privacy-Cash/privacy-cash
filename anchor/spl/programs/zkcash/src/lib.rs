@@ -198,14 +198,14 @@ pub mod zkcash {
             ErrorCode::InvalidMintAddressInProof
         );
 
-        let calculated_ext_data_hash = utils::calculate_complete_ext_data_hash_for_spl(
+        let calculated_ext_data_hash = utils::calculate_complete_ext_data_hash(
             ext_data.recipient,
             ext_data.ext_amount,
             &encrypted_output1,
             &encrypted_output2,
             ext_data.fee,
             ext_data.fee_recipient,
-            mint_bytes_for_hash,
+            ext_data.mint_address,
         )?;
 
         require!(
