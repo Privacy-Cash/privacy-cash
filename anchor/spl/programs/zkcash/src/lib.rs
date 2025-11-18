@@ -21,9 +21,11 @@ const MERKLE_TREE_HEIGHT: u8 = 30;
 #[cfg(any(feature = "localnet", feature = "localnet-mint-checked", test))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = None;
 
-// IMPORTANT!!!!!!!: Change it back to AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM after devnet testing is done!!!!!!!
-#[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", test)))]
+#[cfg(feature = "devnet")]
 pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf"));
+
+#[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", feature = "devnet", test)))]
+pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM"));
 
 #[cfg(any(feature = "localnet", test))]
 pub const ALLOW_ALL_SPL_TOKENS: bool = true;
@@ -31,8 +33,11 @@ pub const ALLOW_ALL_SPL_TOKENS: bool = true;
 #[cfg(not(any(feature = "localnet", test)))]
 pub const ALLOW_ALL_SPL_TOKENS: bool = false;
 
-// IMPORTANT!!!!!!!: Change it back to EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v after devnet testing is done!!!!!!!
+#[cfg(feature = "devnet")]
 pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")];
+
+#[cfg(not(feature = "devnet"))]
+pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")];
 
 #[program]
 pub mod zkcash {
