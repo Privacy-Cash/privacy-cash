@@ -103,6 +103,29 @@ pub mod zkcash {
     }
 
     /**
+     * Register an authorized spender for a ZK public key.
+     * This binds a ZK keypair to a specific Solana account (e.g., multisig PDA).
+     * Only the authorized account can spend UTXOs created with this ZK pubkey.
+     */
+    pub fn register_authorized_spender(
+        ctx: Context<RegisterAuthorizedSpender>,
+        zk_pubkey: [u8; 32]
+    ) -> Result<()> {
+        let auth_spender = &mut ctx.accounts.authorized_spender;
+        auth_spender.zk_pubkey = zk_pubkey;
+        auth_spender.authorized_account = ctx.accounts.authority.key();
+        auth_spender.bump = ctx.bumps.authorized_spender;
+        
+        msg!(
+            "Authorized spender registered: ZK pubkey {:?} -> Solana account {}",
+            zk_pubkey,
+            ctx.accounts.authority.key()
+        );
+        
+        Ok(())
+    }
+
+    /**
      * Update global configuration for SOL and SPL tokens. Only the authority can call this.
      */
     pub fn update_global_config(
@@ -159,13 +182,62 @@ pub mod zkcash {
      * Users deposit or withdraw SPL tokens from the program.
      * 
      * Reentrant attacks are not possible, because nullifier creation is checked by anchor first.
+     * 
+     * For withdrawals: If input UTXOs have registered authorized spenders, only those
+     * authorized accounts can execute the withdrawal.
      */
-    pub fn transact_spl(ctx: Context<TransactSpl>, proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>) -> Result<()> {
+    pub fn transact_spl(
+        ctx: Context<TransactSpl>,
+        proof: Proof,
+        ext_data_minified: ExtDataMinified,
+        encrypted_output1: Vec<u8>,
+        encrypted_output2: Vec<u8>,
+        input_pubkeys: [[u8; 32]; 2]
+    ) -> Result<()> {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
         let global_config = &ctx.accounts.global_config;
 
         // Reconstruct full ExtData from minified version and context accounts
         let ext_data = ExtData::from_minified_spl(&ctx, ext_data_minified);
+        
+        // For withdrawals, check if either input has an authorized spender
+        // If so, verify the signer is authorized
+        if ext_data.ext_amount < 0 {
+            let mut authorized_account: Option<Pubkey> = None;
+            
+            // Check first input
+            if let Some(auth_spender_0) = &ctx.accounts.authorized_spender_0 {
+                require!(
+                    input_pubkeys[0] == auth_spender_0.zk_pubkey,
+                    ErrorCode::ZkPubkeyMismatch
+                );
+                require!(
+                    ctx.accounts.signer.key() == auth_spender_0.authorized_account,
+                    ErrorCode::UnauthorizedSpender
+                );
+                authorized_account = Some(auth_spender_0.authorized_account);
+            }
+            
+            // Check second input (if it's not a dummy UTXO)
+            if let Some(auth_spender_1) = &ctx.accounts.authorized_spender_1 {
+                require!(
+                    input_pubkeys[1] == auth_spender_1.zk_pubkey,
+                    ErrorCode::ZkPubkeyMismatch
+                );
+                require!(
+                    ctx.accounts.signer.key() == auth_spender_1.authorized_account,
+                    ErrorCode::UnauthorizedSpender
+                );
+                
+                // Both inputs must belong to the same authorized account
+                if let Some(first_auth) = authorized_account {
+                    require!(
+                        first_auth == auth_spender_1.authorized_account,
+                        ErrorCode::MixedAuthorizedAccounts
+                    );
+                }
+            }
+        }
 
         // check if proof.root is in the tree_account's proof history
         require!(
@@ -360,7 +432,7 @@ pub struct ExtDataMinified {
 }
 
 #[derive(Accounts)]
-#[instruction(proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>)]
+#[instruction(proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>, input_pubkeys: [[u8; 32]; 2])]
 pub struct TransactSpl<'info> {
     #[account(
         mut,
@@ -429,6 +501,22 @@ pub struct TransactSpl<'info> {
     )]
     pub recipient_token_account: Account<'info, TokenAccount>,
     
+    /// Optional: Authorized spender for first input UTXO
+    /// If provided, validates that signer is authorized to spend this UTXO
+    #[account(
+        seeds = [b"authorized_spender", input_pubkeys[0].as_ref()],
+        bump = authorized_spender_0.bump
+    )]
+    pub authorized_spender_0: Option<Account<'info, AuthorizedSpender>>,
+    
+    /// Optional: Authorized spender for second input UTXO
+    /// If provided, validates that signer is authorized to spend this UTXO
+    #[account(
+        seeds = [b"authorized_spender", input_pubkeys[1].as_ref()],
+        bump = authorized_spender_1.bump
+    )]
+    pub authorized_spender_1: Option<Account<'info, AuthorizedSpender>>,
+    
     /// Tree's associated token account (destination for deposits, source for withdrawals)
     /// Created automatically if it doesn't exist
     #[account(
@@ -454,6 +542,25 @@ pub struct TransactSpl<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+#[instruction(zk_pubkey: [u8; 32])]
+pub struct RegisterAuthorizedSpender<'info> {
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + std::mem::size_of::<AuthorizedSpender>(),
+        seeds = [b"authorized_spender", zk_pubkey.as_ref()],
+        bump
+    )]
+    pub authorized_spender: Account<'info, AuthorizedSpender>,
+    
+    /// The account that will be authorized to spend (e.g., Squads multisig PDA)
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 pub struct TreeTokenAccount {
     pub authority: Pubkey,
@@ -466,6 +573,16 @@ pub struct GlobalConfig {
     pub deposit_fee_rate: u16,    // basis points (0-10000, where 10000 = 100%)
     pub withdrawal_fee_rate: u16, // basis points (0-10000, where 10000 = 100%)
     pub fee_error_margin: u16,    // basis points (0-10000, where 10000 = 100%)
+    pub bump: u8,
+}
+
+#[account]
+pub struct AuthorizedSpender {
+    /// ZK public key (Poseidon hash of private key)
+    pub zk_pubkey: [u8; 32],
+    /// The Solana account authorized to spend UTXOs with this ZK pubkey
+    /// Typically a multisig PDA (e.g., Squads)
+    pub authorized_account: Pubkey,
     pub bump: u8,
 }
 
@@ -610,4 +727,10 @@ pub enum ErrorCode {
     InvalidTokenAccountMintAddress,
     #[msg("Invalid mint address in proof")]
     InvalidMintAddressInProof,
+    #[msg("Unauthorized spender: signer is not authorized to spend this UTXO")]
+    UnauthorizedSpender,
+    #[msg("ZK public key does not match the authorized spender account")]
+    ZkPubkeyMismatch,
+    #[msg("Cannot mix UTXOs from different authorized accounts in same transaction")]
+    MixedAuthorizedAccounts,
 }
