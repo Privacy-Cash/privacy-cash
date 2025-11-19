@@ -498,9 +498,6 @@ pub struct MerkleTreeAccount {
     pub _padding: [u8; 5],
 }
 
-
-
-
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(
