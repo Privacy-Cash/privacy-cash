@@ -377,7 +377,7 @@ pub struct TransactSpl<'info> {
         init,
         payer = signer,
         space = 8 + std::mem::size_of::<NullifierAccount>(),
-        seeds = [b"nullifier0", proof.input_nullifiers[0].as_ref()],
+        seeds = [b"nullifier", proof.input_nullifiers[0].as_ref()],
         bump
     )]
     pub nullifier0: Account<'info, NullifierAccount>,
@@ -390,7 +390,7 @@ pub struct TransactSpl<'info> {
         init,
         payer = signer,
         space = 8 + std::mem::size_of::<NullifierAccount>(),
-        seeds = [b"nullifier1", proof.input_nullifiers[1].as_ref()],
+        seeds = [b"nullifier", proof.input_nullifiers[1].as_ref()],
         bump
     )]
     pub nullifier1: Account<'info, NullifierAccount>,

@@ -48,12 +48,12 @@ import { createGlobalTestALT, createVersionedTransactionWithALT, sendAndConfirmV
 // Find nullifier PDAs for the given proof
 function findNullifierPDAs(program: anchor.Program<any>, proof: any) {
   const [nullifier0PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("nullifier0"), Buffer.from(proof.inputNullifiers[0])],
+    [Buffer.from("nullifier"), Buffer.from(proof.inputNullifiers[0])],
     program.programId
   );
   
   const [nullifier1PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("nullifier1"), Buffer.from(proof.inputNullifiers[1])],
+    [Buffer.from("nullifier"), Buffer.from(proof.inputNullifiers[1])],
     program.programId
   );
   
