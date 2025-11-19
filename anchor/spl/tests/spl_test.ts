@@ -898,6 +898,151 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     for (const commitment of firstOutputs) {
       splMerkleTree.insert(await commitment.getCommitment());
     }
+
+    // Step 3: Now attempt double-spend by using the SAME UTXO in position 1 instead of 0
+    const secondInputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 }), // Empty UTXO in position 0
+      targetUtxo // SAME target UTXO now in position 1 (DOUBLE SPEND!)
+    ];
+
+    const secondOutputs = [
+      new Utxo({ lightWasm, amount: '200', mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressBase58 })
+    ];
+
+    const secondInputsSum = secondInputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
+    const secondOutputsSum = secondOutputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
+    const secondWithdrawFee = new anchor.BN(calculateWithdrawalFee(secondInputsSum.toNumber()));
+    const secondExtAmount = new BN(secondWithdrawFee).add(secondOutputsSum).sub(secondInputsSum);
+    
+    const secondPublicAmount = new BN(secondExtAmount).sub(new BN(secondWithdrawFee)).add(FIELD_SIZE).mod(FIELD_SIZE);
+    
+    const secondExtData = {
+      recipient: await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey),
+      extAmount: secondExtAmount,
+      encryptedOutput1: Buffer.from("secondEncryptedOutput1"),
+      encryptedOutput2: Buffer.from("secondEncryptedOutput2"),
+      fee: secondWithdrawFee,
+      feeRecipient: await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey),
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    // Generate the second withdrawal proof with swapped inputs
+    const secondInputMerklePathIndices = [];
+    const secondInputMerklePathElements = [];
+    
+    for (let i = 0; i < secondInputs.length; i++) {
+      const input = secondInputs[i];
+      if (input.amount.gt(new BN(0))) {
+        // This is the same commitment as before, but now in position 1 instead of 0
+        const commitment = depositOutputCommitments[0]; // Same commitment!
+        input.index = splMerkleTree.indexOf(commitment);
+        secondInputMerklePathIndices.push(input.index);
+        secondInputMerklePathElements.push(splMerkleTree.path(input.index).pathElements);
+      } else {
+        secondInputMerklePathIndices.push(0);
+        secondInputMerklePathElements.push(new Array(splMerkleTree.levels).fill(0));
+      }
+    }
+
+    const secondInputNullifiers = await Promise.all(secondInputs.map(x => x.getNullifier()));
+    const secondOutputCommitments = await Promise.all(secondOutputs.map(x => x.getCommitment()));
+    const secondRoot = splMerkleTree.root();
+    const secondExtDataHash = getExtDataHash(secondExtData);
+
+    // Verify that the target nullifier is being reused
+    const firstTxTargetNullifier = firstInputNullifiers[0]; // Was in position 0 in first tx
+    const secondTxTargetNullifier = secondInputNullifiers[1]; // Now in position 1 in second tx
+    
+    expect(Buffer.from(firstTxTargetNullifier).equals(Buffer.from(secondTxTargetNullifier))).to.be.true;
+
+    const secondProofInput = {
+      root: secondRoot,
+      inputNullifier: secondInputNullifiers,
+      outputCommitment: secondOutputCommitments,
+      publicAmount: secondPublicAmount.toString(),
+      extDataHash: secondExtDataHash,
+      mintAddress: mintAddressField,
+      inAmount: secondInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: secondInputs.map(x => x.keypair.privkey),
+      inBlinding: secondInputs.map(x => x.blinding.toString(10)),
+      inPathIndices: secondInputMerklePathIndices,
+      inPathElements: secondInputMerklePathElements,
+      outAmount: secondOutputs.map(x => x.amount.toString(10)),
+      outBlinding: secondOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: secondOutputs.map(x => x.keypair.pubkey),
+    };
+
+    const secondProofResult = await prove(secondProofInput, keyBasePath);
+    const secondProofInBytes = parseProofToBytesArray(secondProofResult.proof);
+    const secondInputsInBytes = parseToBytesArray(secondProofResult.publicSignals);
+    
+    const secondProofToSubmit = {
+      proofA: secondProofInBytes.proofA,
+      proofB: secondProofInBytes.proofB.flat(),
+      proofC: secondProofInBytes.proofC,
+      root: secondInputsInBytes[0],
+      publicAmount: secondInputsInBytes[1],
+      extDataHash: secondInputsInBytes[2],
+      mintAddress: secondInputsInBytes[3],
+      inputNullifiers: [secondInputsInBytes[4], secondInputsInBytes[5]],
+      outputCommitments: [secondInputsInBytes[6], secondInputsInBytes[7]],
+    };
+
+    const secondNullifiers = findNullifierPDAs(program, secondProofToSubmit);
+
+    // This is the vulnerability: the nullifier from the first transaction is now in a different slot
+    // The PDA addresses will be different because:
+    // First transaction: ["nullifier0", nullifier_value] and ["nullifier1", empty_nullifier]
+    // Second transaction: ["nullifier0", empty_nullifier] and ["nullifier1", nullifier_value]
+    // This allows the same UTXO to be spent twice!
+    
+    let hasTransactionFailed = false;
+    try {
+      // Execute second withdrawal - this SHOULD fail but currently succeeds due to vulnerability
+      const secondTx = await program.methods
+        .transactSpl(secondProofToSubmit, createExtDataMinified(secondExtData), secondExtData.encryptedOutput1, secondExtData.encryptedOutput2)
+        .accounts({
+          treeAccount: splTreeAccountPDA,
+          nullifier0: secondNullifiers.nullifier0PDA,
+          nullifier1: secondNullifiers.nullifier1PDA,
+          globalConfig: globalConfigPDA,
+          signer: randomUser.publicKey,
+          recipient: recipient.publicKey,
+          mint: splTokenMint.publicKey,
+          signerTokenAccount: randomUserTokenAccount,
+          recipientTokenAccount: recipientTokenAccount,
+          treeAta: treeAta,
+          feeRecipientAta: feeRecipientTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+
+      const secondVersionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        randomUser.publicKey,
+        secondTx.instructions,
+        depositLookupTableAddress
+      );
+      
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        secondVersionedTx,
+        [randomUser]
+      );
+    } catch (error) {
+      // If the transaction fails, it means the vulnerability is fixed
+      // Test should pass when attack is prevented
+      hasTransactionFailed = true;
+    }
+
+    // The test expects the double-spend attempt to fail
+    // If it succeeds (hasTransactionFailed = false), the system is vulnerable
+    expect(hasTransactionFailed).to.be.true;
   });
 
   it("SPL Can execute both deposit and withdraw instruction for correct input, with positive fee", async () => {
