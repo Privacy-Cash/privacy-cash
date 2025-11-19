@@ -2,7 +2,9 @@
   "license": "ISC",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "test:spl": "TEST_FILES='tests/spl_test.ts' anchor test -- --features localnet",
+    "test:mint": "TEST_FILES='tests/spl_mint_test.ts' anchor test -- --features localnet-mint-checked"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.0",
@@ -28,3 +30,4 @@
     "typescript": "^5.7.3"
   }
 }
+

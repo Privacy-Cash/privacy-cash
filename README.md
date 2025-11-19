@@ -24,7 +24,7 @@ The implementation uses zero-knowledge proofs to ensure that withdrawals cannot 
 ## SDK
 If you want to integrate Privacy Cash into your project, use the [Privacy Cash SDK](https://github.com/Privacy-Cash/privacy-cash-sdk) here.
 
-## Anchor Program
+## SOL Anchor Program
 1. Navigate to the program directory:
    ```bash
    cd anchor/sol
@@ -75,7 +75,7 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
    --url mainnet-beta
    ```
 
-# Program verification for SOL transfers
+# SOL Program verification
 1. Dump onchain program hash
    ```bash
    solana program dump 9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD current_program.so --url mainnet-beta && sha256sum current_program.so
@@ -91,3 +91,55 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
    ```
 
 3. You'll find the hash of onchain program exactly matches the zkcash program generated from commit 549686066e81c5434182f9f85b9296bb636b07e9, which is the commit audited.
+
+## SPL Anchor Program
+1. Navigate to the program directory:
+   ```bash
+   cd anchor/spl
+   ```
+
+2. Build the program:
+   ```bash
+   anchor build
+   ```
+
+3. Run unit test:
+   ```bash
+   cargo test
+   ```
+
+4. Run integration test:
+   ```bash
+   npm run test:spl
+   npm run test:mint
+   ```
+
+5. Deploy the program to devnet:
+   ```bash
+   anchor build
+   rm target/deploy/zkcash-keypair.json
+   cp zkcash-keypair.json target/deploy/zkcash-keypair.json
+   anchor deploy --provider.cluster devnet
+
+   or
+   solana program deploy target/deploy/zkcash.so --program-id zkcash-keypair.json --upgrade-authority ./deploy-keypair.json
+   ```
+
+6. Deploy to mainnet:
+   ```bash
+   anchor build --verifiable
+
+   rm target/deploy/zkcash-keypair.json
+   cp zkcash-keypair.json target/deploy/zkcash-keypair.json 
+
+   anchor deploy --verifiable --provider.cluster mainnet
+   ```
+
+7. Transfer the authority to multisig wallet
+   ```bash
+   solana program set-upgrade-authority 9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt \
+   --new-upgrade-authority AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM \
+   --upgrade-authority deploy-keypair.json \
+   --skip-new-upgrade-authority-signer-check \
+   --url mainnet-beta
+   ```

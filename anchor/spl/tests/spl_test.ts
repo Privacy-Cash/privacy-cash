@@ -150,16 +150,21 @@ describe("zkcash", () => {
       program.programId
     );
     globalConfigPDA = globalConfigPda;
-        
-    await program.methods
-      .initialize()
-      .accounts({
-        globalConfig: globalConfigPDA,
-        authority: authority.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId
-      })
-      .signers([authority]) // Only authority is a signer
-      .rpc();
+    
+    // Check if global config is already initialized
+    const globalConfigInfo = await provider.connection.getAccountInfo(globalConfigPDA);
+    if (!globalConfigInfo) {
+      // Only initialize if it doesn't exist yet
+      await program.methods
+        .initialize()
+        .accounts({
+          globalConfig: globalConfigPDA,
+          authority: authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([authority])
+        .rpc();
+    }
 
     // Create a test SPL token mint
     splTokenMint = anchor.web3.Keypair.generate();

@@ -22,7 +22,7 @@ cluster = "localnet"
 wallet = "./deploy-keypair.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/*.ts"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 ${TEST_FILES:-tests/*.ts}"
 
 [package]
 name = "zkcash"
