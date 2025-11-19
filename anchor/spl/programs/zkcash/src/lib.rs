@@ -164,16 +164,6 @@ pub mod zkcash {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
         let global_config = &ctx.accounts.global_config;
 
-        // Validate signer's token account ownership and mint
-        require!(
-            ctx.accounts.signer_token_account.owner == ctx.accounts.signer.key(),
-            ErrorCode::InvalidTokenAccount
-        );
-        require!(
-            ctx.accounts.signer_token_account.mint == ctx.accounts.mint.key(),
-            ErrorCode::InvalidTokenAccountMintAddress
-        );
-
         // Reconstruct full ExtData from minified version and context accounts
         let ext_data = ExtData::from_minified_spl(&ctx, ext_data_minified);
 
@@ -419,7 +409,11 @@ pub struct TransactSpl<'info> {
     pub mint: Account<'info, Mint>,
     
     /// Signer's token account (source for deposits)
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = signer_token_account.owner == signer.key() @ ErrorCode::InvalidTokenAccount,
+        constraint = signer_token_account.mint == mint.key() @ ErrorCode::InvalidTokenAccountMintAddress
+    )]
     pub signer_token_account: Account<'info, TokenAccount>,
 
     /// CHECK: user should be able to send funds to any types of accounts
