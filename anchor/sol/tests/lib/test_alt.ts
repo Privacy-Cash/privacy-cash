@@ -11,6 +11,7 @@ import {
   TransactionMessage
 } from '@solana/web3.js';
 import * as anchor from "@coral-xyz/anchor";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 // Global ALT for test session (created once, used everywhere)
 let globalTestALT: PublicKey | null = null;
@@ -150,6 +151,43 @@ export function getTestProtocolAddresses(
     // System programs (constant)
     SystemProgram.programId,
     ComputeBudgetProgram.programId,
+  ];
+}
+
+export function getTestProtocolAddressesWithMint(
+  programId: PublicKey,
+  authority: PublicKey,
+  treeAta: PublicKey,
+  feeRecipient: PublicKey,
+  feeRecipientAta: PublicKey
+): PublicKey[] {
+  // Derive global config PDA
+  const [globalConfigAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('global_config')],
+    programId
+  );
+
+  // Derive tree accounts
+  const [treeAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('merkle_tree')],
+    programId
+  );
+
+  return [
+    // Core program accounts (constant)
+    programId,
+    treeAccount,
+    treeAta,
+    globalConfigAccount,
+    authority,
+    feeRecipient,
+    feeRecipientAta,
+    
+    // System programs (constant)
+    SystemProgram.programId,
+    ComputeBudgetProgram.programId,
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
   ];
 }
 

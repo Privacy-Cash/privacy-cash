@@ -59,21 +59,6 @@ function findNullifierPDAs(program: anchor.Program<any>, proof: any) {
   return { nullifier0PDA, nullifier1PDA };
 }
 
-// Find commitment PDAs for the given proof
-function findCommitmentPDAs(program: anchor.Program<any>, proof: any) {
-  const [commitment0PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("commitment0"), Buffer.from(proof.outputCommitments[0])],
-    program.programId
-  );
-  
-  const [commitment1PDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("commitment1"), Buffer.from(proof.outputCommitments[1])],
-    program.programId
-  );
-  
-  return { commitment0PDA, commitment1PDA };
-}
-
 // Find cross-check nullifier PDAs for the given proof
 function findCrossCheckNullifierPDAs(program: anchor.Program<any>, proof: any) {
   const [nullifier2PDA] = PublicKey.findProgramAddressSync(
@@ -349,7 +334,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
       units: 1_000_000 
@@ -373,8 +357,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -492,7 +474,6 @@ describe("zkcash", () => {
 
     const firstNullifiers = findNullifierPDAs(program, firstProofToSubmit);
     const firstCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, firstProofToSubmit);
-    const firstCommitments = findCommitmentPDAs(program, firstProofToSubmit);
 
     // Create Address Lookup Table for first withdrawal transaction
     const firstTestProtocolAddresses = getTestProtocolAddresses(
@@ -512,8 +493,6 @@ describe("zkcash", () => {
         nullifier1: firstNullifiers.nullifier1PDA,
         nullifier2: firstCrossCheckNullifiers.nullifier2PDA,
         nullifier3: firstCrossCheckNullifiers.nullifier3PDA,
-        commitment0: firstCommitments.commitment0PDA,
-        commitment1: firstCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -635,7 +614,6 @@ describe("zkcash", () => {
 
     const secondNullifiers = findNullifierPDAs(program, secondProofToSubmit);
     const secondCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, secondProofToSubmit);
-    const secondCommitments = findCommitmentPDAs(program, secondProofToSubmit);
 
     // This is the vulnerability: the nullifier from the first transaction is now in a different slot
     // The PDA addresses will be different because:
@@ -662,8 +640,6 @@ describe("zkcash", () => {
           nullifier1: secondNullifiers.nullifier1PDA,
           nullifier2: secondCrossCheckNullifiers.nullifier2PDA,
           nullifier3: secondCrossCheckNullifiers.nullifier3PDA,
-          commitment0: secondCommitments.commitment0PDA,
-          commitment1: secondCommitments.commitment1PDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -818,9 +794,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -849,8 +822,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -1059,10 +1030,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
       .transact(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
@@ -1072,8 +1039,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -1280,9 +1245,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -1311,8 +1273,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: pdaRecipient, // Use PDA recipient to match ExtData
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -1521,10 +1481,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Get PDA recipient balance before withdrawal (PDA was already funded at the beginning of the test)
     const pdaRecipientBalanceBefore = await provider.connection.getBalance(pdaRecipient);
 
@@ -1537,8 +1493,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA, 
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: pdaRecipient, // Use PDA as recipient in transaction accounts
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -1748,9 +1702,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -1779,8 +1730,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey, // Use normal recipient account
         feeRecipientAccount: pdaFeeRecipient, // Use PDA fee recipient to match ExtData
         treeTokenAccount: treeTokenAccountPDA,
@@ -1989,10 +1938,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Get PDA fee recipient balance before withdrawal (PDA was already funded at the beginning of the test)
     const pdaFeeRecipientBalanceBeforeWithdraw = await provider.connection.getBalance(pdaFeeRecipient);
 
@@ -2005,8 +1950,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: recipient.publicKey, // Use normal recipient account
         feeRecipientAccount: pdaFeeRecipient, // Use PDA as fee recipient in transaction accounts
         treeTokenAccount: treeTokenAccountPDA,
@@ -2195,9 +2138,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -2226,8 +2166,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -2435,10 +2373,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
       .transact(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
@@ -2448,8 +2382,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -2631,9 +2563,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -2663,8 +2592,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -2873,10 +2800,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Execute the withdrawal transaction - this should fail due to recipient mismatch
     try {
       const withdrawTx = await program.methods
@@ -2887,8 +2810,6 @@ describe("zkcash", () => {
           nullifier1: withdrawNullifiers.nullifier1PDA,
           nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
           nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-          commitment0: withdrawCommitments.commitment0PDA,
-          commitment1: withdrawCommitments.commitment1PDA,
           recipient: attacker.publicKey, // Attacker tries to replace recipient with their own address
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -3047,9 +2968,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -3078,8 +2996,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -3287,10 +3203,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
       .transact(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
@@ -3300,8 +3212,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -3485,9 +3395,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -3516,8 +3423,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -3725,10 +3630,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
       .transact(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
@@ -3738,8 +3639,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -3923,9 +3822,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -3954,8 +3850,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -4163,10 +4057,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
       .transact(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
@@ -4176,8 +4066,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -4363,9 +4251,6 @@ describe("zkcash", () => {
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
 
-    // Derive commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
-
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
       program.programId,
@@ -4394,8 +4279,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -4603,10 +4486,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Execute the withdrawal transaction
     const withdrawTx = await program.methods
       .transact(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
@@ -4616,8 +4495,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -4732,9 +4609,6 @@ describe("zkcash", () => {
     // Get nullifier PDAs
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    
-    // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     try {
       // Create the compute units instruction
@@ -4751,8 +4625,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -4832,9 +4704,6 @@ describe("zkcash", () => {
     // Get nullifier PDAs
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    
-    // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     try {
       // Create the compute units instruction
@@ -4851,8 +4720,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -4936,9 +4803,6 @@ describe("zkcash", () => {
     // Get nullifier PDAs
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    
-    // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     try {
       // Create the compute units instruction
@@ -4955,8 +4819,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -5038,9 +4900,6 @@ describe("zkcash", () => {
     // Get nullifier PDAs
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    
-    // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     try {
       // Create the compute units instruction
@@ -5057,8 +4916,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -5141,9 +4998,6 @@ describe("zkcash", () => {
     // Get nullifier PDAs
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    
-    // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     try {
       // Create the compute units instruction
@@ -5160,8 +5014,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -5425,8 +5277,7 @@ describe("zkcash", () => {
 
     // Derive PDAs
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
-    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
+    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);;
 
     // Create Address Lookup Table for transaction size optimization
     const testProtocolAddresses = getTestProtocolAddresses(
@@ -5450,8 +5301,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -5574,7 +5423,6 @@ describe("zkcash", () => {
 
     const depositNullifiers = findNullifierPDAs(program, depositProofToSubmit);
     const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
-    const depositCommitments = findCommitmentPDAs(program, depositProofToSubmit);
 
     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
       units: 1_000_000 
@@ -5598,8 +5446,6 @@ describe("zkcash", () => {
         nullifier1: depositNullifiers.nullifier1PDA,
         nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
         nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
-        commitment0: depositCommitments.commitment0PDA,
-        commitment1: depositCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -5717,7 +5563,6 @@ describe("zkcash", () => {
 
     const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
     const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-    const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
 
     // Create Address Lookup Table for withdrawal transaction
     const withdrawTestProtocolAddresses = getTestProtocolAddresses(
@@ -5737,8 +5582,6 @@ describe("zkcash", () => {
         nullifier1: withdrawNullifiers.nullifier1PDA,
         nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
         nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-        commitment0: withdrawCommitments.commitment0PDA,
-        commitment1: withdrawCommitments.commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -5867,7 +5710,6 @@ describe("zkcash", () => {
     // Derive nullifier and commitment PDAs for deposit
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proofToSubmit);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
 
     // Execute the deposit transaction
     const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
@@ -5891,8 +5733,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: nullifier2PDA,
         nullifier3: nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,
@@ -6034,10 +5874,6 @@ describe("zkcash", () => {
          // Derive PDAs for withdrawal nullifiers
      const withdrawNullifiers = findNullifierPDAs(program, withdrawProofToSubmit);
      const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
-     
-     // Derive PDAs for withdrawal commitments
-     const withdrawCommitments = findCommitmentPDAs(program, withdrawProofToSubmit);
-
     // Execute the withdrawal transaction - this should succeed and demonstrate arithmetic protection is in place
     try {
       // Create Address Lookup Table for withdrawal transaction
@@ -6057,8 +5893,6 @@ describe("zkcash", () => {
           nullifier1: withdrawNullifiers.nullifier1PDA,
           nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
           nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
-          commitment0: withdrawCommitments.commitment0PDA,
-          commitment1: withdrawCommitments.commitment1PDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -6135,9 +5969,6 @@ describe("zkcash", () => {
     // Get nullifier PDAs
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proof);
     const { nullifier2PDA, nullifier3PDA } = findCrossCheckNullifierPDAs(program, proof);
-    
-    // Get commitment PDAs
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proof);
 
     try {
       // Create the compute units instruction
@@ -6154,8 +5985,6 @@ describe("zkcash", () => {
           nullifier1: nullifier1PDA,
           nullifier2: nullifier2PDA,
           nullifier3: nullifier3PDA,
-          commitment0: commitment0PDA,
-          commitment1: commitment1PDA,
           recipient: recipient.publicKey,
           feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
           treeTokenAccount: treeTokenAccountPDA,
@@ -6610,7 +6439,6 @@ describe("zkcash", () => {
     // Derive PDAs
     const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
     const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
-    const { commitment0PDA, commitment1PDA } = findCommitmentPDAs(program, proofToSubmit);
 
     // Create Address Lookup Table
     const testProtocolAddresses = getTestProtocolAddresses(
@@ -6634,8 +6462,6 @@ describe("zkcash", () => {
         nullifier1: nullifier1PDA,
         nullifier2: crossCheckNullifiers.nullifier2PDA,
         nullifier3: crossCheckNullifiers.nullifier3PDA,
-        commitment0: commitment0PDA,
-        commitment1: commitment1PDA,
         recipient: recipient.publicKey,
         feeRecipientAccount: FEE_RECIPIENT_ACCOUNT,
         treeTokenAccount: treeTokenAccountPDA,

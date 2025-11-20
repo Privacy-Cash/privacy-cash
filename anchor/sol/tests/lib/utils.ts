@@ -97,4 +97,98 @@ export function getExtDataHash(extData: {
   const hashHex = sha256(serializedData);
   // Convert from hex string to Uint8Array
   return Buffer.from(hashHex.slice(2), 'hex');
-} 
+}
+
+/**
+ * Calculates the hash of ext data using Borsh serialization
+ * @param extData External data object containing recipient, amount, encrypted outputs, fee, fee recipient, and mint address
+ * @returns The hash as a Uint8Array (32 bytes)
+ */
+export function getExtDataHashForSpl(extData: {
+  recipient: string | PublicKey;
+  extAmount: string | number | BN;
+  encryptedOutput1?: string | Uint8Array;  // Optional for Account Data Separation
+  encryptedOutput2?: string | Uint8Array;  // Optional for Account Data Separation
+  fee: string | number | BN;
+  feeRecipient: string | PublicKey;
+  mintAddress: string | PublicKey;
+}): Uint8Array {
+  // Convert all inputs to their appropriate types
+  const recipient = extData.recipient instanceof PublicKey 
+    ? extData.recipient 
+    : new PublicKey(extData.recipient);
+  
+  const feeRecipient = extData.feeRecipient instanceof PublicKey 
+    ? extData.feeRecipient 
+    : new PublicKey(extData.feeRecipient);
+  
+  const mintAddress = extData.mintAddress instanceof PublicKey 
+    ? extData.mintAddress 
+    : new PublicKey(extData.mintAddress);
+  
+  // Convert to BN for proper i64/u64 handling
+  const extAmount = new BN(extData.extAmount.toString());
+  const fee = new BN(extData.fee.toString());
+  
+  // Handle encrypted outputs - they might not be present in Account Data Separation approach
+  const encryptedOutput1 = extData.encryptedOutput1 
+    ? Buffer.from(extData.encryptedOutput1 as any)
+    : Buffer.alloc(0); // Empty buffer if not provided
+  const encryptedOutput2 = extData.encryptedOutput2 
+    ? Buffer.from(extData.encryptedOutput2 as any)
+    : Buffer.alloc(0); // Empty buffer if not provided
+
+  // For SPL tokens (not SOL), use only the first 16 bytes of the mint address
+  // SOL address is '11111111111111111111111111111112' which is handled specially
+  const mintAddressBytes = mintAddress.toBytes();
+  const solAddressBytes = new PublicKey('11111111111111111111111111111112').toBytes();
+  const mintAddressBytesForHash = mintAddressBytes.slice(0, 31);
+
+  // Define the borsh schema matching the Rust struct
+  const schema = {
+    struct: {
+      recipient: { array: { type: 'u8', len: 32 } },
+      extAmount: 'i64',
+      encryptedOutput1: { array: { type: 'u8' } },
+      encryptedOutput2: { array: { type: 'u8' } },
+      fee: 'u64',
+      feeRecipient: { array: { type: 'u8', len: 32 } },
+      mintAddress: { array: { type: 'u8' } },
+    }
+  };
+
+  const value = {
+    recipient: recipient.toBytes(),
+    extAmount: extAmount,  // BN instance - Borsh handles it correctly with i64 type
+    encryptedOutput1: encryptedOutput1,
+    encryptedOutput2: encryptedOutput2,
+    fee: fee,  // BN instance - Borsh handles it correctly with u64 type
+    feeRecipient: feeRecipient.toBytes(),
+    mintAddress: mintAddressBytesForHash,
+  };
+  
+  // Serialize with Borsh
+  const serializedData = borsh.serialize(schema, value);
+  
+  // Calculate the SHA-256 hash
+  const hashHex = sha256(serializedData);
+  // Convert from hex string to Uint8Array
+  return Buffer.from(hashHex.slice(2), 'hex');
+}
+
+// Helper function to get mint address field for circuit
+// Returns a field element that fits within the circuit's prime field (254 bits)
+export function getMintAddressField(mint: PublicKey): string {
+  const mintStr = mint.toString();
+  
+  // Special case for SOL (system program)
+  if (mintStr === '11111111111111111111111111111112') {
+    return mintStr;
+  }
+  
+  // For SPL tokens (USDC, USDT, etc): use first 31 bytes (248 bits)
+  // This provides better collision resistance than 8 bytes while still fitting in the field
+  // We will only suppport private SOL, USDC and USDT send, so there won't be any collision.
+  const mintBytes = mint.toBytes();
+  return new anchor.BN(mintBytes.slice(0, 31), 'be').toString();
+}

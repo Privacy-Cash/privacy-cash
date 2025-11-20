@@ -2,10 +2,14 @@
   "license": "ISC",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "test:spl": "TEST_FILES='tests/spl_tests.ts' anchor test -- --features localnet",
+    "test:sol": "TEST_FILES='tests/sol_tests.ts' anchor test -- --features localnet",
+    "test:mint-checked": "TEST_FILES='tests/spl_mint_test.ts' anchor test -- --features localnet-mint-checked"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.0",
+    "@solana/spl-token": "^0.4.14",
     "circomlib": "^2.0.5",
     "ffjavascript": "^0.3.1"
   },

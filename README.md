@@ -42,7 +42,9 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
 
 4. Run integration test:
    ```bash
-   anchor test -- --features localnet
+   npm run test:sol
+   npm run test:spl
+   npm run test:mint-checked
    ```
 
 5. Deploy the program to devnet:
@@ -51,6 +53,12 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
    rm target/deploy/zkcash-keypair.json
    cp zkcash-keypair.json target/deploy/zkcash-keypair.json
    anchor deploy --provider.cluster devnet
+
+   or
+   rm target
+   anchor build --verifiable
+   cp zkcash-keypair.json target/deploy/zkcash-keypair.json
+   anchor deploy --verifiable --provider.cluster devnet
 
    or
    solana program deploy target/deploy/zkcash.so --program-id zkcash-keypair.json --upgrade-authority ./deploy-keypair.json
