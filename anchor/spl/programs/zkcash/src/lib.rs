@@ -58,17 +58,33 @@ pub mod zkcash {
         global_config.fee_error_margin = 500; // 5% (500 basis points)
         global_config.bump = ctx.bumps.global_config;
         
+        // Initialize global tree account for all SPL tokens
+        let tree_account = &mut ctx.accounts.tree_account.load_init()?;
+        tree_account.authority = ctx.accounts.authority.key();
+        tree_account.next_index = 0;
+        tree_account.root_index = 0;
+        tree_account.bump = ctx.bumps.tree_account;
+        tree_account.height = MERKLE_TREE_HEIGHT;
+        tree_account.root_history_size = 100;
+
+        MerkleTree::initialize::<Poseidon>(tree_account)?;
+
+        msg!(
+            "Global merkle tree initialized for all SPL tokens, height: {}, root history size: {}",
+            MERKLE_TREE_HEIGHT,
+            100
+        );
+        
         Ok(())
     }
 
     /**
-     * Initialize a new merkle tree for a specific SPL token.
-     * This allows each token type to have its own separate tree.
+     * Initialize tree ATA for a specific SPL token.
+     * This creates the associated token account for holding deposits.
      * Only the authority can call this.
      */
     pub fn initialize_tree_account_for_spl_token(
-        ctx: Context<InitializeTreeAccountForSplToken>,
-        max_deposit_amount: u64
+        ctx: Context<InitializeTreeAccountForSplToken>
     ) -> Result<()> {
         if let Some(admin_key) = ADMIN_PUBKEY {
             require!(ctx.accounts.authority.key().eq(&admin_key), ErrorCode::Unauthorized);
@@ -80,23 +96,10 @@ pub mod zkcash {
             ErrorCode::InvalidMintAddress
         );
 
-        let tree_account = &mut ctx.accounts.tree_account.load_init()?;
-        tree_account.authority = ctx.accounts.authority.key();
-        tree_account.next_index = 0;
-        tree_account.root_index = 0;
-        tree_account.bump = ctx.bumps.tree_account;
-        tree_account.max_deposit_amount = max_deposit_amount;
-        tree_account.height = MERKLE_TREE_HEIGHT;
-        tree_account.root_history_size = 100;
-
-        MerkleTree::initialize::<Poseidon>(tree_account)?;
-
+        // The tree_ata is automatically created by the init constraint in the account struct
         msg!(
-            "SPL Token merkle tree initialized for mint: {}, height: {}, root history size: {}, deposit limit: {}",
-            ctx.accounts.mint.key(),
-            MERKLE_TREE_HEIGHT,
-            100,
-            max_deposit_amount
+            "Tree ATA initialized for mint: {}",
+            ctx.accounts.mint.key()
         );
 
         Ok(())
@@ -131,27 +134,6 @@ pub mod zkcash {
             msg!("Fee error margin updated to: {} basis points", fee_error_margin_val);
         }
         
-        Ok(())
-    }
-
-    /**
-     * Update the maximum deposit amount limit for a specific SPL token tree.
-     * Only the authority can call this.
-     */
-    pub fn update_deposit_limit_for_spl_token(
-        ctx: Context<UpdateDepositLimitForSplToken>,
-        new_limit: u64
-    ) -> Result<()> {
-        let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
-
-        tree_account.max_deposit_amount = new_limit;
-
-        msg!(
-            "Deposit limit updated to: {} for mint: {}",
-            new_limit,
-            ctx.accounts.mint.key()
-        );
-
         Ok(())
     }
 
@@ -224,13 +206,6 @@ pub mod zkcash {
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
         if ext_amount > 0 {
-            // Check deposit limit for deposits
-            let deposit_amount = ext_amount as u64;
-            require!(
-                deposit_amount <= tree_account.max_deposit_amount,
-                ErrorCode::DepositLimitExceeded
-            );
-            
             // SPL Token deposit: transfer from signer's token account to tree's ATA
             token::transfer(
                 CpiContext::new(
@@ -364,7 +339,7 @@ pub struct ExtDataMinified {
 pub struct TransactSpl<'info> {
     #[account(
         mut,
-        seeds = [b"merkle_tree", mint.key().as_ref()],
+        seeds = [b"merkle_tree"],
         bump = tree_account.load()?.bump
     )]
     pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
@@ -484,12 +459,11 @@ pub struct MerkleTreeAccount {
     pub root: [u8; 32],
     pub root_history: [[u8; 32]; 100],
     pub root_index: u64,
-    pub max_deposit_amount: u64,
     pub height: u8,
     pub root_history_size: u8,
     pub bump: u8,
-    // The pub _padding: [u8; 5] is needed because of the #[account(zero_copy)] attribute.
-    pub _padding: [u8; 5],
+    // The pub _padding: [u8; 13] is needed because of the #[account(zero_copy)] attribute.
+    pub _padding: [u8; 13],
 }
 
 #[derive(Accounts)]
@@ -503,6 +477,15 @@ pub struct Initialize<'info> {
     )]
     pub global_config: Account<'info, GlobalConfig>,
     
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + std::mem::size_of::<MerkleTreeAccount>(),
+        seeds = [b"merkle_tree"],
+        bump
+    )]
+    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
+    
     #[account(mut)]
     pub authority: Signer<'info>,
     
@@ -511,15 +494,6 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct InitializeTreeAccountForSplToken<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<MerkleTreeAccount>(),
-        seeds = [b"merkle_tree", mint.key().as_ref()],
-        bump
-    )]
-    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
-
     /// SPL Token mint account
     pub mint: Account<'info, Mint>,
 
@@ -529,27 +503,25 @@ pub struct InitializeTreeAccountForSplToken<'info> {
     )]
     pub global_config: Account<'info, GlobalConfig>,
 
+    /// Tree's associated token account for this mint
+    #[account(
+        init,
+        payer = authority,
+        associated_token::mint = mint,
+        associated_token::authority = global_config
+    )]
+    pub tree_ata: Account<'info, TokenAccount>,
+
     #[account(mut)]
     pub authority: Signer<'info>,
 
+    /// SPL Token program
+    pub token_program: Program<'info, Token>,
+    
+    /// Associated Token program
+    pub associated_token_program: Program<'info, AssociatedToken>,
+
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateDepositLimitForSplToken<'info> {
-    #[account(
-        mut,
-        seeds = [b"merkle_tree", mint.key().as_ref()],
-        bump = tree_account.load()?.bump,
-        has_one = authority @ ErrorCode::Unauthorized
-    )]
-    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
-
-    /// SPL Token mint account
-    pub mint: Account<'info, Mint>,
-
-    /// The authority account that can update the deposit limit
-    pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -590,8 +562,6 @@ pub enum ErrorCode {
     PublicAmountCalculationError,
     #[msg("Arithmetic overflow/underflow occurred")]
     ArithmeticOverflow,
-    #[msg("Deposit limit exceeded")]
-    DepositLimitExceeded,
     #[msg("Invalid fee rate: must be between 0 and 10000 basis points")]
     InvalidFeeRate,
     #[msg("Fee recipient does not match global configuration")]

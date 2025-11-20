@@ -139,7 +139,7 @@ fn test_tree_already_full() {
     let error = result.unwrap_err();
     match error {
         anchor_lang::error::Error::AnchorError(anchor_error) => {
-            assert_eq!(anchor_error.error_code_number, 6016); // MerkleTreeFull error code
+            assert_eq!(anchor_error.error_code_number, 6015); // MerkleTreeFull error code
         }
         _ => {
             panic!("Expected AnchorError with MerkleTreeFull error code, got: {:?}", error);
