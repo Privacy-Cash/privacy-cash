@@ -21,7 +21,7 @@ const MERKLE_TREE_HEIGHT: u8 = 30;
 #[cfg(any(feature = "localnet", feature = "localnet-mint-checked", test))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = None;
 
-#[cfg(feature = "devnet")]
+#[cfg(all(feature = "devnet", not(any(feature = "localnet", feature = "localnet-mint-checked", test))))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf"));
 
 #[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", feature = "devnet", test)))]
