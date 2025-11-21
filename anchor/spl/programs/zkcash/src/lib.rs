@@ -405,10 +405,8 @@ pub struct TransactSpl<'info> {
     pub recipient_token_account: Account<'info, TokenAccount>,
     
     /// Tree's associated token account (destination for deposits, source for withdrawals)
-    /// Created automatically if it doesn't exist
     #[account(
-        init_if_needed,
-        payer = signer,
+        mut,
         associated_token::mint = mint,
         associated_token::authority = global_config
     )]
@@ -505,7 +503,7 @@ pub struct InitializeTreeAccountForSplToken<'info> {
 
     /// Tree's associated token account for this mint
     #[account(
-        init,
+        init_if_needed,
         payer = authority,
         associated_token::mint = mint,
         associated_token::authority = global_config
