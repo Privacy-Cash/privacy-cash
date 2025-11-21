@@ -134,7 +134,8 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
     }
 }
 
-// Only use the allocator if we're not in a no-entrypoint context
-#[cfg(not(feature = "no-entrypoint"))]
+// Only use the allocator when building for Solana target
+// This avoids conflicts with Anchor's allocator during IDL generation and tests
+#[cfg(all(target_os = "solana", not(feature = "no-entrypoint")))]
 #[global_allocator]
 static A: BumpAllocator = BumpAllocator;

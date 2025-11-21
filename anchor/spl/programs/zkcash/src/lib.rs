@@ -8,7 +8,10 @@ use anchor_spl::associated_token::AssociatedToken;
 
 declare_id!("9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt");
 
+// Only include allocator when building for Solana target (not during IDL generation)
+#[cfg(target_os = "solana")]
 pub mod allocator;
+
 pub mod merkle_tree;
 pub mod utils;
 pub mod groth16;
