@@ -8,6 +8,7 @@ use anchor_spl::associated_token::AssociatedToken;
 
 declare_id!("9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt");
 
+pub mod allocator;
 pub mod merkle_tree;
 pub mod utils;
 pub mod groth16;
