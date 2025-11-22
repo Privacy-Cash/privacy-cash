@@ -310,47 +310,6 @@ pub fn calculate_complete_ext_data_hash(
     Ok(calculated_ext_data_hash)
 }
 
-/**
- * This method is very much the same as calculate_complete_ext_data_hash, but we intentionally
- * duplicate here for preventing breaking the existing production code for data to be backward compatible.
- */
-pub fn calculate_complete_ext_data_hash_for_spl(
-    recipient: Pubkey,
-    ext_amount: i64,
-    encrypted_output1: &[u8],
-    encrypted_output2: &[u8],
-    fee: u64,
-    fee_recipient: Pubkey,
-    mint_address: &[u8],
-) -> Result<[u8; 32]> {
-    #[derive(AnchorSerialize)]
-    struct CompleteExtData {
-        pub recipient: Pubkey,
-        pub ext_amount: i64,
-        pub encrypted_output1: Vec<u8>,
-        pub encrypted_output2: Vec<u8>,
-        pub fee: u64,
-        pub fee_recipient: Pubkey,
-        pub mint_address: Vec<u8>,
-    }
-    
-    let complete_ext_data = CompleteExtData {
-        recipient,
-        ext_amount,
-        encrypted_output1: encrypted_output1.to_vec(),
-        encrypted_output2: encrypted_output2.to_vec(),
-        fee,
-        fee_recipient,
-        mint_address: mint_address.to_vec(),
-    };
-    
-    let mut serialized_ext_data = Vec::new();
-    complete_ext_data.serialize(&mut serialized_ext_data)?;
-    let calculated_ext_data_hash = hash(&serialized_ext_data).to_bytes();
-    
-    Ok(calculated_ext_data_hash)
-}
-
 pub fn change_endianness(bytes: &[u8]) -> Vec<u8> {
     let mut vec = Vec::new();
     for b in bytes.chunks(32) {
