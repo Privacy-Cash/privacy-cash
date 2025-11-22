@@ -21,14 +21,13 @@ const deployKeypairPath = path.join(anchorDirPath, 'deploy-keypair.json');
 const keypairJson = JSON.parse(readFileSync(deployKeypairPath, 'utf-8'));
 const user = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
 
-// Program ID for the zkcash program
-// IMPORTANT!!!!!!!: Change it back to 9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD after devnet testing is done!!!!!!!
-const PROGRAM_ID = new PublicKey('2H723rrywJVPGRdqC2iL8Egcz2A3VCkEQ6hmt8XGcGix');
-// IMPORTANT!!!!!!!: Change it back to AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM after devnet testing is done!!!!!!!
-const FEE_RECIPIENT_ACCOUNT = new PublicKey('AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM');
+// Program ID for the zkcash program on devnet
+const PROGRAM_ID = new PublicKey('ATZj4jZ4FFzkvAcvk27DW9GRkgSbFnHo49fKKPQXU7VS');
+// Fee recipient for devnet
+const FEE_RECIPIENT_ACCOUNT = new PublicKey('97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf');
+const authority = new PublicKey('97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf');
 
 // USDC mint address on devnet
-// IMPORTANT!!!!!!!: Change it back to EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v after devnet testing is done!!!!!!!
 const USDC_MINT = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
 
 // Configure connection to Solana mainnet-beta
@@ -152,10 +151,6 @@ async function getProtocolAddresses(
   programId: PublicKey,
   authority: PublicKey,
   user: PublicKey,
-  nullifier0PDA: PublicKey,
-  nullifier1PDA: PublicKey,
-  commitment0PDA: PublicKey,
-  commitment1PDA: PublicKey,
   feeRecipientAccount: PublicKey,
   recipient?: PublicKey
 ): Promise<PublicKey[]> {
@@ -175,6 +170,12 @@ async function getProtocolAddresses(
     programId
   );
 
+  // Derive USDC tree account (1 tree per token)
+  const [usdcTreeAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('merkle_tree'), USDC_MINT.toBuffer()],
+    programId
+  );
+
   // Calculate USDC token accounts
   const usdcTreeAta = await getAssociatedTokenAddress(
     USDC_MINT,
@@ -190,11 +191,8 @@ async function getProtocolAddresses(
 
   const addresses = [
     programId,
-    treeAccount,
-    nullifier0PDA,
-    nullifier1PDA,
-    commitment0PDA,
-    commitment1PDA,
+    treeAccount,        // SOL tree
+    usdcTreeAccount,    // USDC tree
     treeTokenAccount,
     globalConfigAccount,
     user,
@@ -223,9 +221,7 @@ async function main() {
   try {
     console.log('🚀 Creating Address Lookup Table for Privacy Cash Protocol...\n');
     
-    // Squad vault (authority) public key
-    const squadVault = new PublicKey('AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM');
-    console.log(`Squad Vault (Authority): ${squadVault.toString()}`);
+    console.log(`(Authority): ${authority.toString()}`);
     console.log(`Payer: ${user.publicKey.toString()}`);
     
     // Check wallet balance
@@ -250,6 +246,12 @@ async function main() {
 
     const [globalConfigAccount] = PublicKey.findProgramAddressSync(
       [Buffer.from('global_config')],
+      PROGRAM_ID
+    );
+
+    // Derive USDC tree account (1 tree per token)
+    const [usdcTreeAccount] = PublicKey.findProgramAddressSync(
+      [Buffer.from('merkle_tree'), USDC_MINT.toBuffer()],
       PROGRAM_ID
     );
 
@@ -278,11 +280,12 @@ async function main() {
 
     console.log('\n📋 Protocol addresses to include in ALT:');
     console.log(`- Program ID: ${PROGRAM_ID.toString()}`);
-    console.log(`- Tree Account: ${treeAccount.toString()}`);
+    console.log(`- SOL Tree Account: ${treeAccount.toString()}`);
+    console.log(`- USDC Tree Account: ${usdcTreeAccount.toString()}`);
     console.log(`- Tree Token Account: ${treeTokenAccount.toString()}`);
     console.log(`- Global Config Account: ${globalConfigAccount.toString()}`);
     console.log(`- Fee Recipient: ${FEE_RECIPIENT_ACCOUNT.toString()}`);
-    console.log(`- Squad Vault (Authority): ${squadVault.toString()}`);
+    console.log(`- (Authority): ${authority.toString()}`);
     console.log(`- Payer: ${user.publicKey.toString()}`);
     console.log(`- System Program: 11111111111111111111111111111111`);
     console.log(`- Compute Budget Program: ComputeBudget111111111111111111111111111111`);
@@ -301,12 +304,8 @@ async function main() {
     // Create comprehensive address list for the protocol
     const protocolAddresses = await getProtocolAddresses(
       PROGRAM_ID,
-      squadVault, // Squad vault as authority
+      authority, // Squad vault as authority
       user.publicKey,
-      nullifier0PDA, // Dummy PDAs for ALT creation
-      nullifier1PDA,
-      commitment0PDA,
-      commitment1PDA,
       FEE_RECIPIENT_ACCOUNT
     );
 

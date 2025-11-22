@@ -71,6 +71,11 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
    solana program deploy target/deploy/zkcash.so --program-id zkcash-keypair.json --upgrade-authority ./deploy-keypair.json
    ```
 
+   for SPL, build with:
+   ```
+   anchor build -- --features devnet
+   ```
+
 6. Deploy to mainnet:
    ```bash
    anchor build --verifiable

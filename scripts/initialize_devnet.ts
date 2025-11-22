@@ -24,8 +24,8 @@ const idl = JSON.parse(readFileSync(idlPath, 'utf-8'));
 
 dotenv.config();
 
-// Program ID for the zkcash program (updated to match new keypair)
-const PROGRAM_ID = new PublicKey('2H723rrywJVPGRdqC2iL8Egcz2A3VCkEQ6hmt8XGcGix');
+// Program ID for the zkcash program on devnet
+const PROGRAM_ID = new PublicKey('ATZj4jZ4FFzkvAcvk27DW9GRkgSbFnHo49fKKPQXU7VS');
 
 // Configure connection to Solana mainnet-beta
 const connection = new Connection('https://domini-i2gp2o-fast-devnet.helius-rpc.com', 'confirmed');
