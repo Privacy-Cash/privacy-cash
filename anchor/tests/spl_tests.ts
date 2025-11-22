@@ -4,7 +4,7 @@ import { Zkcash } from "../target/types/zkcash";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddress, createInitializeMintInstruction, createAssociatedTokenAccountInstruction, createMintToInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
-import { getExtDataHash, getExtDataHashForSpl, getMintAddressField } from "./lib/utils";
+import { getExtDataHash, getMintAddressField } from "./lib/utils";
 import { DEFAULT_HEIGHT, FIELD_SIZE, ROOT_HISTORY_SIZE, ZERO_BYTES, DEPOSIT_FEE_RATE, WITHDRAW_FEE_RATE, FEE_RECIPIENT_ACCOUNT } from "./lib/constants";
 
 // SOL address constant (matches the Rust program)
@@ -755,7 +755,7 @@ it("Deposit SOL withdraw USDC", async () => {
   const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
   const withdrawRoot = solMerkleTree.root();
-  const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
+  const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
   const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
   const withdrawCircuitInput = {
@@ -936,7 +936,7 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
  const root = splMerkleTree.root();
 
  // Calculate the hash correctly using our utility
- const calculatedExtDataHash = getExtDataHashForSpl(extData);
+ const calculatedExtDataHash = getExtDataHash(extData);
  const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
 
  const input = {
@@ -1166,7 +1166,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee.toNumber());
 
     const depositInput = {
@@ -1326,7 +1326,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const firstInputNullifiers = await Promise.all(firstInputs.map(x => x.getNullifier()));
     const firstOutputCommitments = await Promise.all(firstOutputs.map(x => x.getCommitment()));
     const firstRoot = splMerkleTree.root();
-    const firstExtDataHash = getExtDataHashForSpl(firstExtData);
+    const firstExtDataHash = getExtDataHash(firstExtData);
 
     const firstProofInput = {
       root: firstRoot,
@@ -1469,7 +1469,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -1622,7 +1622,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = splMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
     const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
     const withdrawCircuitInput = {
@@ -1798,7 +1798,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -1951,7 +1951,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = splMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
     const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
     const withdrawCircuitInput = {
@@ -2149,7 +2149,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -2302,7 +2302,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = splMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
     const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
     const withdrawCircuitInput = {
@@ -2475,7 +2475,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -2621,7 +2621,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = splMerkleTree.root();
-    const legitimateExtDataHash = getExtDataHashForSpl(legitimateExtData);
+    const legitimateExtDataHash = getExtDataHash(legitimateExtData);
     const withdrawPublicAmountNumber = new anchor.BN(-withdrawAmount - withdrawFee);
 
     const withdrawCircuitInput = {
@@ -2839,7 +2839,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -2995,7 +2995,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = splMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
 
     const withdrawCircuitInput = {
       root: withdrawRoot,
@@ -3158,7 +3158,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -3339,7 +3339,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = splMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
 
     const withdrawCircuitInput = {
       root: withdrawRoot,
@@ -3530,7 +3530,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -3711,7 +3711,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = splMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
 
     const withdrawCircuitInput = {
       root: withdrawRoot,
@@ -3902,7 +3902,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
 
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(depositAmount - depositFee);
 
     const depositInput = {
@@ -4058,7 +4058,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
 
     const withdrawRoot = splMerkleTree.root();
-    const withdrawCalculatedExtDataHash = getExtDataHashForSpl(withdrawExtData);
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
 
     const withdrawCircuitInput = {
       root: withdrawRoot,
@@ -4185,7 +4185,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     };
 
     // Calculate the hash using the modified data
-    const incorrectExtDataHash = getExtDataHashForSpl(modifiedExtData);
+    const incorrectExtDataHash = getExtDataHash(modifiedExtData);
     
     // Create a Proof object with the incorrect hash
     const proof = {
@@ -4282,7 +4282,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       mintAddress: splTokenMint.publicKey,
     };
 
-    const calculatedExtDataHash = getExtDataHashForSpl(extData);
+    const calculatedExtDataHash = getExtDataHash(extData);
     const invalidRoot = Array(32).fill(123); // Different from any known root
     
     const proof = {
@@ -4383,7 +4383,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       mintAddress: splTokenMint.publicKey,
     };
 
-    const calculatedExtDataHash = getExtDataHashForSpl(extData);
+    const calculatedExtDataHash = getExtDataHash(extData);
     const zeroRoot = Array(32).fill(0);
     
     const proof = {
@@ -4523,7 +4523,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     };
 
     // Calculate the hash using the modified data (with different mint address)
-    const incorrectExtDataHash = getExtDataHashForSpl(modifiedExtData);
+    const incorrectExtDataHash = getExtDataHash(modifiedExtData);
     
     // Create a Proof object with the incorrect hash
     const proof = {
@@ -4734,7 +4734,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
    const root = splMerkleTree.root();
 
    // Calculate the hash correctly using our utility
-   const calculatedExtDataHash = getExtDataHashForSpl(extData);
+   const calculatedExtDataHash = getExtDataHash(extData);
    const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
 
    const input = {
@@ -4964,7 +4964,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
     
     const depositRoot = splMerkleTree.root();
-    const depositCalculatedExtDataHash = getExtDataHashForSpl(depositExtData);
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
     const depositPublicAmountNumber = new anchor.BN(smallDepositAmount - depositFee);
     
     const depositInput = {
@@ -5166,7 +5166,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       mintAddress: splTokenMint.publicKey,
     };
     
-    const largeExtDataHash = getExtDataHashForSpl(largeExtData);
+    const largeExtDataHash = getExtDataHash(largeExtData);
     
     const largeCircuitInput = {
       root: largeRoot,
@@ -5242,7 +5242,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const invalidCircuitInput = {
       root: splMerkleTree.root(),
       publicAmount: "0", // Balanced (no external transfer)
-      extDataHash: getExtDataHashForSpl(invalidExtData),
+      extDataHash: getExtDataHash(invalidExtData),
       mintAddress: mintAddressField,
       
       inputNullifier: invalidInputNullifiers,
@@ -5339,7 +5339,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
 
     const root = splMerkleTree.root();
-    const calculatedExtDataHash = getExtDataHashForSpl(extData);
+    const calculatedExtDataHash = getExtDataHash(extData);
     const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
 
     const input = {
@@ -5548,7 +5548,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
 
     const root = splMerkleTree.root();
-    const calculatedExtDataHash = getExtDataHashForSpl(extData);
+    const calculatedExtDataHash = getExtDataHash(extData);
     const publicAmountNumber = new anchor.BN(depositAmount - calculatedDepositFee);
 
     const input = {
