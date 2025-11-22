@@ -6,8 +6,11 @@ use ark_bn254::Fr;
 use anchor_spl::token::{self, Token, TokenAccount, Mint, Transfer as SplTransfer};
 use anchor_spl::associated_token::AssociatedToken;
 
-// IMPORTANT!!!!!!!: Change it back to 9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD after devnet testing is done!!!!!!!
-declare_id!("2H723rrywJVPGRdqC2iL8Egcz2A3VCkEQ6hmt8XGcGix");
+#[cfg(any(feature = "devnet", feature = "localnet", feature = "localnet-mint-checked"))]
+declare_id!("ATZj4jZ4FFzkvAcvk27DW9GRkgSbFnHo49fKKPQXU7VS");
+
+#[cfg(not(any(feature = "devnet", feature = "localnet", feature = "localnet-mint-checked")))]
+declare_id!("9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD");
 
 pub mod merkle_tree;
 pub mod utils;
@@ -22,9 +25,11 @@ const MERKLE_TREE_HEIGHT: u8 = 26;
 #[cfg(any(feature = "localnet", feature = "localnet-mint-checked", test))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = None;
 
-// IMPORTANT!!!!!!!: Change it back to AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM after devnet testing is done!!!!!!!
-#[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", test)))]
+#[cfg(all(feature = "devnet", not(any(feature = "localnet", feature = "localnet-mint-checked", test))))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf"));
+
+#[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", feature = "devnet", test)))]
+pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM"));
 
 #[cfg(any(feature = "localnet", test))]
 pub const ALLOW_ALL_SPL_TOKENS: bool = true;
@@ -32,8 +37,11 @@ pub const ALLOW_ALL_SPL_TOKENS: bool = true;
 #[cfg(not(any(feature = "localnet", test)))]
 pub const ALLOW_ALL_SPL_TOKENS: bool = false;
 
-// IMPORTANT!!!!!!!: Change it back to EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v after devnet testing is done!!!!!!!
+#[cfg(feature = "devnet")]
 pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")];
+
+#[cfg(not(feature = "devnet"))]
+pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")];
 
 #[program]
 pub mod zkcash {
@@ -477,14 +485,16 @@ pub mod zkcash {
         let second_index = next_index_to_insert.checked_add(1)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-        emit!(CommitmentData {
+        emit!(SplCommitmentData {
             index: next_index_to_insert,
+            mint_address: ext_data.mint_address,
             commitment: proof.output_commitments[0],
             encrypted_output: encrypted_output1.to_vec(),
         });
 
-        emit!(CommitmentData {
+        emit!(SplCommitmentData {
             index: second_index,
+            mint_address: ext_data.mint_address,
             commitment: proof.output_commitments[1],
             encrypted_output: encrypted_output2.to_vec(),
         });
@@ -496,6 +506,14 @@ pub mod zkcash {
 #[event]
 pub struct CommitmentData {
     pub index: u64,
+    pub commitment: [u8; 32],
+    pub encrypted_output: Vec<u8>,
+}
+
+#[event]
+pub struct SplCommitmentData {
+    pub index: u64,
+    pub mint_address: Pubkey,
     pub commitment: [u8; 32],
     pub encrypted_output: Vec<u8>,
 }

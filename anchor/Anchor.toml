@@ -5,13 +5,11 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-# IMPORTANT!!!!!!!: Change it back to 9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD after devnet testing is done!!!!!!!
 [programs.localnet]
-zkcash = "2H723rrywJVPGRdqC2iL8Egcz2A3VCkEQ6hmt8XGcGix"
+zkcash = "ATZj4jZ4FFzkvAcvk27DW9GRkgSbFnHo49fKKPQXU7VS"
 
-# IMPORTANT!!!!!!!: Change it back to 9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD after devnet testing is done!!!!!!!
 [programs.devnet]
-zkcash = "2H723rrywJVPGRdqC2iL8Egcz2A3VCkEQ6hmt8XGcGix"
+zkcash = "ATZj4jZ4FFzkvAcvk27DW9GRkgSbFnHo49fKKPQXU7VS"
 
 [programs.mainnet]
 zkcash = "9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD"
