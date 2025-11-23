@@ -29,6 +29,8 @@ const authority = new PublicKey('97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf');
 
 // USDC mint address on devnet
 const USDC_MINT = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+// Relayer address
+const RELAYER = new PublicKey('AF8VuwCncKd5ZBnLYYnMjqh4vLch8mjqE75sFe5ZjRFW');
 
 // Configure connection to Solana mainnet-beta
 const connection = new Connection('https://domini-i2gp2o-fast-devnet.helius-rpc.com', 'confirmed');
@@ -189,6 +191,12 @@ async function getProtocolAddresses(
     true // allowOwnerOffCurve for PDA
   );
 
+  const usdcRelayerAta = await getAssociatedTokenAddress(
+    USDC_MINT,
+    RELAYER,
+    false // relayer is a regular account, not a PDA
+  );
+
   const addresses = [
     programId,
     treeAccount,        // SOL tree
@@ -207,6 +215,9 @@ async function getProtocolAddresses(
     USDC_MINT,
     usdcTreeAta,
     usdcFeeRecipientAta,
+    // Relayer addresses
+    RELAYER,
+    usdcRelayerAta,
   ];
 
   // Add recipient if provided (for withdrawals)
@@ -295,11 +306,14 @@ async function main() {
     // Calculate USDC addresses to display
     const usdcTreeAta = await getAssociatedTokenAddress(USDC_MINT, globalConfigAccount, true);
     const usdcFeeRecipientAta = await getAssociatedTokenAddress(USDC_MINT, FEE_RECIPIENT_ACCOUNT, true /* allowOwnerOffCurve */);
+    const usdcRelayerAta = await getAssociatedTokenAddress(USDC_MINT, RELAYER, false);
 
     console.log(`\n💵 USDC Token Addresses:`);
     console.log(`- USDC Mint: ${USDC_MINT.toString()}`);
     console.log(`- USDC Tree ATA: ${usdcTreeAta.toString()}`);
     console.log(`- USDC Fee Recipient ATA: ${usdcFeeRecipientAta.toString()}`);
+    console.log(`- Relayer: ${RELAYER.toString()}`);
+    console.log(`- USDC Relayer ATA: ${usdcRelayerAta.toString()}`);
 
     // Create comprehensive address list for the protocol
     const protocolAddresses = await getProtocolAddresses(
