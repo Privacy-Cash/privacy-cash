@@ -24,7 +24,7 @@ const user = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
 // Program ID for the zkcash program on devnet
 const PROGRAM_ID = new PublicKey('ATZj4jZ4FFzkvAcvk27DW9GRkgSbFnHo49fKKPQXU7VS');
 // Fee recipient for devnet
-const FEE_RECIPIENT_ACCOUNT = new PublicKey('97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf');
+const FEE_RECIPIENT_ACCOUNT = new PublicKey('AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM');
 const authority = new PublicKey('97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf');
 
 // USDC mint address on devnet
