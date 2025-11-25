@@ -56,7 +56,7 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
 
 5. Deploy the program to devnet:
    ```bash
-   anchor build
+   anchor build -- --features devnet
    rm target/deploy/zkcash-keypair.json
    cp zkcash-keypair.json target/deploy/zkcash-keypair.json
    anchor deploy --provider.cluster devnet
@@ -69,11 +69,6 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
 
    or
    solana program deploy target/deploy/zkcash.so --program-id zkcash-keypair.json --upgrade-authority ./deploy-keypair.json
-   ```
-
-   for SPL, build with:
-   ```
-   anchor build -- --features devnet
    ```
 
 6. Deploy to mainnet:
