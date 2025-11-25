@@ -112,7 +112,7 @@ async function initializeSplTree() {
 
     // Maximum deposit amount (e.g., 1,000,000 USDC with 6 decimals = 1,000,000,000,000)
     // For devnet, let's set a reasonable limit like 10,000 USDC
-    const maxDepositAmount = new BN(10_000_000_000); // 10,000 USDC (6 decimals)
+    const maxDepositAmount = new BN(100_000_000_000); // 100,000 USDC (6 decimals)
 
     console.log(`\nMax deposit amount: ${maxDepositAmount.toString()} (${maxDepositAmount.div(new BN(1_000_000)).toString()} USDC)`);
 

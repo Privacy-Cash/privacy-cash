@@ -416,8 +416,13 @@ pub mod zkcash {
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
         if ext_amount > 0 {
-            // For SPL tokens, we don't limit the amount of tokens deposited.
-            // SPL Token deposit: transfer from signer's token account to tree's ATA
+            // Check deposit limit for deposits
+            let deposit_amount = ext_amount as u64;
+            require!(
+                deposit_amount <= tree_account.max_deposit_amount,
+                ErrorCode::DepositLimitExceeded
+            );
+            
             token::transfer(
                 CpiContext::new(
                     ctx.accounts.token_program.to_account_info(),

@@ -5663,4 +5663,820 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     }
   });
 
+  // ============================================================================
+  // Deposit Limit Tests
+  // ============================================================================
+
+  it("SPL Fails to deposit when exceeding the default deposit limit", async () => {
+    // First, set the deposit limit to 1000 tokens for this test
+    const depositLimit = new anchor.BN(1000);
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+    
+    await program.methods
+      .updateDepositLimitForSplToken(depositLimit)
+      .accounts({
+        treeAccount: splTreeAccountPDA,
+        mint: splTokenMint.publicKey,
+        authority: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+
+    // Now try to deposit 1001 tokens (above the limit)
+    const excessiveAmount = 1001; // Just above the limit
+    const depositFee = new anchor.BN(calculateDepositFee(excessiveAmount));
+    const depositAmountBN = new anchor.BN(excessiveAmount);
+    
+    const mintAddressBase58 = splTokenMint.publicKey.toBase58();
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+    
+    // Get token accounts (SPL transactions need token accounts, not public keys)
+    const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
+    const feeRecipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey);
+    
+    const extData = {
+      recipient: recipientTokenAccount,
+      extAmount: depositAmountBN,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee,
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    // Create the merkle tree
+    const tree: MerkleTree = splMerkleTree;
+
+    // Create inputs for the deposit
+    const inputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 })
+    ];
+
+    const publicAmountNumber = extData.extAmount.sub(depositFee);
+    const outputAmount = publicAmountNumber.toString();
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount, index: splMerkleTree._layers[0].length, mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressBase58 })
+    ];
+
+    // Create mock Merkle path data
+    const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    const inputMerklePathElements = inputs.map(() => {
+      return [...new Array(tree.levels).fill(0)];
+    });
+
+    // Resolve async operations
+    const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+    const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+    const root = tree.root();
+    const calculatedExtDataHash = getExtDataHash(extData);
+
+    const input = {
+      root: root,
+      inputNullifier: inputNullifiers,
+      outputCommitment: outputCommitments,
+      publicAmount: outputAmount.toString(),
+      extDataHash: calculatedExtDataHash,
+      inAmount: inputs.map(x => x.amount.toString(10)),
+      inPrivateKey: inputs.map(x => x.keypair.privkey),
+      inBlinding: inputs.map(x => x.blinding.toString(10)),
+      mintAddress: mintAddressField,
+      inPathIndices: inputMerklePathIndices,
+      inPathElements: inputMerklePathElements,
+      outAmount: outputs.map(x => x.amount.toString(10)),
+      outBlinding: outputs.map(x => x.blinding.toString(10)),
+      outPubkey: outputs.map(x => x.keypair.pubkey),
+    };
+
+    // Generate proof
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof, publicSignals} = await prove(input, keyBasePath);
+
+    const proofInBytes = parseProofToBytesArray(proof);
+    const inputsInBytes = parseToBytesArray(publicSignals);
+    
+    const proofToSubmit = {
+      proofA: proofInBytes.proofA,
+      proofB: proofInBytes.proofB.flat(),
+      proofC: proofInBytes.proofC,
+      root: inputsInBytes[0],
+      publicAmount: inputsInBytes[1],
+      extDataHash: inputsInBytes[2],
+      inputNullifiers: [inputsInBytes[3], inputsInBytes[4]],
+      outputCommitments: [inputsInBytes[5], inputsInBytes[6]],
+    };
+
+    // Derive PDAs
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
+
+    // Get signer token account (recipient and fee recipient token accounts already fetched above)
+    const randomUserTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, randomUser.publicKey);
+
+    // Create Address Lookup Table for transaction size optimization
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount,
+      splTreeAccountPDA,
+      splTokenMint.publicKey
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    try {
+      // Create the compute units instruction
+      const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+        units: 1_000_000 
+      });
+      
+      // Execute the transaction - this should fail because of exceeding deposit limit
+      const tx = await program.methods
+        .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+        .accounts({
+          treeAccount: splTreeAccountPDA,
+          nullifier0: nullifier0PDA,
+          nullifier1: nullifier1PDA,
+          nullifier2: crossCheckNullifiers.nullifier2PDA,
+          nullifier3: crossCheckNullifiers.nullifier3PDA,
+          globalConfig: globalConfigPDA,
+          signer: randomUser.publicKey,
+          recipient: recipient.publicKey,
+          mint: splTokenMint.publicKey,
+          signerTokenAccount: randomUserTokenAccount,
+          recipientTokenAccount: recipientTokenAccount,
+          treeAta: treeAta,
+          feeRecipientAta: feeRecipientTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId
+        })
+        .signers([randomUser])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+
+      // Create versioned transaction with ALT
+      const versionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        randomUser.publicKey,
+        tx.instructions,
+        lookupTableAddress
+      );
+      
+      // Send and confirm versioned transaction - this should fail
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        versionedTx,
+        [randomUser]
+      );
+      
+      // If we reach here, the test should fail because the transaction should have thrown an error
+      expect.fail("Transaction should have failed due to exceeding deposit limit but succeeded");
+    } catch (error) {
+      // Check for the deposit limit exceeded error
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x1773") || 
+        errorString.includes("DepositLimitExceeded")
+      ).to.be.true;
+    }
+  });
+
+  it("SPL Authority can update deposit limit", async () => {
+    const newLimit = new anchor.BN(2_000_000); // 2 million tokens
+    
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+    
+    // Create Address Lookup Table for transaction size optimization
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey),
+      splTreeAccountPDA,
+      splTokenMint.publicKey
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    const tx = await program.methods
+      .updateDepositLimitForSplToken(newLimit)
+      .accounts({
+        treeAccount: splTreeAccountPDA,
+        mint: splTokenMint.publicKey,
+        authority: authority.publicKey,
+      })
+      .signers([authority])
+      .preInstructions([modifyComputeUnits])
+      .transaction();
+
+    // Create versioned transaction with ALT
+    const versionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      authority.publicKey,
+      tx.instructions,
+      lookupTableAddress
+    );
+    
+    // Send and confirm versioned transaction
+    const txSig = await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      versionedTx,
+      [authority]
+    );
+
+    expect(txSig).to.be.a('string');
+
+    // Verify the limit was updated
+    const merkleTreeAccount = await program.account.merkleTreeAccount.fetch(splTreeAccountPDA);
+    expect(merkleTreeAccount.maxDepositAmount.toString()).to.equal(newLimit.toString());
+  });
+
+  it("SPL Non-authority cannot update deposit limit", async () => {
+    const newLimit = new anchor.BN(3_000_000); // 3 million tokens
+    const nonAuthority = anchor.web3.Keypair.generate();
+    
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+    
+    // Fund the non-authority account
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: fundingAccount.publicKey,
+        toPubkey: nonAuthority.publicKey,
+        lamports: 0.5 * LAMPORTS_PER_SOL,
+      })
+    );
+    
+    const transferSignature = await provider.connection.sendTransaction(transferTx, [fundingAccount]);
+    await provider.connection.confirmTransaction(transferSignature);
+
+    // Create Address Lookup Table for transaction size optimization
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey),
+      splTreeAccountPDA,
+      splTokenMint.publicKey
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, nonAuthority, testProtocolAddresses);
+
+    try {
+      const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+        units: 1_000_000 
+      });
+      
+      const tx = await program.methods
+        .updateDepositLimitForSplToken(newLimit)
+        .accounts({
+          treeAccount: splTreeAccountPDA,
+          mint: splTokenMint.publicKey,
+          authority: nonAuthority.publicKey,
+        })
+        .signers([nonAuthority])
+        .preInstructions([modifyComputeUnits])
+        .transaction();
+
+      // Create versioned transaction with ALT
+      const versionedTx = await createVersionedTransactionWithALT(
+        provider.connection,
+        nonAuthority.publicKey,
+        tx.instructions,
+        lookupTableAddress
+      );
+      
+      // Send and confirm versioned transaction - this should fail
+      await sendAndConfirmVersionedTransaction(
+        provider.connection,
+        versionedTx,
+        [nonAuthority]
+      );
+
+      expect.fail("Transaction should have failed due to unauthorized access");
+    } catch (error) {
+      const errorString = error.toString();
+      expect(
+        errorString.includes("0x1770") ||
+        errorString.includes("Unauthorized") ||
+        errorString.includes("Not authorized to perform this action") ||
+        errorString.includes("custom program error")
+      ).to.be.true;
+    }
+  });
+
+  it("SPL Can deposit after increasing limit", async () => {
+    // First, update the limit to 2 million tokens
+    const newLimit = new anchor.BN(2_000_000);
+    
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+    
+    await program.methods
+      .updateDepositLimitForSplToken(newLimit)
+      .accounts({
+        treeAccount: splTreeAccountPDA,
+        mint: splTokenMint.publicKey,
+        authority: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+
+    // Now try to deposit 1.5 million tokens (which should now be allowed)
+    const depositAmount = 1_500_000;
+    const depositFee = new anchor.BN(calculateDepositFee(depositAmount));
+    const depositAmountBN = new anchor.BN(depositAmount);
+    
+    const mintAddressBase58 = splTokenMint.publicKey.toBase58();
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+    
+    // Get token accounts (SPL transactions need token accounts, not public keys)
+    const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
+    const feeRecipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey);
+    
+    const extData = {
+      recipient: recipientTokenAccount,
+      extAmount: depositAmountBN,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee,
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    // Create the merkle tree
+    const tree: MerkleTree = splMerkleTree;
+
+    // Create inputs for the deposit
+    const inputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 })
+    ];
+
+    const publicAmountNumber = extData.extAmount.sub(depositFee);
+    const outputAmount = publicAmountNumber.toString();
+    const outputs = [
+      new Utxo({ lightWasm, amount: outputAmount, index: splMerkleTree._layers[0].length, mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressBase58 })
+    ];
+
+    // Create mock Merkle path data
+    const inputMerklePathIndices = inputs.map((input) => input.index || 0);
+    const inputMerklePathElements = inputs.map(() => {
+      return [...new Array(tree.levels).fill(0)];
+    });
+
+    // Resolve async operations
+    const inputNullifiers = await Promise.all(inputs.map(x => x.getNullifier()));
+    const outputCommitments = await Promise.all(outputs.map(x => x.getCommitment()));
+    const root = tree.root();
+    const calculatedExtDataHash = getExtDataHash(extData);
+
+    const input = {
+      root: root,
+      inputNullifier: inputNullifiers,
+      outputCommitment: outputCommitments,
+      publicAmount: outputAmount.toString(),
+      extDataHash: calculatedExtDataHash,
+      inAmount: inputs.map(x => x.amount.toString(10)),
+      inPrivateKey: inputs.map(x => x.keypair.privkey),
+      inBlinding: inputs.map(x => x.blinding.toString(10)),
+      mintAddress: mintAddressField,
+      inPathIndices: inputMerklePathIndices,
+      inPathElements: inputMerklePathElements,
+      outAmount: outputs.map(x => x.amount.toString(10)),
+      outBlinding: outputs.map(x => x.blinding.toString(10)),
+      outPubkey: outputs.map(x => x.keypair.pubkey),
+    };
+
+    // Generate proof
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof, publicSignals} = await prove(input, keyBasePath);
+
+    const proofInBytes = parseProofToBytesArray(proof);
+    const inputsInBytes = parseToBytesArray(publicSignals);
+    
+    const proofToSubmit = {
+      proofA: proofInBytes.proofA,
+      proofB: proofInBytes.proofB.flat(),
+      proofC: proofInBytes.proofC,
+      root: inputsInBytes[0],
+      publicAmount: inputsInBytes[1],
+      extDataHash: inputsInBytes[2],
+      inputNullifiers: [inputsInBytes[3], inputsInBytes[4]],
+      outputCommitments: [inputsInBytes[5], inputsInBytes[6]],
+    };
+
+    // Derive PDAs
+    const { nullifier0PDA, nullifier1PDA } = findNullifierPDAs(program, proofToSubmit);
+    const crossCheckNullifiers = findCrossCheckNullifierPDAs(program, proofToSubmit);
+
+    // Get signer token account (recipient and fee recipient token accounts already fetched above)
+    const randomUserTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, randomUser.publicKey);
+
+    // Create Address Lookup Table for transaction size optimization
+    const testProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount,
+      splTreeAccountPDA,
+      splTokenMint.publicKey
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, testProtocolAddresses);
+
+    // Execute the transaction - should now succeed
+    const modifyComputeUnits = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+    
+    const tx = await program.methods
+      .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
+      .accounts({
+        treeAccount: splTreeAccountPDA,
+        nullifier0: nullifier0PDA,
+        nullifier1: nullifier1PDA,
+        nullifier2: crossCheckNullifiers.nullifier2PDA,
+        nullifier3: crossCheckNullifiers.nullifier3PDA,
+        globalConfig: globalConfigPDA,
+        signer: randomUser.publicKey,
+        recipient: recipient.publicKey,
+        mint: splTokenMint.publicKey,
+        signerTokenAccount: randomUserTokenAccount,
+        recipientTokenAccount: recipientTokenAccount,
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnits])
+      .transaction();
+
+    // Create versioned transaction with ALT
+    const versionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      randomUser.publicKey,
+      tx.instructions,
+      lookupTableAddress
+    );
+    
+    // Send and confirm versioned transaction
+    const txSig = await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      versionedTx,
+      [randomUser]
+    );
+
+    expect(txSig).to.be.a('string');
+
+    for (const commitment of outputCommitments) {
+      tree.insert(commitment);
+    }
+  });
+
+  it("SPL Withdrawal has no limit (can withdraw any amount)", async () => {
+    // Step 1: Set deposit limit to 2000 tokens and deposit 2000 tokens
+    const initialDepositLimit = new anchor.BN(2000);
+    const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalConfigPDA, true);
+    
+    await program.methods
+      .updateDepositLimitForSplToken(initialDepositLimit)
+      .accounts({
+        treeAccount: splTreeAccountPDA,
+        mint: splTokenMint.publicKey,
+        authority: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+
+    // Deposit 2000 tokens
+    const depositAmount = 2000;
+    const depositFee = new anchor.BN(calculateDepositFee(depositAmount));
+    const depositAmountBN = new anchor.BN(depositAmount);
+    
+    const mintAddressBase58 = splTokenMint.publicKey.toBase58();
+    const mintAddressField = getMintAddressField(splTokenMint.publicKey);
+    
+    // Get token accounts (SPL transactions need token accounts, not public keys)
+    const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
+    const feeRecipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, feeRecipient.publicKey);
+    
+    const depositExtData = {
+      recipient: recipientTokenAccount,
+      extAmount: depositAmountBN,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: depositFee,
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    // Create the merkle tree
+    const tree: MerkleTree = splMerkleTree;
+
+    // Create inputs for the deposit
+    const depositInputs = [
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 })
+    ];
+
+    const depositPublicAmountNumber = depositExtData.extAmount.sub(depositFee);
+    const depositOutputAmount = depositPublicAmountNumber.toString();
+    const depositOutputs = [
+      new Utxo({ lightWasm, amount: depositOutputAmount, index: splMerkleTree._layers[0].length, mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressBase58 })
+    ];
+
+    // Create mock Merkle path data
+    const depositInputMerklePathIndices = depositInputs.map((input) => input.index || 0);
+    const depositInputMerklePathElements = depositInputs.map(() => {
+      return [...new Array(tree.levels).fill(0)];
+    });
+
+    // Resolve async operations
+    const depositInputNullifiers = await Promise.all(depositInputs.map(x => x.getNullifier()));
+    const depositOutputCommitments = await Promise.all(depositOutputs.map(x => x.getCommitment()));
+    const depositRoot = tree.root();
+    const depositCalculatedExtDataHash = getExtDataHash(depositExtData);
+
+    const depositInputData = {
+      root: depositRoot,
+      inputNullifier: depositInputNullifiers,
+      outputCommitment: depositOutputCommitments,
+      publicAmount: depositOutputAmount.toString(),
+      extDataHash: depositCalculatedExtDataHash,
+      inAmount: depositInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: depositInputs.map(x => x.keypair.privkey),
+      inBlinding: depositInputs.map(x => x.blinding.toString(10)),
+      mintAddress: mintAddressField,
+      inPathIndices: depositInputMerklePathIndices,
+      inPathElements: depositInputMerklePathElements,
+      outAmount: depositOutputs.map(x => x.amount.toString(10)),
+      outBlinding: depositOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: depositOutputs.map(x => x.keypair.pubkey),
+    };
+
+    // Generate proof for deposit
+    const keyBasePath = path.resolve(__dirname, '../../artifacts/circuits/transaction2');
+    const {proof: depositProof, publicSignals: depositPublicSignals} = await prove(depositInputData, keyBasePath);
+
+    const depositProofInBytes = parseProofToBytesArray(depositProof);
+    const depositInputsInBytes = parseToBytesArray(depositPublicSignals);
+    
+    const depositProofToSubmit = {
+      proofA: depositProofInBytes.proofA,
+      proofB: depositProofInBytes.proofB.flat(),
+      proofC: depositProofInBytes.proofC,
+      root: depositInputsInBytes[0],
+      publicAmount: depositInputsInBytes[1],
+      extDataHash: depositInputsInBytes[2],
+      inputNullifiers: [depositInputsInBytes[3], depositInputsInBytes[4]],
+      outputCommitments: [depositInputsInBytes[5], depositInputsInBytes[6]],
+    };
+
+    // Derive PDAs for deposit
+    const { nullifier0PDA: depositNullifier0PDA, nullifier1PDA: depositNullifier1PDA } = findNullifierPDAs(program, depositProofToSubmit);
+    const depositCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, depositProofToSubmit);
+
+    // Get signer token account (recipient and fee recipient token accounts already fetched above)
+    const randomUserTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, randomUser.publicKey);
+
+    // Create Address Lookup Table for transaction size optimization
+    const depositTestProtocolAddresses = getTestProtocolAddressesWithMint(
+      program.programId,
+      authority.publicKey,
+      treeAta,
+      feeRecipient.publicKey,
+      feeRecipientTokenAccount,
+      splTreeAccountPDA,
+      splTokenMint.publicKey
+    );
+    
+    const lookupTableAddress = await createGlobalTestALT(provider.connection, authority, depositTestProtocolAddresses);
+
+    // Execute the deposit transaction with ALT
+    const modifyComputeUnitsDeposit = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+
+    const depositTx = await program.methods
+      .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
+      .accounts({
+        treeAccount: splTreeAccountPDA,
+        nullifier0: depositNullifier0PDA,
+        nullifier1: depositNullifier1PDA,
+        nullifier2: depositCrossCheckNullifiers.nullifier2PDA,
+        nullifier3: depositCrossCheckNullifiers.nullifier3PDA,
+        globalConfig: globalConfigPDA,
+        signer: randomUser.publicKey,
+        recipient: recipient.publicKey,
+        mint: splTokenMint.publicKey,
+        signerTokenAccount: randomUserTokenAccount,
+        recipientTokenAccount: recipientTokenAccount,
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnitsDeposit])
+      .transaction();
+
+    const depositVersionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      randomUser.publicKey,
+      depositTx.instructions,
+      lookupTableAddress
+    );
+    
+    await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      depositVersionedTx,
+      [randomUser]
+    );
+
+    // Add deposit commitments to the tree
+    for (const commitment of depositOutputCommitments) {
+      tree.insert(commitment);
+    }
+
+    // Step 2: Lower the deposit limit to 1000 tokens
+    const loweredDepositLimit = new anchor.BN(1000);
+    
+    await program.methods
+      .updateDepositLimitForSplToken(loweredDepositLimit)
+      .accounts({
+        treeAccount: splTreeAccountPDA,
+        mint: splTokenMint.publicKey,
+        authority: authority.publicKey,
+      })
+      .signers([authority])
+      .rpc();
+
+    // Step 3: Withdraw an amount that exceeds the current deposit limit of 1000
+    // We have (2000 - depositFee) tokens available
+    // Let's withdraw 1500 tokens which exceeds the current 1000 limit
+    // This should SUCCEED because withdrawals have no limit
+    
+    // Create withdrawal inputs using the deposited outputs
+    const withdrawInputs = [
+      depositOutputs[0], // Use the first deposit output as input (has 2000 - depositFee tokens)
+      new Utxo({ lightWasm, mintAddress: mintAddressBase58 }) // Add another zero input
+    ];
+
+    // Calculate withdrawal amounts
+    const withdrawInputsSum = withdrawInputs.reduce((sum, x) => sum.add(x.amount), new anchor.BN(0));
+    const withdrawAmount = 1500; // Amount going to recipient (exceeds current deposit limit of 1000)
+    const withdrawFee = calculateWithdrawalFee(withdrawAmount);
+    const withdrawFeeBN = new anchor.BN(withdrawFee);
+    
+    // Change = input - withdrawAmount - fee
+    const changeAmount = withdrawInputsSum.sub(new anchor.BN(withdrawAmount)).sub(withdrawFeeBN);
+    
+    const withdrawOutputs = [
+      new Utxo({ lightWasm, amount: changeAmount.toString(), index: splMerkleTree._layers[0].length, mintAddress: mintAddressBase58 }),
+      new Utxo({ lightWasm, amount: '0', mintAddress: mintAddressBase58 })
+    ];
+    
+    const withdrawOutputsSum = withdrawOutputs.reduce((sum, x) => sum.add(x.amount), new anchor.BN(0));
+    const withdrawalAmount = withdrawInputsSum.sub(withdrawOutputsSum);
+    
+    // extAmount = fee + outputsSum - inputsSum
+    const extAmount = withdrawFeeBN
+      .add(withdrawOutputsSum)
+      .sub(withdrawInputsSum);
+    
+    // publicAmount = (extAmount - fee + FIELD_SIZE) % FIELD_SIZE
+    const withdrawPublicAmount = new anchor.BN(extAmount)
+      .sub(withdrawFeeBN)
+      .add(FIELD_SIZE)
+      .mod(FIELD_SIZE)
+      .toString();
+
+    const withdrawExtData = {
+      recipient: recipientTokenAccount,
+      extAmount: extAmount,
+      encryptedOutput1: Buffer.from("encryptedOutput1Data"),
+      encryptedOutput2: Buffer.from("encryptedOutput2Data"),
+      fee: withdrawFeeBN,
+      feeRecipient: feeRecipientTokenAccount,
+      mintAddress: splTokenMint.publicKey,
+    };
+
+    // Create Merkle path data for withdrawal
+    const withdrawInputMerklePathIndices = withdrawInputs.map((input) => input.index || 0);
+    const withdrawInputMerklePathElements = withdrawInputs.map((input) => {
+      if (input.index !== undefined && input.index !== null) {
+        return tree.path(input.index).pathElements;
+      }
+      return [...new Array(tree.levels).fill(0)];
+    });
+
+    // Resolve async operations for withdrawal
+    const withdrawInputNullifiers = await Promise.all(withdrawInputs.map(x => x.getNullifier()));
+    const withdrawOutputCommitments = await Promise.all(withdrawOutputs.map(x => x.getCommitment()));
+    const withdrawRoot = tree.root();
+    const withdrawCalculatedExtDataHash = getExtDataHash(withdrawExtData);
+
+    const withdrawInputData = {
+      root: withdrawRoot,
+      inputNullifier: withdrawInputNullifiers,
+      outputCommitment: withdrawOutputCommitments,
+      publicAmount: withdrawPublicAmount,
+      extDataHash: withdrawCalculatedExtDataHash,
+      inAmount: withdrawInputs.map(x => x.amount.toString(10)),
+      inPrivateKey: withdrawInputs.map(x => x.keypair.privkey),
+      inBlinding: withdrawInputs.map(x => x.blinding.toString(10)),
+      mintAddress: mintAddressField,
+      inPathIndices: withdrawInputMerklePathIndices,
+      inPathElements: withdrawInputMerklePathElements,
+      outAmount: withdrawOutputs.map(x => x.amount.toString(10)),
+      outBlinding: withdrawOutputs.map(x => x.blinding.toString(10)),
+      outPubkey: withdrawOutputs.map(x => x.keypair.pubkey),
+    };
+
+    // Generate proof for withdrawal
+    const {proof: withdrawProof, publicSignals: withdrawPublicSignals} = await prove(withdrawInputData, keyBasePath);
+
+    const withdrawProofInBytes = parseProofToBytesArray(withdrawProof);
+    const withdrawInputsInBytes = parseToBytesArray(withdrawPublicSignals);
+    
+    const withdrawProofToSubmit = {
+      proofA: withdrawProofInBytes.proofA,
+      proofB: withdrawProofInBytes.proofB.flat(),
+      proofC: withdrawProofInBytes.proofC,
+      root: withdrawInputsInBytes[0],
+      publicAmount: withdrawInputsInBytes[1],
+      extDataHash: withdrawInputsInBytes[2],
+      inputNullifiers: [withdrawInputsInBytes[3], withdrawInputsInBytes[4]],
+      outputCommitments: [withdrawInputsInBytes[5], withdrawInputsInBytes[6]],
+    };
+
+    // Derive PDAs for withdrawal
+    const { nullifier0PDA: withdrawNullifier0PDA, nullifier1PDA: withdrawNullifier1PDA } = findNullifierPDAs(program, withdrawProofToSubmit);
+    const withdrawCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, withdrawProofToSubmit);
+
+    // Execute the withdrawal transaction with ALT - should succeed even though amount > any deposit limit
+    const modifyComputeUnitsWithdraw = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
+      units: 1_000_000 
+    });
+
+    const withdrawTx = await program.methods
+      .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
+      .accounts({
+        treeAccount: splTreeAccountPDA,
+        nullifier0: withdrawNullifier0PDA,
+        nullifier1: withdrawNullifier1PDA,
+        nullifier2: withdrawCrossCheckNullifiers.nullifier2PDA,
+        nullifier3: withdrawCrossCheckNullifiers.nullifier3PDA,
+        globalConfig: globalConfigPDA,
+        signer: randomUser.publicKey,
+        recipient: recipient.publicKey,
+        mint: splTokenMint.publicKey,
+        signerTokenAccount: randomUserTokenAccount,
+        recipientTokenAccount: recipientTokenAccount,
+        treeAta: treeAta,
+        feeRecipientAta: feeRecipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId
+      })
+      .signers([randomUser])
+      .preInstructions([modifyComputeUnitsWithdraw])
+      .transaction();
+
+    const withdrawVersionedTx = await createVersionedTransactionWithALT(
+      provider.connection,
+      randomUser.publicKey,
+      withdrawTx.instructions,
+      lookupTableAddress
+    );
+    
+    const withdrawTxSig = await sendAndConfirmVersionedTransaction(
+      provider.connection,
+      withdrawVersionedTx,
+      [randomUser]
+    );
+
+    expect(withdrawTxSig).to.be.a('string');
+
+    // Add withdrawal commitments to the tree
+    for (const commitment of withdrawOutputCommitments) {
+      tree.insert(commitment);
+    }
+  });
+
 });
