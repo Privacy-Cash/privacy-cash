@@ -86,6 +86,38 @@ function createExtDataMinified(extData: any) {
   };
 }
 
+// Helper function to check if a token account exists and return an instruction to create it if needed
+async function getCreateTokenAccountInstructionIfNeeded(
+  connection: anchor.web3.Connection,
+  payer: PublicKey,
+  tokenAccountAddress: PublicKey,
+  owner: PublicKey,
+  mint: PublicKey
+): Promise<anchor.web3.TransactionInstruction | null> {
+  try {
+    const accountInfo = await connection.getAccountInfo(tokenAccountAddress);
+    if (accountInfo) {
+      // Account exists, no need to create
+      return null;
+    }
+    // Account doesn't exist, return instruction to create it
+    return createAssociatedTokenAccountInstruction(
+      payer,
+      tokenAccountAddress,
+      owner,
+      mint
+    );
+  } catch (error) {
+    // If there's an error checking the account, assume it doesn't exist
+    return createAssociatedTokenAccountInstruction(
+      payer,
+      tokenAccountAddress,
+      owner,
+      mint
+    );
+  }
+}
+
 // Helper function to get the tree PDA for a given mint
 // SOL uses the original PDA, SPL tokens use mint-specific PDAs
 function getTreePDA(program: anchor.Program<any>, mint: PublicKey): [PublicKey, number] {
@@ -683,23 +715,8 @@ it("Deposit SOL withdraw USDC", async () => {
   // PART 2: SPL WITHDRAW
   // ============================================
   
-  // Create recipient token account for SPL
-  const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-  try {
-    const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-      createAssociatedTokenAccountInstruction(
-        randomUser.publicKey,
-        recipientTokenAccount,
-        recipient.publicKey,
-        splTokenMint.publicKey
-      )
-    );
-    await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-  } catch (error) {
-    console.log("Recipient token account might already exist:", error.message);
-  }
-
   // Setup withdrawal amounts
+  const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
   const withdrawAmount = 15000; // Withdraw 15000 SPL tokens from the 20000 SOL deposit equivalent
   const withdrawFee = calculateWithdrawalFee(withdrawAmount); // 0.25% withdrawal fee
 
@@ -818,6 +835,20 @@ it("Deposit SOL withdraw USDC", async () => {
     units: 1_000_000 
   });
   
+  // Check if recipient token account needs to be created and add instruction if needed
+  const createRecipientTokenAccountIxWithdraw = await getCreateTokenAccountInstructionIfNeeded(
+    provider.connection,
+    randomUser.publicKey,
+    recipientTokenAccount,
+    recipient.publicKey,
+    splTokenMint.publicKey
+  );
+  
+  const withdrawPreInstructions = [modifyComputeUnitsWithdraw];
+  if (createRecipientTokenAccountIxWithdraw) {
+    withdrawPreInstructions.push(createRecipientTokenAccountIxWithdraw);
+  }
+  
   const withdrawTx = await program.methods
     .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
     .accounts({
@@ -839,7 +870,7 @@ it("Deposit SOL withdraw USDC", async () => {
       systemProgram: anchor.web3.SystemProgram.programId
     })
     .signers([randomUser])
-    .preInstructions([modifyComputeUnitsWithdraw])
+    .preInstructions(withdrawPreInstructions)
     .transaction();
 
   const withdrawVersionedTx = await createVersionedTransactionWithALT(
@@ -872,22 +903,6 @@ it("Can execute SPL token deposit instruction for correct input", async () => {
     splTokenMint.publicKey,
     recipient.publicKey
   );
-
-  // Create recipient token account manually since it's now UncheckedAccount
-  try {
-    const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-      createAssociatedTokenAccountInstruction(
-        randomUser.publicKey, // payer
-        recipientTokenAccount, // associatedToken
-        recipient.publicKey, // owner
-        splTokenMint.publicKey // mint
-      )
-    );
-    await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-  } catch (error) {
-    // Account might already exist, which is fine
-    console.log("Recipient token account might already exist:", error.message);
-  }
 
   const extData = {
     recipient: recipientTokenAccount, // Use the token account, not the user account
@@ -1043,6 +1058,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     units: 1_000_000 
   });
   
+  // Check if recipient token account needs to be created and add instruction if needed
+  const createRecipientTokenAccountIxDeposit = await getCreateTokenAccountInstructionIfNeeded(
+    provider.connection,
+    randomUser.publicKey,
+    recipientTokenAccount,
+    recipient.publicKey,
+    splTokenMint.publicKey
+  );
+  
+  const depositPreInstructions = [modifyComputeUnits];
+  if (createRecipientTokenAccountIxDeposit) {
+    depositPreInstructions.push(createRecipientTokenAccountIxDeposit);
+  }
+  
   const depositTx = await program.methods
     .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
     .accounts({
@@ -1064,7 +1093,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       systemProgram: anchor.web3.SystemProgram.programId
     })
     .signers([randomUser])
-    .preInstructions([modifyComputeUnits])
+    .preInstructions(depositPreInstructions)
     .transaction();
 
   // Create versioned transaction with ALT
@@ -1116,22 +1145,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       mintAddress: splTokenMint.publicKey,
     };
 
-    // Create recipient token account manually since it's now UncheckedAccount
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey, // payer
-          recipientTokenAccount, // associatedToken
-          recipient.publicKey, // owner
-          splTokenMint.publicKey // mint
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      // Account might already exist, which is fine
-      console.log("Recipient token account might already exist:", error.message);
-    }
 
     // Convert SPL token mint address to a field element that the circuit can understand
     // Get the mint address as a field element for the circuit
@@ -1231,6 +1245,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     
     const depositLookupTableAddress = await createGlobalTestALT(provider.connection, authority, depositTestProtocolAddresses);
 
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxDeposit = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions = [modifyComputeUnits];
+    if (createRecipientTokenAccountIxDeposit) {
+      depositPreInstructions.push(createRecipientTokenAccountIxDeposit);
+    }
+
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -1253,7 +1281,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnits])
+      .preInstructions(depositPreInstructions)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -1363,6 +1391,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const firstNullifiers = findNullifierPDAs(program, firstProofToSubmit);
     const firstCrossCheckNullifiers = findCrossCheckNullifierPDAs(program, firstProofToSubmit);
 
+    // Check if recipient token account needs to be created
+    const createRecipientTokenAccountIxFirst = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const firstPreInstructions = [modifyComputeUnits];
+    if (createRecipientTokenAccountIxFirst) {
+      firstPreInstructions.push(createRecipientTokenAccountIxFirst);
+    }
+
     // This should fail because we're trying to use the same nullifiers
     const firstTx = await program.methods
       .transactSpl(firstProofToSubmit, createExtDataMinified(firstExtData), firstExtData.encryptedOutput1, firstExtData.encryptedOutput2)
@@ -1385,7 +1427,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnits])
+      .preInstructions(firstPreInstructions)
       .transaction();
 
     const firstVersionedTx = await createVersionedTransactionWithALT(
@@ -1419,19 +1461,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
 
     // Create recipient token account
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
 
     // Deposit transaction
     const depositInputs = [
@@ -1531,6 +1560,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxDeposit = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIxDeposit) {
+      depositPreInstructions.push(createRecipientTokenAccountIxDeposit);
+    }
+    
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -1552,7 +1595,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -1670,6 +1713,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxWithdraw = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const withdrawPreInstructions = [modifyComputeUnitsWithdraw];
+    if (createRecipientTokenAccountIxWithdraw) {
+      withdrawPreInstructions.push(createRecipientTokenAccountIxWithdraw);
+    }
+    
     const withdrawTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
       .accounts({
@@ -1691,7 +1748,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsWithdraw])
+      .preInstructions(withdrawPreInstructions)
       .transaction();
 
     const withdrawVersionedTx = await createVersionedTransactionWithALT(
@@ -1734,19 +1791,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
 
     // Create regular recipient token account for deposit
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
 
     // Create a different PDA as the withdrawal recipient
     // We can't use globalConfigPDA because it's already the tree authority (tree_ata uses it)
@@ -1860,6 +1904,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxDeposit = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIxDeposit) {
+      depositPreInstructions.push(createRecipientTokenAccountIxDeposit);
+    }
+    
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -1881,7 +1939,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -2007,6 +2065,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if PDA recipient token account needs to be created and add instruction if needed
+    const createPdaRecipientTokenAccountIxWithdraw = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      pdaRecipientTokenAccount,
+      pdaRecipient,
+      splTokenMint.publicKey
+    );
+    
+    const withdrawPreInstructions = [modifyComputeUnitsWithdraw];
+    if (createPdaRecipientTokenAccountIxWithdraw) {
+      withdrawPreInstructions.push(createPdaRecipientTokenAccountIxWithdraw);
+    }
+    
     const withdrawTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
       .accounts({
@@ -2028,7 +2100,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsWithdraw])
+      .preInstructions(withdrawPreInstructions)
       .transaction();
 
     const withdrawVersionedTx = await createVersionedTransactionWithALT(
@@ -2099,19 +2171,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
 
     // Create recipient token account
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
 
     // Deposit transaction
     const depositInputs = [
@@ -2211,6 +2270,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxDeposit2 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions2 = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIxDeposit2) {
+      depositPreInstructions2.push(createRecipientTokenAccountIxDeposit2);
+    }
+    
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -2232,7 +2305,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions2)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -2359,6 +2432,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created for withdrawal
+    const createRecipientTokenAccountIxWithdrawPDA = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const withdrawPreInstructionsPDA = [modifyComputeUnitsWithdraw];
+    if (createRecipientTokenAccountIxWithdrawPDA) {
+      withdrawPreInstructionsPDA.push(createRecipientTokenAccountIxWithdrawPDA);
+    }
+    
     const withdrawTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
       .accounts({
@@ -2380,7 +2467,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsWithdraw])
+      .preInstructions(withdrawPreInstructionsPDA)
       .transaction();
 
     const withdrawVersionedTx = await createVersionedTransactionWithALT(
@@ -2423,19 +2510,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     
     // Create recipient token account
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
     
     const depositInputs = [
       new Utxo({ lightWasm, mintAddress: mintAddressBase58 }),
@@ -2534,6 +2608,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     
     const depositLookupTableAddress = await createGlobalTestALT(provider.connection, authority, depositTestProtocolAddresses);
 
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIx3 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions3 = [modifyComputeUnits];
+    if (createRecipientTokenAccountIx3) {
+      depositPreInstructions3.push(createRecipientTokenAccountIx3);
+    }
+
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -2555,7 +2643,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnits])
+      .preInstructions(depositPreInstructions3)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -2680,6 +2768,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     // Attacker tries to submit the transaction with their recipient but the legitimate proof
     let frontrunFailed = false;
     try {
+      // Check if attacker's recipient token account needs to be created
+      const createAttackerTokenAccountIx = await getCreateTokenAccountInstructionIfNeeded(
+        provider.connection,
+        attacker.publicKey,
+        attackerRecipientTokenAccount,
+        attacker.publicKey,
+        splTokenMint.publicKey
+      );
+      
+      const attackerPreInstructions = [modifyComputeUnits];
+      if (createAttackerTokenAccountIx) {
+        attackerPreInstructions.push(createAttackerTokenAccountIx);
+      }
+      
       const attackerTx = await program.methods
         .transactSpl(withdrawProofToSubmit, createExtDataMinified(attackerExtData), attackerExtData.encryptedOutput1, attackerExtData.encryptedOutput2)
         .accounts({
@@ -2701,7 +2803,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([attacker])
-        .preInstructions([modifyComputeUnits])
+        .preInstructions(attackerPreInstructions)
         .transaction();
 
       const attackerVersionedTx = await createVersionedTransactionWithALT(
@@ -2730,6 +2832,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     expect(frontrunFailed).to.be.true;
 
     // Step 4: Verify that the legitimate transaction still works
+    // Check if recipient token account needs to be created
+    const createRecipientTokenAccountIxLegitimate = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const legitimatePreInstructions = [modifyComputeUnits];
+    if (createRecipientTokenAccountIxLegitimate) {
+      legitimatePreInstructions.push(createRecipientTokenAccountIxLegitimate);
+    }
+    
     const legitimateTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(legitimateExtData), legitimateExtData.encryptedOutput1, legitimateExtData.encryptedOutput2)
       .accounts({
@@ -2751,7 +2867,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnits])
+      .preInstructions(legitimatePreInstructions)
       .transaction();
 
     const legitimateVersionedTx = await createVersionedTransactionWithALT(
@@ -2789,19 +2905,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
 
     // Create recipient token account
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
 
     // Deposit transaction
     const depositInputs = [
@@ -2901,6 +3004,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxDeposit = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIxDeposit) {
+      depositPreInstructions.push(createRecipientTokenAccountIxDeposit);
+    }
+    
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -2922,7 +3039,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -3042,6 +3159,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxWithdraw = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const withdrawPreInstructions = [modifyComputeUnitsWithdraw];
+    if (createRecipientTokenAccountIxWithdraw) {
+      withdrawPreInstructions.push(createRecipientTokenAccountIxWithdraw);
+    }
+    
     const withdrawTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
       .accounts({
@@ -3063,7 +3194,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsWithdraw])
+      .preInstructions(withdrawPreInstructions)
       .transaction();
 
     const withdrawVersionedTx = await createVersionedTransactionWithALT(
@@ -3099,7 +3230,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
   });
 
   it("SPL TreeATA has $0 change, after withdrawing full amount with withdraw fees higher than deposit change", async () => {
-    // test withdrawal has higher fee rates the same as deposit. use 0.35% for both withdrawals and deposits.
+    // test withdrawal has higher fee rates than deposit. use 0.35% for both withdrawals and deposits.
     // Step 1: Perform a deposit
     const depositAmount = 50000;
     const depositFee = calculateFee(depositAmount, 35);
@@ -3107,21 +3238,8 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     const mintAddressBase58 = splTokenMint.publicKey.toBase58();
     const mintAddressField = getMintAddressField(splTokenMint.publicKey);
 
-    // Create recipient token account
+    // Create recipient token account address (will be created by helper in tx)
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
     
     const depositInputs = [
       new Utxo({ lightWasm, mintAddress: mintAddressBase58 }),
@@ -3229,6 +3347,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
 
+    // Check if recipient token account needs to be created for deposit
+    const createRecipientTokenAccountIxDeposit1 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions1 = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIxDeposit1) {
+      depositPreInstructions1.push(createRecipientTokenAccountIxDeposit1);
+    }
+
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -3250,7 +3382,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions1)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -3306,7 +3438,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     // Calculate withdrawal amount and fee such that withdrawAmount + withdrawFee = utxoBalance
     const utxoBalance = depositOutputs[0].amount.toNumber();
     let withdrawAmount = utxoBalance;
-    let withdrawFee = calculateFee(withdrawAmount, 35);
+    let withdrawFee = calculateFee(withdrawAmount, 35); // 0.35% fee rate
     
     const withdrawInputsSum = withdrawInputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
     const withdrawOutputsSum = withdrawOutputs.reduce((sum, x) => sum.add(x.amount), new BN(0));
@@ -3384,13 +3516,27 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     try {
       recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
     } catch (error) {
-      // Account doesn't exist yet, will be created by transact_spl
+      // Account doesn't exist yet, will be created by helper in transaction
       console.log("Recipient token account doesn't exist yet, will be created by transaction");
     }
 
     const modifyComputeUnitsWithdraw = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
       units: 1_000_000 
     });
+
+    // Check if recipient token account needs to be created for withdrawal
+    const createRecipientTokenAccountIxWithdraw1 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const withdrawPreInstructions1 = [modifyComputeUnitsWithdraw];
+    if (createRecipientTokenAccountIxWithdraw1) {
+      withdrawPreInstructions1.push(createRecipientTokenAccountIxWithdraw1);
+    }
 
     const withdrawTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
@@ -3413,7 +3559,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsWithdraw])
+      .preInstructions(withdrawPreInstructions1)
       .transaction();
 
     const withdrawVersionedTx = await createVersionedTransactionWithALT(
@@ -3481,19 +3627,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
 
     // Create recipient token account
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
     
     const depositInputs = [
       new Utxo({ lightWasm, mintAddress: mintAddressBase58 }),
@@ -3601,6 +3734,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
 
+    // Check if recipient token account needs to be created for deposit
+    const createRecipientTokenAccountIxDeposit2 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions2 = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIxDeposit2) {
+      depositPreInstructions2.push(createRecipientTokenAccountIxDeposit2);
+    }
+
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -3622,7 +3769,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions2)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -3756,13 +3903,27 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     try {
       recipientTokenBalanceBefore = await provider.connection.getTokenAccountBalance(recipientTokenAccount);
     } catch (error) {
-      // Account doesn't exist yet, will be created by transact_spl
+      // Account doesn't exist yet, will be created by helper in transaction
       console.log("Recipient token account doesn't exist yet, will be created by transaction");
     }
 
     const modifyComputeUnitsWithdraw = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ 
       units: 1_000_000 
     });
+
+    // Check if recipient token account needs to be created for withdrawal
+    const createRecipientTokenAccountIxWithdraw2 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const withdrawPreInstructions2 = [modifyComputeUnitsWithdraw];
+    if (createRecipientTokenAccountIxWithdraw2) {
+      withdrawPreInstructions2.push(createRecipientTokenAccountIxWithdraw2);
+    }
 
     const withdrawTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
@@ -3785,7 +3946,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsWithdraw])
+      .preInstructions(withdrawPreInstructions2)
       .transaction();
 
     const withdrawVersionedTx = await createVersionedTransactionWithALT(
@@ -3852,19 +4013,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
 
     // Create recipient token account
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
 
     // Deposit transaction
     const depositInputs = [
@@ -3964,6 +4112,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxDeposit = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIxDeposit) {
+      depositPreInstructions.push(createRecipientTokenAccountIxDeposit);
+    }
+    
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -3985,7 +4147,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -4105,6 +4267,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxWithdraw = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const withdrawPreInstructions = [modifyComputeUnitsWithdraw];
+    if (createRecipientTokenAccountIxWithdraw) {
+      withdrawPreInstructions.push(createRecipientTokenAccountIxWithdraw);
+    }
+    
     const withdrawTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
       .accounts({
@@ -4126,7 +4302,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsWithdraw])
+      .preInstructions(withdrawPreInstructions)
       .transaction();
 
     const withdrawVersionedTx = await createVersionedTransactionWithALT(
@@ -4227,6 +4403,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         units: 1_000_000 
       });
       
+      // Check if recipient token account needs to be created
+      const createRecipientTokenAccountIxTest1 = await getCreateTokenAccountInstructionIfNeeded(
+        provider.connection,
+        randomUser.publicKey,
+        extData.recipient,
+        recipient.publicKey,
+        splTokenMint.publicKey
+      );
+      
+      const preInstructionsTest1 = [modifyComputeUnits];
+      if (createRecipientTokenAccountIxTest1) {
+        preInstructionsTest1.push(createRecipientTokenAccountIxTest1);
+      }
+      
       const tx = await program.methods
         .transactSpl(proof, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
         .accounts({
@@ -4248,7 +4438,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
-        .preInstructions([modifyComputeUnits])
+        .preInstructions(preInstructionsTest1)
         .transaction();
       
       const versionedTx = await createVersionedTransactionWithALT(
@@ -4324,6 +4514,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         units: 1_000_000 
       });
       
+      // Check if recipient token account needs to be created
+      const createRecipientTokenAccountIxTestRoot1 = await getCreateTokenAccountInstructionIfNeeded(
+        provider.connection,
+        randomUser.publicKey,
+        extData.recipient,
+        recipient.publicKey,
+        splTokenMint.publicKey
+      );
+      
+      const preInstructionsTestRoot1 = [modifyComputeUnits];
+      if (createRecipientTokenAccountIxTestRoot1) {
+        preInstructionsTestRoot1.push(createRecipientTokenAccountIxTestRoot1);
+      }
+      
       const tx = await program.methods
         .transactSpl(proof, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
         .accounts({
@@ -4345,7 +4549,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
-        .preInstructions([modifyComputeUnits])
+        .preInstructions(preInstructionsTestRoot1)
         .transaction();
       
       const versionedTx = await createVersionedTransactionWithALT(
@@ -4425,6 +4629,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         units: 1_000_000 
       });
       
+      // Check if recipient token account needs to be created
+      const createRecipientTokenAccountIxTestRoot2 = await getCreateTokenAccountInstructionIfNeeded(
+        provider.connection,
+        randomUser.publicKey,
+        extData.recipient,
+        recipient.publicKey,
+        splTokenMint.publicKey
+      );
+      
+      const preInstructionsTestRoot2 = [modifyComputeUnits];
+      if (createRecipientTokenAccountIxTestRoot2) {
+        preInstructionsTestRoot2.push(createRecipientTokenAccountIxTestRoot2);
+      }
+      
       const tx = await program.methods
         .transactSpl(proof, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
         .accounts({
@@ -4446,7 +4664,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
-        .preInstructions([modifyComputeUnits])
+        .preInstructions(preInstructionsTestRoot2)
         .transaction();
       
       const versionedTx = await createVersionedTransactionWithALT(
@@ -4593,6 +4811,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         units: 1_000_000 
       });
       
+      // Check if recipient token account needs to be created
+      const createRecipientTokenAccountIxTestMint = await getCreateTokenAccountInstructionIfNeeded(
+        provider.connection,
+        randomUser.publicKey,
+        differentRecipientAta,
+        recipient.publicKey,
+        differentSplTokenMint.publicKey
+      );
+      
+      const preInstructionsTestMint = [modifyComputeUnits];
+      if (createRecipientTokenAccountIxTestMint) {
+        preInstructionsTestMint.push(createRecipientTokenAccountIxTestMint);
+      }
+      
       const tx = await program.methods
         .transactSpl(proof, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
         .accounts({
@@ -4614,7 +4846,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
-        .preInstructions([modifyComputeUnits])
+        .preInstructions(preInstructionsTestMint)
         .transaction();
       
       const versionedTx = await createVersionedTransactionWithALT(
@@ -4671,22 +4903,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       splTokenMint.publicKey,
       recipient.publicKey
     );
-
-    // Create recipient token account manually since it's now UncheckedAccount
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey, // payer
-          recipientTokenAccount, // associatedToken
-          recipient.publicKey, // owner
-          splTokenMint.publicKey // mint
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      // Account might already exist, which is fine
-      console.log("Recipient token account might already exist:", error.message);
-    }
 
     const extData = {
       recipient: recipientTokenAccount, // Use the token account, not the user account
@@ -4841,6 +5057,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created
+    const createRecipientTokenAccountIx4 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions4 = [modifyComputeUnits];
+    if (createRecipientTokenAccountIx4) {
+      depositPreInstructions4.push(createRecipientTokenAccountIx4);
+    }
+    
     const depositTx = await program.methods
       .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
       .accounts({
@@ -4862,7 +5092,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnits])
+      .preInstructions(depositPreInstructions4)
       .transaction();
 
     // Create versioned transaction with ALT
@@ -4914,19 +5144,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
     
     // Create recipient token account
     const recipientTokenAccount = await getAssociatedTokenAddress(splTokenMint.publicKey, recipient.publicKey);
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
     
     // Deposit transaction with large amount
     const depositInputs = [
@@ -5026,6 +5243,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created and add instruction if needed
+    const createRecipientTokenAccountIxDeposit = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIxDeposit) {
+      depositPreInstructions.push(createRecipientTokenAccountIxDeposit);
+    }
+    
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -5047,7 +5278,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions)
       .transaction();
     
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -5291,21 +5522,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       recipient.publicKey
     );
 
-    // Create recipient token account
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
-
     const extData = {
       recipient: recipientTokenAccount,
       extAmount: new anchor.BN(depositAmount),
@@ -5406,6 +5622,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         units: 1_000_000 
       });
       
+      // Check if recipient token account needs to be created
+      const createRecipientTokenAccountIxTest2 = await getCreateTokenAccountInstructionIfNeeded(
+        provider.connection,
+        randomUser.publicKey,
+        recipientTokenAccount,
+        recipient.publicKey,
+        splTokenMint.publicKey
+      );
+      
+      const preInstructionsTest2 = [modifyComputeUnits];
+      if (createRecipientTokenAccountIxTest2) {
+        preInstructionsTest2.push(createRecipientTokenAccountIxTest2);
+      }
+      
       // Try to use attacker's token account instead of randomUser's
       const depositTx = await program.methods
         .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
@@ -5428,7 +5658,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
-        .preInstructions([modifyComputeUnits])
+        .preInstructions(preInstructionsTest2)
         .transaction();
 
       const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -5500,21 +5730,6 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       recipient.publicKey
     );
 
-    // Create recipient token account
-    try {
-      const createRecipientTokenAccountTx = new anchor.web3.Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          randomUser.publicKey,
-          recipientTokenAccount,
-          recipient.publicKey,
-          splTokenMint.publicKey
-        )
-      );
-      await provider.sendAndConfirm(createRecipientTokenAccountTx, [randomUser]);
-    } catch (error) {
-      console.log("Recipient token account might already exist:", error.message);
-    }
-
     const extData = {
       recipient: recipientTokenAccount,
       extAmount: new anchor.BN(depositAmount),
@@ -5615,6 +5830,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         units: 1_000_000 
       });
       
+      // Check if recipient token account needs to be created
+      const createRecipientTokenAccountIxTest3 = await getCreateTokenAccountInstructionIfNeeded(
+        provider.connection,
+        randomUser.publicKey,
+        recipientTokenAccount,
+        recipient.publicKey,
+        splTokenMint.publicKey
+      );
+      
+      const preInstructionsTest3 = [modifyComputeUnits];
+      if (createRecipientTokenAccountIxTest3) {
+        preInstructionsTest3.push(createRecipientTokenAccountIxTest3);
+      }
+      
       // Try to use token account with different mint
       const depositTx = await program.methods
         .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
@@ -5637,7 +5866,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
-        .preInstructions([modifyComputeUnits])
+        .preInstructions(preInstructionsTest3)
         .transaction();
 
       const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -5793,6 +6022,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         units: 1_000_000 
       });
       
+      // Check if recipient token account needs to be created
+      const createRecipientTokenAccountIxTest4 = await getCreateTokenAccountInstructionIfNeeded(
+        provider.connection,
+        randomUser.publicKey,
+        recipientTokenAccount,
+        recipient.publicKey,
+        splTokenMint.publicKey
+      );
+      
+      const preInstructionsTest4 = [modifyComputeUnits];
+      if (createRecipientTokenAccountIxTest4) {
+        preInstructionsTest4.push(createRecipientTokenAccountIxTest4);
+      }
+      
       // Execute the transaction - this should fail because of exceeding deposit limit
       const tx = await program.methods
         .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
@@ -5815,7 +6058,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
           systemProgram: anchor.web3.SystemProgram.programId
         })
         .signers([randomUser])
-        .preInstructions([modifyComputeUnits])
+        .preInstructions(preInstructionsTest4)
         .transaction();
 
       // Create versioned transaction with ALT
@@ -6100,6 +6343,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
     
+    // Check if recipient token account needs to be created
+    const createRecipientTokenAccountIx5 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const preInstructions5 = [modifyComputeUnits];
+    if (createRecipientTokenAccountIx5) {
+      preInstructions5.push(createRecipientTokenAccountIx5);
+    }
+    
     const tx = await program.methods
       .transactSpl(proofToSubmit, createExtDataMinified(extData), extData.encryptedOutput1, extData.encryptedOutput2)
       .accounts({
@@ -6121,7 +6378,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnits])
+      .preInstructions(preInstructions5)
       .transaction();
 
     // Create versioned transaction with ALT
@@ -6271,6 +6528,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
 
+    // Check if recipient token account needs to be created
+    const createRecipientTokenAccountIx6 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const depositPreInstructions6 = [modifyComputeUnitsDeposit];
+    if (createRecipientTokenAccountIx6) {
+      depositPreInstructions6.push(createRecipientTokenAccountIx6);
+    }
+
     const depositTx = await program.methods
       .transactSpl(depositProofToSubmit, createExtDataMinified(depositExtData), depositExtData.encryptedOutput1, depositExtData.encryptedOutput2)
       .accounts({
@@ -6292,7 +6563,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsDeposit])
+      .preInstructions(depositPreInstructions6)
       .transaction();
 
     const depositVersionedTx = await createVersionedTransactionWithALT(
@@ -6434,6 +6705,20 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
       units: 1_000_000 
     });
 
+    // Check if recipient token account needs to be created
+    const createRecipientTokenAccountIxWithdraw6 = await getCreateTokenAccountInstructionIfNeeded(
+      provider.connection,
+      randomUser.publicKey,
+      recipientTokenAccount,
+      recipient.publicKey,
+      splTokenMint.publicKey
+    );
+    
+    const withdrawPreInstructions6 = [modifyComputeUnitsWithdraw];
+    if (createRecipientTokenAccountIxWithdraw6) {
+      withdrawPreInstructions6.push(createRecipientTokenAccountIxWithdraw6);
+    }
+
     const withdrawTx = await program.methods
       .transactSpl(withdrawProofToSubmit, createExtDataMinified(withdrawExtData), withdrawExtData.encryptedOutput1, withdrawExtData.encryptedOutput2)
       .accounts({
@@ -6455,7 +6740,7 @@ const treeAta = await getAssociatedTokenAddress(splTokenMint.publicKey, globalCo
         systemProgram: anchor.web3.SystemProgram.programId
       })
       .signers([randomUser])
-      .preInstructions([modifyComputeUnitsWithdraw])
+      .preInstructions(withdrawPreInstructions6)
       .transaction();
 
     const withdrawVersionedTx = await createVersionedTransactionWithALT(

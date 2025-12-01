@@ -714,14 +714,12 @@ pub struct TransactSpl<'info> {
     pub recipient: UncheckedAccount<'info>,
     
     /// Recipient's token account (destination for withdrawals)
-    /// Created automatically if it doesn't exist
     /// It's relayer's job to account for the rent of the recipient_token_account, to prevent rent
-    /// griefing attacks on the relayer's wallet
+    /// griefing attacks on the relayer's wallet. Relayer adds instruction to init the account.
     #[account(
-        init_if_needed,
-        payer = signer,
-        associated_token::mint = mint,
-        associated_token::authority = recipient
+        mut,
+        token::mint = mint,
+        token::authority = recipient
     )]
     pub recipient_token_account: Account<'info, TokenAccount>,
     
