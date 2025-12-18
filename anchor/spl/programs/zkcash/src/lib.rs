@@ -27,17 +27,21 @@ pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("97rSMQUukMDjA7PYErccyx7Zx
 #[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", feature = "devnet", test)))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM"));
 
-#[cfg(any(feature = "localnet", test))]
-pub const ALLOW_ALL_SPL_TOKENS: bool = true;
-
-#[cfg(not(any(feature = "localnet", test)))]
-pub const ALLOW_ALL_SPL_TOKENS: bool = false;
-
 #[cfg(feature = "devnet")]
-pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")];
+pub const DISABLED_ALLOWED_TOKENS: &[Pubkey] = &[
+    pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"), // USDC
+    pubkey!("EcFc2cMyZxaKBkFK1XooxiyDyCPneLXiMwSJiVY6eTad"), // USDT
+    pubkey!("6zxkY8UygHKBf64LJDXnzcYr9wdvyqScmj7oGPBFw58Z"), // ORE
+    pubkey!("Vu3Lcx3chdCHmy9KCCdd19DdJsLejHAZxm1E1bTgE16") // ZEC
+];
 
 #[cfg(not(feature = "devnet"))]
-pub const ALLOWED_TOKENS: &[Pubkey] = &[pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")];
+pub const DISABLED_ALLOWED_TOKENS: &[Pubkey] = &[
+    pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"), // USDC
+    pubkey!("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"), // USDT
+    pubkey!("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"), // ORE
+    pubkey!("A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS") // ZEC
+];
 
 #[program]
 pub mod zkcash {
@@ -90,9 +94,9 @@ pub mod zkcash {
             require!(ctx.accounts.authority.key().eq(&admin_key), ErrorCode::Unauthorized);
         }
 
-        // Validate that the mint is in the allowed tokens list
+        // Validate that the mint is in the disallowed tokens list (it should go to the old program)
         require!(
-            ALLOW_ALL_SPL_TOKENS || ALLOWED_TOKENS.contains(&ctx.accounts.mint.key()),
+            !DISABLED_ALLOWED_TOKENS.contains(&ctx.accounts.mint.key()),
             ErrorCode::InvalidMintAddress
         );
 
@@ -156,13 +160,12 @@ pub mod zkcash {
         );
 
         require!(
-            ALLOW_ALL_SPL_TOKENS || ALLOWED_TOKENS.contains(&ext_data.mint_address),
+            !DISABLED_ALLOWED_TOKENS.contains(&ext_data.mint_address),
             ErrorCode::InvalidMintAddress
         );
 
         // For SOL, use all 32 bytes; for SPL tokens, use only first 31 bytes because circuit only supports 254 bits.
-        // This is still safe because ALLOWED_TOKENS only has limited tokens that don't have the same first 31 bytes.
-        // Also, 31 bytes collision is never known to happen, and such Ethereum only has 20 bytes for pubkey.
+        // 31 bytes collision is never known to happen, and such Ethereum only has 20 bytes for pubkey.
         let mint_bytes_for_hash: &[u8] = &ext_data.mint_address.to_bytes()[..31];
         
         require!(
