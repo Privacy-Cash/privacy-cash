@@ -4,8 +4,8 @@
 
 # Configuration
 POWERS_OF_TAU=18 # circuit will support max 2^POWERS_OF_TAU constraints
-CIRCUIT_DIR="../circuits/spl"
-ARTIFACTS_DIR="../artifacts/spl/circuits"
+CIRCUIT_DIR="../circuits"
+ARTIFACTS_DIR="../artifacts/circuits"
 
 # Create necessary directories
 mkdir -p $ARTIFACTS_DIR

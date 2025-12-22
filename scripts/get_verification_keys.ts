@@ -23,7 +23,7 @@ interface VerificationKey {
 }
 
 async function main(): Promise<void> {
-  const inputPath = '../artifacts/spl/circuits/verifyingkey2.json';
+  const inputPath = '../artifacts/circuits/verifyingkey2.json';
 
   // Save original console.log
   const originalConsoleLog = console.log;

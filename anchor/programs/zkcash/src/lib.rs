@@ -3,8 +3,10 @@ use light_hasher::Poseidon;
 use anchor_lang::solana_program::sysvar::rent::Rent;
 use ark_ff::PrimeField;
 use ark_bn254::Fr;
+use anchor_spl::token::{self, Token, TokenAccount, Mint, Transfer as SplTransfer};
+use anchor_spl::associated_token::AssociatedToken;
 
-declare_id!("9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD");
+declare_id!("9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt");
 
 pub mod merkle_tree;
 pub mod utils;
@@ -14,13 +16,32 @@ pub mod errors;
 use merkle_tree::MerkleTree;
 
 // Constants
-const MERKLE_TREE_HEIGHT: u8 = 26;
+const MERKLE_TREE_HEIGHT: u8 = 30;
 
-#[cfg(any(feature = "localnet", test))]
+#[cfg(any(feature = "localnet", feature = "localnet-mint-checked", test))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = None;
 
-#[cfg(not(any(feature = "localnet", test)))]
+#[cfg(all(feature = "devnet", not(any(feature = "localnet", feature = "localnet-mint-checked", test))))]
+pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("97rSMQUukMDjA7PYErccyx7ZxbHvSDaeXp2ig5BwSrTf"));
+
+#[cfg(not(any(feature = "localnet", feature = "localnet-mint-checked", feature = "devnet", test)))]
 pub const ADMIN_PUBKEY: Option<Pubkey> = Some(pubkey!("AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM"));
+
+#[cfg(feature = "devnet")]
+pub const DISABLED_ALLOWED_TOKENS: &[Pubkey] = &[
+    pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"), // USDC
+    pubkey!("EcFc2cMyZxaKBkFK1XooxiyDyCPneLXiMwSJiVY6eTad"), // USDT
+    pubkey!("6zxkY8UygHKBf64LJDXnzcYr9wdvyqScmj7oGPBFw58Z"), // ORE
+    pubkey!("Vu3Lcx3chdCHmy9KCCdd19DdJsLejHAZxm1E1bTgE16") // ZEC
+];
+
+#[cfg(not(feature = "devnet"))]
+pub const DISABLED_ALLOWED_TOKENS: &[Pubkey] = &[
+    pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"), // USDC
+    pubkey!("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"), // USDT
+    pubkey!("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"), // ORE
+    pubkey!("A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS") // ZEC
+];
 
 #[program]
 pub mod zkcash {
@@ -33,49 +54,36 @@ pub mod zkcash {
             require!(ctx.accounts.authority.key().eq(&admin_key), ErrorCode::Unauthorized);
         }
         
+        // Initialize global config
+        let global_config = &mut ctx.accounts.global_config;
+        global_config.authority = ctx.accounts.authority.key();
+        global_config.deposit_fee_rate = 0; // 0% - Free deposits
+        global_config.withdrawal_fee_rate = 35; // 0.35% (35 basis points)
+        global_config.fee_error_margin = 500; // 5% (500 basis points)
+        global_config.bump = ctx.bumps.global_config;
+        
+        // Initialize global tree account for all SPL tokens
         let tree_account = &mut ctx.accounts.tree_account.load_init()?;
         tree_account.authority = ctx.accounts.authority.key();
         tree_account.next_index = 0;
         tree_account.root_index = 0;
         tree_account.bump = ctx.bumps.tree_account;
-        tree_account.max_deposit_amount = 1_000_000_000_000; // 1000 SOL default limit
-        tree_account.height = MERKLE_TREE_HEIGHT; // Hardcoded height
-        tree_account.root_history_size = 100; // Hardcoded root history size
+        tree_account.height = MERKLE_TREE_HEIGHT;
+        tree_account.root_history_size = 100;
 
         MerkleTree::initialize::<Poseidon>(tree_account)?;
+
+        msg!(
+            "Global merkle tree initialized for all SPL tokens, height: {}, root history size: {}",
+            MERKLE_TREE_HEIGHT,
+            100
+        );
         
-        let token_account = &mut ctx.accounts.tree_token_account;
-        token_account.authority = ctx.accounts.authority.key();
-        token_account.bump = ctx.bumps.tree_token_account;
-        
-        // Initialize global config
-        let global_config = &mut ctx.accounts.global_config;
-        global_config.authority = ctx.accounts.authority.key();
-        global_config.deposit_fee_rate = 0; // 0% - Free deposits
-        global_config.withdrawal_fee_rate = 25; // 0.25% (25 basis points)
-        global_config.fee_error_margin = 500; // 5% (500 basis points)
-        global_config.bump = ctx.bumps.global_config;
-        
-        msg!("Sparse Merkle Tree initialized successfully with height: {}, root history size: {}, deposit limit: {} lamports, 
-            deposit fee rate: {}, withdrawal fee rate: {}, fee error margin: {}",
-            MERKLE_TREE_HEIGHT, 100, tree_account.max_deposit_amount, global_config.deposit_fee_rate, global_config.withdrawal_fee_rate, global_config.fee_error_margin);
         Ok(())
     }
 
     /**
-     * Update the maximum deposit amount limit. Only the authority can call this.
-     */
-    pub fn update_deposit_limit(ctx: Context<UpdateDepositLimit>, new_limit: u64) -> Result<()> {
-        let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
-        
-        tree_account.max_deposit_amount = new_limit;
-        
-        msg!("Deposit limit updated to: {} lamports", new_limit);
-        Ok(())
-    }
-
-    /**
-     * Update global configuration. Only the authority can call this.
+     * Update global configuration for SOL and SPL tokens. Only the authority can call this.
      */
     pub fn update_global_config(
         ctx: Context<UpdateGlobalConfig>, 
@@ -107,18 +115,16 @@ pub mod zkcash {
     }
 
     /**
-     * Users deposit or withdraw from the program.
+     * Users deposit or withdraw SPL tokens from the program.
      * 
      * Reentrant attacks are not possible, because nullifier creation is checked by anchor first.
-     * 
-     * encrypted_output1 and encrypted_output2 are passed as separate parameters to save instruction data space (~170 bytes).
      */
-    pub fn transact(ctx: Context<Transact>, proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>) -> Result<()> {
+    pub fn transact_spl(ctx: Context<TransactSpl>, proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>) -> Result<()> {
         let tree_account = &mut ctx.accounts.tree_account.load_mut()?;
         let global_config = &ctx.accounts.global_config;
 
         // Reconstruct full ExtData from minified version and context accounts
-        let ext_data = ExtData::from_minified(&ctx, ext_data_minified);
+        let ext_data = ExtData::from_minified_spl(&ctx, ext_data_minified);
 
         // check if proof.root is in the tree_account's proof history
         require!(
@@ -126,7 +132,20 @@ pub mod zkcash {
             ErrorCode::UnknownRoot
         );
 
-        // check if the ext_data hashes to the same ext_data in the proof
+        require!(
+            !DISABLED_ALLOWED_TOKENS.contains(&ext_data.mint_address),
+            ErrorCode::InvalidMintAddress
+        );
+
+        // For SOL, use all 32 bytes; for SPL tokens, use only first 31 bytes because circuit only supports 254 bits.
+        // 31 bytes collision is never known to happen, and such Ethereum only has 20 bytes for pubkey.
+        let mint_bytes_for_hash: &[u8] = &ext_data.mint_address.to_bytes()[..31];
+        
+        require!(
+            proof.mint_address == utils::mint_bytes_to_proof_format(mint_bytes_for_hash),
+            ErrorCode::InvalidMintAddressInProof
+        );
+
         let calculated_ext_data_hash = utils::calculate_complete_ext_data_hash(
             ext_data.recipient,
             ext_data.ext_amount,
@@ -162,86 +181,62 @@ pub mod zkcash {
         // verify the proof
         require!(verify_proof(proof.clone(), VERIFYING_KEY), ErrorCode::InvalidProof);
 
-        let tree_token_account_info = ctx.accounts.tree_token_account.to_account_info();
-        let rent = Rent::get()?;
-        let rent_exempt_minimum = rent.minimum_balance(tree_token_account_info.data_len());
-
         if ext_amount > 0 {
-            // Check deposit limit for deposits
-            let deposit_amount = ext_amount as u64;
-            require!(
-                deposit_amount <= tree_account.max_deposit_amount,
-                ErrorCode::DepositLimitExceeded
-            );
-            
-            // If it's a deposit, transfer the SOL to the tree token account.
-            anchor_lang::system_program::transfer(
+            // SPL Token deposit: transfer from signer's token account to tree's ATA
+            token::transfer(
                 CpiContext::new(
-                    ctx.accounts.system_program.to_account_info(),
-                    anchor_lang::system_program::Transfer {
-                        from: ctx.accounts.signer.to_account_info(),
-                        to: ctx.accounts.tree_token_account.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
+                    SplTransfer {
+                        from: ctx.accounts.signer_token_account.to_account_info(),
+                        to: ctx.accounts.tree_ata.to_account_info(),
+                        authority: ctx.accounts.signer.to_account_info(),
                     },
                 ),
                 ext_amount as u64,
             )?;
         } else if ext_amount < 0 {
-            // PDA can't directly sign transactions, so we need to transfer SOL via try_borrow_mut_lamports
-            // No limit on withdrawals
-            let recipient_account_info = ctx.accounts.recipient.to_account_info();
-
             let ext_amount_abs: u64 = ext_amount.checked_neg()
                 .ok_or(ErrorCode::ArithmeticOverflow)?
                 .try_into()
                 .map_err(|_| ErrorCode::InvalidExtAmount)?;
             
-            let total_required = ext_amount_abs
-                .checked_add(fee)
-                .ok_or(ErrorCode::ArithmeticOverflow)?
-                .checked_add(rent_exempt_minimum)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            // SPL Token withdrawal: transfer from tree's ATA to recipient's token account
+            let bump = &[ctx.accounts.global_config.bump];
+            let seeds: &[&[u8]] = &[b"global_config", bump];
+            let signer_seeds = &[seeds];
             
-            require!(
-                tree_token_account_info.lamports() >= total_required,
-                ErrorCode::InsufficientFundsForWithdrawal
-            );
-
-            let tree_token_balance = tree_token_account_info.lamports();
-            let recipient_balance = recipient_account_info.lamports();
-            
-            let new_tree_token_balance = tree_token_balance.checked_sub(ext_amount_abs)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-            let new_recipient_balance = recipient_balance.checked_add(ext_amount_abs)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-                
-            **tree_token_account_info.try_borrow_mut_lamports()? = new_tree_token_balance;
-            **recipient_account_info.try_borrow_mut_lamports()? = new_recipient_balance;
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    SplTransfer {
+                        from: ctx.accounts.tree_ata.to_account_info(),
+                        to: ctx.accounts.recipient_token_account.to_account_info(),
+                        authority: ctx.accounts.global_config.to_account_info(),
+                    },
+                    signer_seeds,
+                ),
+                ext_amount_abs,
+            )?;
         }
         
         if fee > 0 {
-            let fee_recipient_account_info = ctx.accounts.fee_recipient_account.to_account_info();
-
-            if ext_amount >= 0 {
-                let total_required = fee
-                    .checked_add(rent_exempt_minimum)
-                    .ok_or(ErrorCode::ArithmeticOverflow)?;
-                
-                require!(
-                    tree_token_account_info.lamports() >= total_required,
-                    ErrorCode::InsufficientFundsForFee
-                );
-            }
-
-            let tree_token_balance = tree_token_account_info.lamports();
-            let fee_recipient_balance = fee_recipient_account_info.lamports();
+            // SPL Token fee payment: transfer from tree's ATA to fee recipient's token account
+            let bump = &[ctx.accounts.global_config.bump];
+            let seeds: &[&[u8]] = &[b"global_config", bump];
+            let signer_seeds = &[seeds];
             
-            let new_tree_token_balance = tree_token_balance.checked_sub(fee)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-            let new_fee_recipient_balance = fee_recipient_balance.checked_add(fee)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-                
-            **tree_token_account_info.try_borrow_mut_lamports()? = new_tree_token_balance;
-            **fee_recipient_account_info.try_borrow_mut_lamports()? = new_fee_recipient_balance;
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    SplTransfer {
+                        from: ctx.accounts.tree_ata.to_account_info(),
+                        to: ctx.accounts.fee_recipient_ata.to_account_info(),
+                        authority: ctx.accounts.global_config.to_account_info(),
+                    },
+                    signer_seeds,
+                ),
+                fee,
+            )?;
         }
 
         let next_index_to_insert = tree_account.next_index;
@@ -267,6 +262,18 @@ pub mod zkcash {
     }
 }
 
+impl ExtData {
+    fn from_minified_spl(ctx: &Context<TransactSpl>, minified: ExtDataMinified) -> Self {
+        Self {
+            recipient: ctx.accounts.recipient_token_account.key(),
+            ext_amount: minified.ext_amount,
+            fee: minified.fee,
+            fee_recipient: ctx.accounts.fee_recipient_ata.key(),
+            mint_address: ctx.accounts.mint.key(),
+        }
+    }
+}
+
 #[event]
 pub struct CommitmentData {
     pub index: u64,
@@ -283,6 +290,7 @@ pub struct Proof {
     pub root: [u8; 32],
     pub public_amount: [u8; 32],
     pub ext_data_hash: [u8; 32],
+    pub mint_address: [u8; 32],
     pub input_nullifiers: [[u8; 32]; 2],
     pub output_commitments: [[u8; 32]; 2],
 }
@@ -302,22 +310,9 @@ pub struct ExtDataMinified {
     pub fee: u64,
 }
 
-impl ExtData {
-    fn from_minified(ctx: &Context<Transact>, minified: ExtDataMinified) -> Self {
-        use crate::utils::SOL_ADDRESS;
-        Self {
-            recipient: ctx.accounts.recipient.key(),
-            ext_amount: minified.ext_amount,
-            fee: minified.fee,
-            fee_recipient: ctx.accounts.fee_recipient_account.key(),
-            mint_address: SOL_ADDRESS,
-        }
-    }
-}
-
 #[derive(Accounts)]
 #[instruction(proof: Proof, ext_data_minified: ExtDataMinified, encrypted_output1: Vec<u8>, encrypted_output2: Vec<u8>)]
-pub struct Transact<'info> {
+pub struct TransactSpl<'info> {
     #[account(
         mut,
         seeds = [b"merkle_tree"],
@@ -333,7 +328,7 @@ pub struct Transact<'info> {
         init,
         payer = signer,
         space = 8 + std::mem::size_of::<NullifierAccount>(),
-        seeds = [b"nullifier0", proof.input_nullifiers[0].as_ref()],
+        seeds = [b"nullifier", proof.input_nullifiers[0].as_ref()],
         bump
     )]
     pub nullifier0: Account<'info, NullifierAccount>,
@@ -346,29 +341,10 @@ pub struct Transact<'info> {
         init,
         payer = signer,
         space = 8 + std::mem::size_of::<NullifierAccount>(),
-        seeds = [b"nullifier1", proof.input_nullifiers[1].as_ref()],
+        seeds = [b"nullifier", proof.input_nullifiers[1].as_ref()],
         bump
     )]
     pub nullifier1: Account<'info, NullifierAccount>,
-
-    #[account(
-        seeds = [b"nullifier0", proof.input_nullifiers[1].as_ref()],
-        bump
-    )]
-    pub nullifier2: SystemAccount<'info>,
-    
-    #[account(
-        seeds = [b"nullifier1", proof.input_nullifiers[0].as_ref()],
-        bump
-    )]
-    pub nullifier3: SystemAccount<'info>,
-    
-    #[account(
-        mut,
-        seeds = [b"tree_token"],
-        bump = tree_token_account.bump
-    )]
-    pub tree_token_account: Account<'info, TreeTokenAccount>,
     
     #[account(
         seeds = [b"global_config"],
@@ -376,82 +352,55 @@ pub struct Transact<'info> {
     )]
     pub global_config: Account<'info, GlobalConfig>,
     
-    #[account(mut)]
-    /// CHECK: user should be able to send funds to any types of accounts
-    pub recipient: UncheckedAccount<'info>,
-    
-    #[account(mut)]
-    /// CHECK: user should be able to send fees to any types of accounts
-    pub fee_recipient_account: UncheckedAccount<'info>,
-    
     /// The account that is signing the transaction
     #[account(mut)]
     pub signer: Signer<'info>,
     
-    pub system_program: Program<'info, System>,
-}
+    /// SPL Token mint account (required for token operations)
+    pub mint: Account<'info, Mint>,
+    
+    /// Signer's token account (source for deposits)
+    #[account(
+        mut,
+        constraint = signer_token_account.owner == signer.key() @ ErrorCode::InvalidTokenAccount,
+        constraint = signer_token_account.mint == mint.key() @ ErrorCode::InvalidTokenAccountMintAddress
+    )]
+    pub signer_token_account: Account<'info, TokenAccount>,
 
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<MerkleTreeAccount>(),
-        seeds = [b"merkle_tree"],
-        bump
-    )]
-    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
+    /// CHECK: user should be able to send funds to any types of accounts
+    pub recipient: UncheckedAccount<'info>,
     
+    /// Recipient's token account (destination for withdrawals)
+    /// Created automatically if it doesn't exist
     #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<TreeTokenAccount>(),
-        seeds = [b"tree_token"],
-        bump
+        init_if_needed,
+        payer = signer,
+        associated_token::mint = mint,
+        associated_token::authority = recipient
     )]
-    pub tree_token_account: Account<'info, TreeTokenAccount>,
+    pub recipient_token_account: Account<'info, TokenAccount>,
     
+    /// Tree's associated token account (destination for deposits, source for withdrawals)
     #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<GlobalConfig>(),
-        seeds = [b"global_config"],
-        bump
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = global_config
     )]
-    pub global_config: Account<'info, GlobalConfig>,
+    pub tree_ata: Account<'info, TokenAccount>,
     
+    /// Fee recipient's associated token account (auto-derived from fee_recipient_account + mint)
+    /// Fee recipient ATA is guaranteed to exist for supported tokens
+    /// CHECK: Validated in the instruction logic
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub fee_recipient_ata: UncheckedAccount<'info>,
+    
+    /// SPL Token program
+    pub token_program: Program<'info, Token>,
+    
+    /// Associated Token program
+    pub associated_token_program: Program<'info, AssociatedToken>,
     
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateDepositLimit<'info> {
-    #[account(
-        mut,
-        seeds = [b"merkle_tree"],
-        bump = tree_account.load()?.bump,
-        has_one = authority @ ErrorCode::Unauthorized
-    )]
-    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
-    
-    /// The authority account that can update the deposit limit
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateGlobalConfig<'info> {
-    #[account(
-        mut,
-        seeds = [b"global_config"],
-        bump = global_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized
-    )]
-    pub global_config: Account<'info, GlobalConfig>,
-    
-    /// The authority account that can update the global config
-    pub authority: Signer<'info>,
 }
 
 #[account]
@@ -484,12 +433,51 @@ pub struct MerkleTreeAccount {
     pub root: [u8; 32],
     pub root_history: [[u8; 32]; 100],
     pub root_index: u64,
-    pub max_deposit_amount: u64,
     pub height: u8,
     pub root_history_size: u8,
     pub bump: u8,
-    // The pub _padding: [u8; 5] is needed because of the #[account(zero_copy)] attribute.
-    pub _padding: [u8; 5],
+    // The pub _padding: [u8; 13] is needed because of the #[account(zero_copy)] attribute.
+    pub _padding: [u8; 13],
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + std::mem::size_of::<GlobalConfig>(),
+        seeds = [b"global_config"],
+        bump
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+    
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + std::mem::size_of::<MerkleTreeAccount>(),
+        seeds = [b"merkle_tree"],
+        bump
+    )]
+    pub tree_account: AccountLoader<'info, MerkleTreeAccount>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateGlobalConfig<'info> {
+    #[account(
+        mut,
+        seeds = [b"global_config"],
+        bump = global_config.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+    
+    /// The authority account that can update the global config
+    pub authority: Signer<'info>,
 }
 
 #[error_code]
@@ -516,8 +504,6 @@ pub enum ErrorCode {
     PublicAmountCalculationError,
     #[msg("Arithmetic overflow/underflow occurred")]
     ArithmeticOverflow,
-    #[msg("Deposit limit exceeded")]
-    DepositLimitExceeded,
     #[msg("Invalid fee rate: must be between 0 and 10000 basis points")]
     InvalidFeeRate,
     #[msg("Fee recipient does not match global configuration")]
@@ -528,4 +514,12 @@ pub enum ErrorCode {
     RecipientMismatch,
     #[msg("Merkle tree is full: cannot add more leaves")]
     MerkleTreeFull,
+    #[msg("Invalid token account: account is not owned by the token program")]
+    InvalidTokenAccount,
+    #[msg("Invalid mint address: mint address is not allowed")]
+    InvalidMintAddress,
+    #[msg("Invalid token account mint address")]
+    InvalidTokenAccountMintAddress,
+    #[msg("Invalid mint address in proof")]
+    InvalidMintAddressInProof,
 }

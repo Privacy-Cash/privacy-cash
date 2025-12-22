@@ -1,6 +1,6 @@
 pragma circom 2.0.0;
 
-include "../../anchor/sol/node_modules/circomlib/circuits/poseidon.circom";
+include "../../anchor/node_modules/circomlib/circuits/poseidon.circom";
 include "./merkleProof.circom";
 include "./keypair.circom";
 
