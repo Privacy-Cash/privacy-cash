@@ -67,5 +67,8 @@ After the protection window, the code is permanently open source under GPL.
 
 ## Disclaimer
 
-The software is provided **“AS IS”**, without warranty of any kind.  
-Use at your own risk. See the LICENSE file for full details.
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSED WORK IS PROVIDED ON
+AN "AS IS" BASIS. LICENSOR HEREBY DISCLAIMS ALL WARRANTIES AND CONDITIONS,
+EXPRESS OR IMPLIED, INCLUDING (WITHOUT LIMITATION) WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, AND
+TITLE.
