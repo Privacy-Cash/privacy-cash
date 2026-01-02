@@ -144,7 +144,8 @@ pub mod zkcash {
      */
     pub fn initialize_tree_account_for_spl_token(
         ctx: Context<InitializeTreeAccountForSplToken>,
-        max_deposit_amount: u64
+        max_deposit_amount: u64,
+        alt_address: Option<Pubkey>,
     ) -> Result<()> {
         if let Some(admin_key) = ADMIN_PUBKEY {
             require!(ctx.accounts.authority.key().eq(&admin_key), ErrorCode::Unauthorized);
@@ -164,15 +165,18 @@ pub mod zkcash {
         tree_account.max_deposit_amount = max_deposit_amount;
         tree_account.height = MERKLE_TREE_HEIGHT;
         tree_account.root_history_size = 100;
+        // Store ALT address (use default as sentinel for "no ALT set")
+        tree_account.alt_address = alt_address.unwrap_or(Pubkey::default());
 
         MerkleTree::initialize::<Poseidon>(tree_account)?;
         
         msg!(
-            "SPL Token merkle tree initialized for mint: {}, height: {}, root history size: {}, deposit limit: {}",
+            "SPL Token merkle tree initialized for mint: {}, height: {}, root history size: {}, deposit limit: {}, alt_address: {}",
             ctx.accounts.mint.key(),
             MERKLE_TREE_HEIGHT,
             100,
-            max_deposit_amount
+            max_deposit_amount,
+            tree_account.alt_address
         );
         
         Ok(())
@@ -899,6 +903,7 @@ pub struct MerkleTreeAccount {
     pub height: u8,
     pub root_history_size: u8,
     pub bump: u8,
+    pub alt_address: Pubkey,  // ALT address for this token pool (Pubkey::default() = no ALT)
     // The pub _padding: [u8; 5] is needed because of the #[account(zero_copy)] attribute.
     pub _padding: [u8; 5],
 }

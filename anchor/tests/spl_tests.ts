@@ -318,7 +318,8 @@ describe("zkcash", () => {
     
     await program.methods
       .initializeTreeAccountForSplToken(
-        new anchor.BN(50_000_000_000_000) // 50M tokens max deposit
+        new anchor.BN(50_000_000_000_000), // 50M tokens max deposit
+        null // alt_address: null means no ALT set (backward compatible)
       )
       .accounts({
         treeAccount: splTreeAccountPDA,

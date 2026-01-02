@@ -47,7 +47,7 @@ async function generateSquadsTransaction() {
 
   // Build the instruction
   const ix = await program.methods
-    .initializeTreeAccountForSplToken(MAX_DEPOSIT_AMOUNT)
+    .initializeTreeAccountForSplToken(MAX_DEPOSIT_AMOUNT, null) // alt_address: null means no ALT set (backward compatible)
     .accounts({
       treeAccount: treeAccount,
       mint: USDT_MINT,
