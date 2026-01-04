@@ -14,7 +14,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 // Program ID for the zkcash SPL program
-const PROGRAM_ID = new PublicKey('9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt');
+const PROGRAM_ID = new PublicKey('Bm7vFJy5o9dVDeKppL1HaoNBD14BKp92cxgwV5bhv7vr');
 
 // Fee rates in basis points (1 basis point = 0.01%, 10000 = 100%)
 export const DEPOSIT_FEE_RATE = 0; // 0% - Free deposits

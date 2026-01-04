@@ -19,7 +19,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 // Program ID for the zkcash SPL program
-const PROGRAM_ID = new PublicKey('9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt');
+const PROGRAM_ID = new PublicKey('Bm7vFJy5o9dVDeKppL1HaoNBD14BKp92cxgwV5bhv7vr');
 
 // USDC mint address
 // IMPORTANT!!!!!!!: Change it back to EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v after devnet testing is done!!!!!!!

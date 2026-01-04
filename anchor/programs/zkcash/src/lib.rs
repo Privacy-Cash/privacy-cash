@@ -6,14 +6,17 @@ use ark_bn254::Fr;
 use anchor_spl::token::{self, Token, TokenAccount, Mint, Transfer as SplTransfer};
 use anchor_spl::associated_token::AssociatedToken;
 
-declare_id!("9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt");
+declare_id!("Bm7vFJy5o9dVDeKppL1HaoNBD14BKp92cxgwV5bhv7vr");
 
+pub mod allocator;
+pub mod heap_test;
 pub mod merkle_tree;
 pub mod utils;
 pub mod groth16;
 pub mod errors;
 
 use merkle_tree::MerkleTree;
+pub use heap_test::*;
 
 // Constants
 const MERKLE_TREE_HEIGHT: u8 = 30;
@@ -45,7 +48,7 @@ pub const DISABLED_ALLOWED_TOKENS: &[Pubkey] = &[
 
 #[program]
 pub mod zkcash {
-    use crate::utils::{verify_proof, VERIFYING_KEY};
+    use utils::{verify_proof, VERIFYING_KEY};
 
     use super::*;
 
@@ -260,6 +263,11 @@ pub mod zkcash {
         
         Ok(())
     }
+
+    // Uncomment to enable the heap_test instruction
+    // pub fn heap_test(ctx: Context<HeapTest>, length: u64) -> Result<()> {
+    //     HeapTest::handler(ctx, length)
+    // }
 }
 
 impl ExtData {

@@ -22,7 +22,7 @@ import {
   const user = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
   
   // Program ID for the zkcash program
-  const PROGRAM_ID = new PublicKey('9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt');
+  const PROGRAM_ID = new PublicKey('Bm7vFJy5o9dVDeKppL1HaoNBD14BKp92cxgwV5bhv7vr');
   const FEE_RECIPIENT_ACCOUNT = new PublicKey('AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM');
   const RELAYER_ACCOUNT = new PublicKey('AF8VuwCncKd5ZBnLYYnMjqh4vLch8mjqE75sFe5ZjRFW');
   

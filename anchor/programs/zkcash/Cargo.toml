@@ -9,7 +9,7 @@ crate-type = ["cdylib", "lib"]
 name = "zkcash"
 
 [features]
-default = []
+default = ["custom-heap"]
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

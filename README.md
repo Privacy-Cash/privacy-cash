@@ -137,7 +137,7 @@ If you want to integrate Privacy Cash into your project, use the [Privacy Cash S
 
 7. Transfer the authority to multisig wallet
    ```bash
-   solana program set-upgrade-authority 9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt \
+   solana program set-upgrade-authority Bm7vFJy5o9dVDeKppL1HaoNBD14BKp92cxgwV5bhv7vr \
    --new-upgrade-authority AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM \
    --upgrade-authority deploy-keypair.json \
    --skip-new-upgrade-authority-signer-check \

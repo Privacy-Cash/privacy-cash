@@ -14,7 +14,7 @@ import BN from 'bn.js';
 dotenv.config();
 
 // Program ID for the zkcash SPL program
-const PROGRAM_ID = new PublicKey('9buNGKLVHL9PDmGKCBQwtAXiGVaqmYHgup9gJYySRDxt');
+const PROGRAM_ID = new PublicKey('Bm7vFJy5o9dVDeKppL1HaoNBD14BKp92cxgwV5bhv7vr');
 
 // Configure connection to Solana devnet using Helius RPC
 const connection = new Connection('https://domini-i2gp2o-fast-devnet.helius-rpc.com', 'confirmed');
