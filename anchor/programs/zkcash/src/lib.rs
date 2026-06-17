@@ -43,9 +43,10 @@ pub const ALLOWED_TOKENS: &[Pubkey] = &[
     pubkey!("EcFc2cMyZxaKBkFK1XooxiyDyCPneLXiMwSJiVY6eTad"), // USDT
     pubkey!("6zxkY8UygHKBf64LJDXnzcYr9wdvyqScmj7oGPBFw58Z"), // ORE
     pubkey!("Vu3Lcx3chdCHmy9KCCdd19DdJsLejHAZxm1E1bTgE16"), // ZEC
-    pubkey!("5MvqBFU5zeHaEfRuAFW2RhqidHLb7Ejsa6sUwPQQXcj1"), // stORE
+    pubkey!("5MvqBFU5zeHaEfRuAFW2RhqidHLb7Ejsa6sUwPQQXcj1"), // stORE (legacy)
     pubkey!("Fv7iYNEmq277whRwAFbCqNY3Qz9r73gwDRLrw5yiNmtf"), // jlUSDC
-    pubkey!("8wBeZG358JQxdsPUVaRJY1viRPkx8Auoh8NvpFscbQka") // jlWSOL
+    pubkey!("8wBeZG358JQxdsPUVaRJY1viRPkx8Auoh8NvpFscbQka"), // jlWSOL
+    pubkey!("CHsGYtQsbWprz1HaxCtCCgpJmsXsLuyNzBZokRwaaiP3"), // stORE
 ];
 
 #[cfg(not(feature = "devnet"))]
@@ -54,9 +55,10 @@ pub const ALLOWED_TOKENS: &[Pubkey] = &[
     pubkey!("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"), // USDT
     pubkey!("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"), // ORE
     pubkey!("A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS"), // ZEC
-    pubkey!("sTorERYB6xAZ1SSbwpK3zoK2EEwbBrc7TZAzg1uCGiH"), // stORE
+    pubkey!("sTorERYB6xAZ1SSbwpK3zoK2EEwbBrc7TZAzg1uCGiH"), // stORE (legacy)
     pubkey!("9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D"), // jlUSDC
-    pubkey!("2uQsyo1fXXQkDtcpXnLofWy88PxcvnfH2L8FPSE62FVU") // jlWSOL
+    pubkey!("2uQsyo1fXXQkDtcpXnLofWy88PxcvnfH2L8FPSE62FVU"), // jlWSOL
+    pubkey!("storenSbvkfzircixnaosc5CbzNZVrHJ6S3EKrS1yqR"), // stORE
 ];
 
 #[program]
