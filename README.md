@@ -2,7 +2,7 @@
 
 Transfer SOL privately. Private SPL tokens transfer and private swap will soon follow.
 
-The program is fully audited by Accretion, HashCloak, Zigtur and Kriko, and verified onchain (with hash c6f1e5336f2068dc1c1e1c64e92e3d8495b8df79f78011e2620af60aa43090c5).
+The program is fully audited by Accretion, HashCloak, Zigtur and Kriko, and verified onchain (with hash 4f0a26e6d5a24cb19527d7127971ac6241fd9fdacdfa5e106c4b9d153f5989bd).
 
 ## Overview
 
